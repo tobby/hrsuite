@@ -15,6 +15,10 @@ import {
   AlertCircle,
   Building2,
   ArrowRight,
+  Calendar,
+  FileText,
+  Settings,
+  Send,
 } from "lucide-react";
 import { useRole, canApproveLeave } from "@/lib/role-context";
 import { 
@@ -92,6 +96,38 @@ export default function Dashboard() {
 
       {/* Stats Cards - vary by role */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {/* Employee-specific stats */}
+        {role === "employee" && (
+          <>
+            <Card data-testid="card-stat-pending-requests">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {myLeaveRequests.filter(r => r.status === "pending").length}
+                </div>
+                <p className="text-xs text-muted-foreground">Awaiting approval</p>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-stat-days-used">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Days Used</CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {userLeaveBalances.reduce((sum, b) => sum + (b.totalDays - b.remainingDays), 0)}
+                </div>
+                <p className="text-xs text-muted-foreground">This year</p>
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* Manager/Admin stats */}
         {(role === "manager" || role === "admin") && (
           <Card data-testid="card-stat-employees">
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
@@ -175,6 +211,50 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Quick Actions - Employee Only */}
+      {role === "employee" && (
+        <Card data-testid="card-quick-actions">
+          <CardHeader>
+            <CardTitle className="text-lg">Quick Actions</CardTitle>
+            <CardDescription>Common tasks at your fingertips</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Link href="/leave">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-auto flex-col gap-2 py-4"
+                  data-testid="button-quick-request-leave"
+                >
+                  <Send className="h-5 w-5 text-primary" />
+                  <span>Request Leave</span>
+                </Button>
+              </Link>
+              <Link href="/performance">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-auto flex-col gap-2 py-4"
+                  data-testid="button-quick-view-performance"
+                >
+                  <FileText className="h-5 w-5 text-primary" />
+                  <span>View Performance</span>
+                </Button>
+              </Link>
+              <Link href="/settings">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-auto flex-col gap-2 py-4"
+                  data-testid="button-quick-update-profile"
+                >
+                  <Settings className="h-5 w-5 text-primary" />
+                  <span>Update Profile</span>
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* My Leave Balance - All roles */}
