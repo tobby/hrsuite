@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useRole, UserRole } from "@/lib/role-context";
 import {
   LayoutDashboard,
   Users,
@@ -6,7 +7,6 @@ import {
   ClipboardCheck,
   Building2,
   Settings,
-  LogOut,
 } from "lucide-react";
 import {
   Sidebar,
@@ -21,31 +21,48 @@ import {
   SidebarFooter,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { currentUser, getDepartmentById } from "@/lib/demo-data";
+import { Badge } from "@/components/ui/badge";
+import { getDepartmentById } from "@/lib/demo-data";
 
-const mainNavItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Employees", url: "/employees", icon: Users },
-  { title: "Departments", url: "/departments", icon: Building2 },
+interface NavItem {
+  title: string;
+  url: string;
+  icon: typeof LayoutDashboard;
+  testId: string;
+  roles: UserRole[];
+}
+
+const mainNavItems: NavItem[] = [
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, testId: "nav-dashboard", roles: ["employee", "manager", "admin"] },
+  { title: "Employees", url: "/employees", icon: Users, testId: "nav-employees", roles: ["manager", "admin"] },
+  { title: "Departments", url: "/departments", icon: Building2, testId: "nav-departments", roles: ["manager", "admin"] },
 ];
 
-const hrNavItems = [
-  { title: "Leave Management", url: "/leave", icon: CalendarDays },
-  { title: "Performance", url: "/performance", icon: ClipboardCheck },
+const hrNavItems: NavItem[] = [
+  { title: "Leave Management", url: "/leave", icon: CalendarDays, testId: "nav-leave-management", roles: ["employee", "manager", "admin"] },
+  { title: "Performance", url: "/performance", icon: ClipboardCheck, testId: "nav-performance", roles: ["employee", "manager", "admin"] },
 ];
 
-const settingsNavItems = [
-  { title: "Settings", url: "/settings", icon: Settings },
+const settingsNavItems: NavItem[] = [
+  { title: "Settings", url: "/settings", icon: Settings, testId: "nav-settings", roles: ["employee", "manager", "admin"] },
 ];
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { role, currentUser } = useRole();
   const department = getDepartmentById(currentUser.departmentId);
 
   const isActive = (url: string) => {
     if (url === "/") return location === "/";
     return location.startsWith(url);
+  };
+
+  const filterByRole = (items: NavItem[]) => items.filter(item => item.roles.includes(role));
+
+  const roleLabels: Record<UserRole, { label: string; color: string }> = {
+    employee: { label: "Employee", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+    manager: { label: "Manager", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
+    admin: { label: "Admin", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
   };
 
   return (
@@ -69,14 +86,13 @@ export function AppSidebar() {
           <SidebarGroupLabel>Main</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map((item) => (
+              {filterByRole(mainNavItems).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
                     isActive={isActive(item.url)}
-                    data-testid={`nav-${item.title.toLowerCase().replace(" ", "-")}`}
                   >
-                    <Link href={item.url}>
+                    <Link href={item.url} data-testid={item.testId}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -91,14 +107,13 @@ export function AppSidebar() {
           <SidebarGroupLabel>HR Management</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {hrNavItems.map((item) => (
+              {filterByRole(hrNavItems).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
                     isActive={isActive(item.url)}
-                    data-testid={`nav-${item.title.toLowerCase().replace(" ", "-")}`}
                   >
-                    <Link href={item.url}>
+                    <Link href={item.url} data-testid={item.testId}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -113,14 +128,13 @@ export function AppSidebar() {
           <SidebarGroupLabel>System</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {settingsNavItems.map((item) => (
+              {filterByRole(settingsNavItems).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
                     isActive={isActive(item.url)}
-                    data-testid={`nav-${item.title.toLowerCase()}`}
                   >
-                    <Link href={item.url}>
+                    <Link href={item.url} data-testid={item.testId}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -133,26 +147,18 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-4">
-        <div className="flex items-center gap-3 rounded-md p-2 bg-sidebar-accent/50">
-          <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-              {currentUser.firstName[0]}{currentUser.lastName[0]}
-            </AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col flex-1 min-w-0">
-            <span className="text-sm font-medium truncate">
+        <div className="flex flex-col gap-2 rounded-md p-3 bg-sidebar-accent/50">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium" data-testid="text-sidebar-user">
               {currentUser.firstName} {currentUser.lastName}
             </span>
-            <span className="text-xs text-muted-foreground truncate">
-              {department?.name}
-            </span>
+            <Badge variant="secondary" className={`text-xs ${roleLabels[role].color}`} data-testid="badge-sidebar-role">
+              {roleLabels[role].label}
+            </Badge>
           </div>
-          <button
-            className="p-1.5 rounded-md hover-elevate text-muted-foreground"
-            data-testid="button-logout"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
+          <span className="text-xs text-muted-foreground" data-testid="text-sidebar-department">
+            {department?.name}
+          </span>
         </div>
       </SidebarFooter>
     </Sidebar>

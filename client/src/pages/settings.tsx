@@ -24,7 +24,8 @@ import {
   Building2,
   Save,
 } from "lucide-react";
-import { currentUser, getDepartmentById } from "@/lib/demo-data";
+import { useRole, canEditOrgSettings } from "@/lib/role-context";
+import { getDepartmentById } from "@/lib/demo-data";
 import { useToast } from "@/hooks/use-toast";
 
 const profileFormSchema = z.object({
@@ -37,6 +38,7 @@ const profileFormSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 export default function Settings() {
+  const { role, currentUser } = useRole();
   const department = getDepartmentById(currentUser.departmentId);
   const { toast } = useToast();
 
@@ -82,10 +84,12 @@ export default function Settings() {
             <Palette className="mr-2 h-4 w-4" />
             Appearance
           </TabsTrigger>
-          <TabsTrigger value="organization" data-testid="tab-organization">
-            <Building2 className="mr-2 h-4 w-4" />
-            Organization
-          </TabsTrigger>
+          {canEditOrgSettings(role) && (
+            <TabsTrigger value="organization" data-testid="tab-organization">
+              <Building2 className="mr-2 h-4 w-4" />
+              Organization
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="profile" className="space-y-6">

@@ -50,11 +50,12 @@ import {
   CalendarDays,
   Filter,
 } from "lucide-react";
+import { useRole, canApproveLeave, canViewAllRequests } from "@/lib/role-context";
 import { 
   leaveRequests, 
   leaveTypes, 
   leaveBalances,
-  currentUser,
+  employees,
   getEmployeeById,
   getLeaveTypeById,
 } from "@/lib/demo-data";
@@ -83,6 +84,7 @@ const statusIcons = {
 };
 
 export default function Leave() {
+  const { role, currentUser } = useRole();
   const [activeTab, setActiveTab] = useState("my-requests");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
@@ -198,15 +200,19 @@ export default function Leave() {
                 {myRequests.length}
               </Badge>
             </TabsTrigger>
-            <TabsTrigger value="pending-approvals" data-testid="tab-pending-approvals">
-              Pending Approvals
-              <Badge variant="secondary" className="ml-2 text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                {pendingApprovals.length}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="all-requests" data-testid="tab-all-requests">
-              All Requests
-            </TabsTrigger>
+            {canApproveLeave(role) && (
+              <TabsTrigger value="pending-approvals" data-testid="tab-pending-approvals">
+                Pending Approvals
+                <Badge variant="secondary" className="ml-2 text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                  {pendingApprovals.length}
+                </Badge>
+              </TabsTrigger>
+            )}
+            {canViewAllRequests(role) && (
+              <TabsTrigger value="all-requests" data-testid="tab-all-requests">
+                All Requests
+              </TabsTrigger>
+            )}
           </TabsList>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[150px]" data-testid="select-leave-status-filter">

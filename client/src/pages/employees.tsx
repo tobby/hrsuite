@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -18,7 +18,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -44,6 +43,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useRole, canManageEmployees } from "@/lib/role-context";
 import { employees, departments, getDepartmentById, getEmployeeById } from "@/lib/demo-data";
 import type { Employee } from "@shared/schema";
 
@@ -60,13 +60,20 @@ const statusLabels = {
 };
 
 export default function Employees() {
+  const { role, currentUser } = useRole();
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-  const filteredEmployees = employees.filter((employee) => {
+  // For managers, show only their direct reports
+  // For admins, show all employees
+  const visibleEmployees = role === "manager" 
+    ? employees.filter(e => e.managerId === currentUser.id || e.id === currentUser.id)
+    : employees;
+
+  const filteredEmployees = visibleEmployees.filter((employee) => {
     const matchesSearch = 
       `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
       employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -88,21 +95,25 @@ export default function Employees() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight" data-testid="text-employees-title">
-            Employees
+            {role === "manager" ? "My Team" : "Employees"}
           </h1>
           <p className="text-muted-foreground">
-            Manage your organization's workforce
+            {role === "manager" 
+              ? "View and manage your direct reports" 
+              : "Manage your organization's workforce"}
           </p>
         </div>
-        <Button data-testid="button-add-employee">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Employee
-        </Button>
+        {canManageEmployees(role) && (
+          <Button data-testid="button-add-employee">
+            <Plus className="mr-2 h-4 w-4" />
+            Add Employee
+          </Button>
+        )}
       </div>
 
       <Card>
-        <CardHeader className="pb-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <CardContent className="pt-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between mb-4">
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -122,7 +133,7 @@ export default function Employees() {
                 <SelectContent>
                   <SelectItem value="all">All Departments</SelectItem>
                   {departments.map((dept) => (
-                    <SelectItem key={dept.id} value={dept.id}>
+                    <SelectItem key={dept.id} value={dept.id} data-testid={`option-dept-${dept.id}`}>
                       {dept.name}
                     </SelectItem>
                   ))}
@@ -134,16 +145,15 @@ export default function Employees() {
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                  <SelectItem value="on_leave">On Leave</SelectItem>
+                  <SelectItem value="all" data-testid="option-status-all">All Status</SelectItem>
+                  <SelectItem value="active" data-testid="option-status-active">Active</SelectItem>
+                  <SelectItem value="inactive" data-testid="option-status-inactive">Inactive</SelectItem>
+                  <SelectItem value="on_leave" data-testid="option-status-on-leave">On Leave</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+          
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -160,13 +170,12 @@ export default function Employees() {
                 {filteredEmployees.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="h-24 text-center">
-                      <p className="text-muted-foreground">No employees found</p>
+                      <p className="text-muted-foreground" data-testid="text-no-employees">No employees found</p>
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredEmployees.map((employee) => {
                     const department = getDepartmentById(employee.departmentId);
-                    const manager = employee.managerId ? getEmployeeById(employee.managerId) : null;
                     return (
                       <TableRow 
                         key={employee.id}
@@ -182,7 +191,7 @@ export default function Employees() {
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <p className="font-medium">
+                              <p className="font-medium" data-testid={`text-employee-name-${employee.id}`}>
                                 {employee.firstName} {employee.lastName}
                               </p>
                               <p className="text-sm text-muted-foreground">
@@ -191,14 +200,14 @@ export default function Employees() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell>{employee.position}</TableCell>
-                        <TableCell>{department?.name}</TableCell>
+                        <TableCell data-testid={`text-employee-position-${employee.id}`}>{employee.position}</TableCell>
+                        <TableCell data-testid={`text-employee-dept-${employee.id}`}>{department?.name}</TableCell>
                         <TableCell>
-                          <Badge variant="secondary" className={statusStyles[employee.status]}>
+                          <Badge variant="secondary" className={statusStyles[employee.status]} data-testid={`badge-employee-status-${employee.id}`}>
                             {statusLabels[employee.status]}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-testid={`text-employee-hire-${employee.id}`}>
                           {new Date(employee.hireDate).toLocaleDateString()}
                         </TableCell>
                         <TableCell>
@@ -209,11 +218,17 @@ export default function Employees() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openEmployeeDetail(employee); }}>
+                              <DropdownMenuItem 
+                                onClick={(e) => { e.stopPropagation(); openEmployeeDetail(employee); }}
+                                data-testid={`menu-view-profile-${employee.id}`}
+                              >
                                 <UserCircle className="mr-2 h-4 w-4" />
                                 View Profile
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenuItem 
+                                onClick={(e) => e.stopPropagation()}
+                                data-testid={`menu-send-email-${employee.id}`}
+                              >
                                 <Mail className="mr-2 h-4 w-4" />
                                 Send Email
                               </DropdownMenuItem>
@@ -227,8 +242,8 @@ export default function Employees() {
               </TableBody>
             </Table>
           </div>
-          <div className="mt-4 text-sm text-muted-foreground">
-            Showing {filteredEmployees.length} of {employees.length} employees
+          <div className="mt-4 text-sm text-muted-foreground" data-testid="text-employee-count">
+            Showing {filteredEmployees.length} of {visibleEmployees.length} employees
           </div>
         </CardContent>
       </Card>
@@ -246,7 +261,7 @@ export default function Employees() {
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <div>{selectedEmployee.firstName} {selectedEmployee.lastName}</div>
+                    <div data-testid="text-detail-employee-name">{selectedEmployee.firstName} {selectedEmployee.lastName}</div>
                     <DialogDescription className="font-normal">
                       {selectedEmployee.position}
                     </DialogDescription>
@@ -257,14 +272,14 @@ export default function Employees() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Email</Label>
-                    <div className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-2 text-sm" data-testid="text-detail-email">
                       <Mail className="h-4 w-4 text-muted-foreground" />
                       {selectedEmployee.email}
                     </div>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Phone</Label>
-                    <div className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-2 text-sm" data-testid="text-detail-phone">
                       <Phone className="h-4 w-4 text-muted-foreground" />
                       {selectedEmployee.phone}
                     </div>
@@ -273,7 +288,7 @@ export default function Employees() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Department</Label>
-                    <div className="flex items-center gap-2 text-sm">
+                    <div className="flex items-center gap-2 text-sm" data-testid="text-detail-department">
                       <Building2 className="h-4 w-4 text-muted-foreground" />
                       {getDepartmentById(selectedEmployee.departmentId)?.name}
                     </div>
@@ -281,7 +296,7 @@ export default function Employees() {
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Status</Label>
                     <div>
-                      <Badge variant="secondary" className={statusStyles[selectedEmployee.status]}>
+                      <Badge variant="secondary" className={statusStyles[selectedEmployee.status]} data-testid="text-detail-status">
                         {statusLabels[selectedEmployee.status]}
                       </Badge>
                     </div>
@@ -290,11 +305,11 @@ export default function Employees() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Hire Date</Label>
-                    <p className="text-sm">{new Date(selectedEmployee.hireDate).toLocaleDateString()}</p>
+                    <p className="text-sm" data-testid="text-detail-hire-date">{new Date(selectedEmployee.hireDate).toLocaleDateString()}</p>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Manager</Label>
-                    <p className="text-sm">
+                    <p className="text-sm" data-testid="text-detail-manager">
                       {selectedEmployee.managerId 
                         ? `${getEmployeeById(selectedEmployee.managerId)?.firstName} ${getEmployeeById(selectedEmployee.managerId)?.lastName}`
                         : "—"}
@@ -302,10 +317,12 @@ export default function Employees() {
                   </div>
                 </div>
                 <div className="flex gap-2 pt-4">
-                  <Button className="flex-1" data-testid="button-edit-employee">
-                    Edit Profile
-                  </Button>
-                  <Button variant="outline" onClick={() => setIsDetailOpen(false)}>
+                  {canManageEmployees(role) && (
+                    <Button className="flex-1" data-testid="button-edit-employee">
+                      Edit Profile
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={() => setIsDetailOpen(false)} data-testid="button-close-detail">
                     Close
                   </Button>
                 </div>

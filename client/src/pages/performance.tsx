@@ -40,12 +40,13 @@ import {
   MessageSquare,
   ChevronRight,
 } from "lucide-react";
+import { useRole, canCreateAppraisalCycles } from "@/lib/role-context";
 import { 
   appraisalCycles,
   appraisals,
   appraisalFeedback,
   competencies,
-  currentUser,
+  employees,
   getEmployeeById,
   getAppraisalCycleById,
   getFeedbackByAppraisal,
@@ -78,6 +79,7 @@ const cycleTypeLabels = {
 };
 
 export default function Performance() {
+  const { role, currentUser } = useRole();
   const [activeTab, setActiveTab] = useState("my-reviews");
   const [selectedAppraisal, setSelectedAppraisal] = useState<Appraisal | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -95,6 +97,10 @@ export default function Performance() {
       teamworkRating: 3,
     },
   });
+
+  // Get team members for manager view
+  const teamMembers = employees.filter(e => e.managerId === currentUser.id);
+  const teamMemberIds = [currentUser.id, ...teamMembers.map(m => m.id)];
 
   const myAppraisals = appraisals.filter(a => a.employeeId === currentUser.id);
   const pendingFeedback = appraisalFeedback.filter(
@@ -131,10 +137,12 @@ export default function Performance() {
             180° and 360° performance reviews and feedback
           </p>
         </div>
-        <Button data-testid="button-new-cycle">
-          <Plus className="mr-2 h-4 w-4" />
-          New Cycle
-        </Button>
+        {canCreateAppraisalCycles(role) && (
+          <Button data-testid="button-new-cycle">
+            <Plus className="mr-2 h-4 w-4" />
+            New Cycle
+          </Button>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -200,6 +208,11 @@ export default function Performance() {
               {pendingFeedback.length}
             </Badge>
           </TabsTrigger>
+          {(role === "manager" || role === "admin") && (
+            <TabsTrigger value="team-reviews" data-testid="tab-team-reviews">
+              Team Reviews
+            </TabsTrigger>
+          )}
           <TabsTrigger value="cycles" data-testid="tab-cycles">
             Review Cycles
           </TabsTrigger>
