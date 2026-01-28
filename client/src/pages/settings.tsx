@@ -1,0 +1,365 @@
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { 
+  User,
+  Bell,
+  Palette,
+  Building2,
+  Save,
+} from "lucide-react";
+import { currentUser, getDepartmentById } from "@/lib/demo-data";
+import { useToast } from "@/hooks/use-toast";
+
+const profileFormSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().min(1, "Phone is required"),
+});
+
+type ProfileFormValues = z.infer<typeof profileFormSchema>;
+
+export default function Settings() {
+  const department = getDepartmentById(currentUser.departmentId);
+  const { toast } = useToast();
+
+  const form = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileFormSchema),
+    defaultValues: {
+      firstName: currentUser.firstName,
+      lastName: currentUser.lastName,
+      email: currentUser.email,
+      phone: currentUser.phone,
+    },
+  });
+
+  const onSubmit = (data: ProfileFormValues) => {
+    toast({
+      title: "Profile Updated",
+      description: "Your profile has been updated successfully.",
+    });
+  };
+
+  return (
+    <div className="space-y-6 p-6">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-settings-title">
+          Settings
+        </h1>
+        <p className="text-muted-foreground">
+          Manage your account and application preferences
+        </p>
+      </div>
+
+      <Tabs defaultValue="profile" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="profile" data-testid="tab-profile">
+            <User className="mr-2 h-4 w-4" />
+            Profile
+          </TabsTrigger>
+          <TabsTrigger value="notifications" data-testid="tab-notifications">
+            <Bell className="mr-2 h-4 w-4" />
+            Notifications
+          </TabsTrigger>
+          <TabsTrigger value="appearance" data-testid="tab-appearance">
+            <Palette className="mr-2 h-4 w-4" />
+            Appearance
+          </TabsTrigger>
+          <TabsTrigger value="organization" data-testid="tab-organization">
+            <Building2 className="mr-2 h-4 w-4" />
+            Organization
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="profile" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile Information</CardTitle>
+              <CardDescription>
+                Update your personal information and profile picture
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center gap-6">
+                <Avatar className="h-20 w-20">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-2xl" data-testid="avatar-user">
+                    {currentUser.firstName[0]}{currentUser.lastName[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="space-y-2">
+                  <Button variant="outline" size="sm" data-testid="button-change-photo">
+                    Change Photo
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    JPG, PNG or GIF. Max size 2MB.
+                  </p>
+                </div>
+              </div>
+
+              <Separator />
+
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <FormField
+                      control={form.control}
+                      name="firstName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>First Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-first-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Last Name</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-last-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <Input type="email" {...field} data-testid="input-email" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="phone"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Phone</FormLabel>
+                          <FormControl>
+                            <Input {...field} data-testid="input-phone" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button type="submit" data-testid="button-save-profile">
+                      <Save className="mr-2 h-4 w-4" />
+                      Save Changes
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Employment Details</CardTitle>
+              <CardDescription>
+                Your role and department information (read-only)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Position</Label>
+                  <p className="font-medium" data-testid="text-position">{currentUser.position}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Department</Label>
+                  <p className="font-medium" data-testid="text-department">{department?.name}</p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Hire Date</Label>
+                  <p className="font-medium" data-testid="text-hire-date">
+                    {new Date(currentUser.hireDate).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Employee ID</Label>
+                  <p className="font-medium font-mono text-sm" data-testid="text-employee-id">{currentUser.id}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="notifications" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Email Notifications</CardTitle>
+              <CardDescription>
+                Configure which emails you receive
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Leave Request Updates</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Receive emails when your leave requests are approved or rejected
+                  </p>
+                </div>
+                <Switch defaultChecked data-testid="switch-leave-notifications" />
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Performance Review Reminders</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Get notified about upcoming reviews and feedback requests
+                  </p>
+                </div>
+                <Switch defaultChecked data-testid="switch-review-notifications" />
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Approval Requests</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Receive notifications when team members submit requests
+                  </p>
+                </div>
+                <Switch defaultChecked data-testid="switch-approval-notifications" />
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Weekly Summary</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Get a weekly digest of HR activities and updates
+                  </p>
+                </div>
+                <Switch data-testid="switch-weekly-summary" />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="appearance" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Theme</CardTitle>
+              <CardDescription>
+                Customize the look and feel of the application
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Dark Mode</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Switch between light and dark themes
+                  </p>
+                </div>
+                <Switch data-testid="switch-dark-mode" />
+              </div>
+              <Separator />
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Compact Mode</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Use smaller spacing for a denser layout
+                  </p>
+                </div>
+                <Switch data-testid="switch-compact-mode" />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="organization" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Organization Settings</CardTitle>
+              <CardDescription>
+                Company-wide configuration (Admin only)
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="companyName">Company Name</Label>
+                  <Input 
+                    id="companyName" 
+                    defaultValue="Acme Corporation"
+                    disabled
+                    data-testid="input-company-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fiscalYear">Fiscal Year Start</Label>
+                  <Input 
+                    id="fiscalYear" 
+                    defaultValue="January"
+                    disabled
+                    data-testid="input-fiscal-year"
+                  />
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Contact your HR administrator to update organization settings.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Leave Policy</CardTitle>
+              <CardDescription>
+                Default leave allocations (Admin only)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="p-4 rounded-md border" data-testid="card-leave-policy-annual">
+                  <p className="text-sm text-muted-foreground">Annual Leave</p>
+                  <p className="text-2xl font-bold">20 days</p>
+                </div>
+                <div className="p-4 rounded-md border" data-testid="card-leave-policy-sick">
+                  <p className="text-sm text-muted-foreground">Sick Leave</p>
+                  <p className="text-2xl font-bold">10 days</p>
+                </div>
+                <div className="p-4 rounded-md border" data-testid="card-leave-policy-personal">
+                  <p className="text-sm text-muted-foreground">Personal Leave</p>
+                  <p className="text-2xl font-bold">5 days</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
