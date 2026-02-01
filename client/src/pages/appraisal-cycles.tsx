@@ -673,14 +673,16 @@ export default function AppraisalCycles() {
 
             {/* Individual Selection with Peer Assignment */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">
-                Participants
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">
+                  Select Participants
+                </Label>
                 {selectedCycleId && appraisalCycles.find(c => c.id === selectedCycleId)?.type === "360" && (
-                  <span className="font-normal text-muted-foreground ml-2">
-                    (Click "Assign Peers" to select peer reviewers)
-                  </span>
+                  <Badge variant="outline" className="text-xs">
+                    360° - Peer assignment available
+                  </Badge>
                 )}
-              </Label>
+              </div>
               <div className="rounded-md border divide-y max-h-[300px] overflow-y-auto">
                 {employees.map((emp) => {
                   const isSelected = selectedParticipants.includes(emp.id);
@@ -690,17 +692,19 @@ export default function AppraisalCycles() {
                   return (
                     <div 
                       key={emp.id}
-                      className="flex items-center gap-3 p-3"
+                      className={`flex items-center gap-3 p-3 ${isSelected ? 'bg-primary/5' : ''}`}
+                      data-testid={`participant-row-${emp.id}`}
                     >
+                      <Checkbox 
+                        checked={isSelected}
+                        onCheckedChange={() => handleToggleParticipant(emp.id)}
+                        className="h-5 w-5"
+                        data-testid={`checkbox-participant-${emp.id}`}
+                      />
                       <div 
-                        className="flex items-center gap-3 flex-1 cursor-pointer hover-elevate rounded-md p-1 -m-1"
+                        className="flex items-center gap-3 flex-1 cursor-pointer"
                         onClick={() => handleToggleParticipant(emp.id)}
                       >
-                        <Checkbox 
-                          checked={isSelected}
-                          onCheckedChange={() => handleToggleParticipant(emp.id)}
-                          data-testid={`checkbox-participant-${emp.id}`}
-                        />
                         <Avatar className="h-8 w-8">
                           <AvatarFallback className="text-xs bg-primary/10 text-primary">
                             {emp.firstName[0]}{emp.lastName[0]}
@@ -718,7 +722,7 @@ export default function AppraisalCycles() {
                       {/* Peer Assignment Button (only for 360° cycles and selected participants) */}
                       {is360Cycle && isSelected && (
                         <Button
-                          variant="outline"
+                          variant="default"
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
