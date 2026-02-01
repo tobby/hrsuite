@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useParams, Link } from "wouter";
+import { useParams, Link, Redirect } from "wouter";
 import { useForm } from "react-hook-form";
 import { useRecruitmentStore, CandidateStage } from "@/lib/recruitment-store";
 import { employees } from "@/lib/demo-data";
 import { useToast } from "@/hooks/use-toast";
+import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,8 +34,13 @@ const ASSESSMENT_CATEGORIES = ["technical", "communication", "culture_fit", "exp
 const NOTE_CATEGORIES = ["general", "feedback", "concern", "positive"];
 
 export default function CandidateDetail() {
+  const { role } = useRole();
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+
+  if (!canEditOrgSettings(role)) {
+    return <Redirect to="/" />;
+  }
   const {
     getCandidateById,
     getJobById,

@@ -2,8 +2,10 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Redirect } from "wouter";
 import { useRecruitmentStore } from "@/lib/recruitment-store";
 import { useToast } from "@/hooks/use-toast";
+import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +37,13 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function RecruitmentSettings() {
+  const { role } = useRole();
   const { toast } = useToast();
+
+  if (!canEditOrgSettings(role)) {
+    return <Redirect to="/" />;
+  }
+
   const {
     emailTemplates,
     addEmailTemplate,

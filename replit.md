@@ -1,7 +1,7 @@
 # HRFlow - HR Management Platform
 
 ## Overview
-HRFlow is a frontend-only HR management platform built for demonstration purposes. It provides three core modules: Leave Management, Performance Appraisals, and Employee Management. The platform uses static demo data instead of API calls, as per user requirements.
+HRFlow is a frontend-only HR management platform built for demonstration purposes. It provides four core modules: Leave Management, Performance Appraisals, Employee Management, and Recruitment/ATS. The platform uses static demo data instead of API calls, as per user requirements.
 
 ## Current State
 - **Status**: Complete MVP with all core modules functional
@@ -9,6 +9,15 @@ HRFlow is a frontend-only HR management platform built for demonstration purpose
 - **Tech Stack**: React + TypeScript, Vite, Tailwind CSS, shadcn/ui, Zustand for state management
 
 ## Recent Changes
+- 2026-02-01: Comprehensive Recruitment/ATS Module implemented
+  - Jobs page (`/recruitment/jobs`) with card/table view toggle, CRUD operations, and shareable application links
+  - Public Careers page (`/careers`) with job listings, filters by department and type
+  - Job Application form (`/jobs/:id/apply`) with privacy disclaimer, multi-step flow, and success confirmation
+  - Candidate Pipeline page (`/recruitment/candidates`) with Kanban board (drag-drop) and table view across 6 stages
+  - Candidate Detail page (`/recruitment/candidates/:id`) with 5 tabs: Overview, Assessments, Interviews, Communications, Notes
+  - Recruitment Settings page (`/recruitment/settings`) for email templates with variables, privacy disclaimer, and terms editing
+  - Zustand recruitment store for state management with demo data (4 jobs, 9 candidates, 4 email templates)
+  - Role-based access control: Recruitment pages are Admin-only with route guards
 - 2026-02-01: Peer Reviewer Assignment for 360° Cycles
   - Admins can now assign peer reviewers for each participant in 360° cycles
   - "Assign Peers" button appears next to each selected participant in the Manage Participants dialog
@@ -64,10 +73,17 @@ client/
 │   │   ├── appraisal-templates.tsx # Template management (Admin)
 │   │   ├── appraisal-cycles.tsx  # Cycle management (Admin)
 │   │   ├── cycle-progress.tsx    # Cycle progress tracking (Admin)
+│   │   ├── recruitment-jobs.tsx  # Job postings management (Admin)
+│   │   ├── recruitment-candidates.tsx  # Candidate pipeline (Admin)
+│   │   ├── candidate-detail.tsx  # Candidate details with 5 tabs (Admin)
+│   │   ├── recruitment-settings.tsx  # Email templates & settings (Admin)
+│   │   ├── careers.tsx       # Public job listings
+│   │   ├── job-application.tsx  # Public job application form
 │   │   └── settings.tsx     # User settings
 │   ├── lib/
 │   │   ├── demo-data.ts     # Static demo data
 │   │   ├── appraisal-store.ts # Zustand store for appraisal state
+│   │   ├── recruitment-store.ts # Zustand store for recruitment/ATS state
 │   │   ├── role-context.tsx # Role-based access control
 │   │   └── queryClient.ts   # TanStack Query setup
 │   └── App.tsx              # Root component with routing
@@ -91,6 +107,12 @@ server/
 - `/appraisals/templates` - Manage review templates (Admin-only)
 - `/appraisals/cycles` - Manage review cycles (Admin-only)
 - `/appraisals/cycles/:id` - View cycle progress and participant status (Admin-only)
+- `/recruitment/jobs` - Job postings management (Admin-only)
+- `/recruitment/candidates` - Candidate pipeline with Kanban/Table view (Admin-only)
+- `/recruitment/candidates/:id` - Candidate details with 5 tabs (Admin-only)
+- `/recruitment/settings` - Email templates and legal settings (Admin-only)
+- `/careers` - Public careers page with job listings
+- `/jobs/:id/apply` - Public job application form
 - `/settings` - User settings
 
 ## Data Model

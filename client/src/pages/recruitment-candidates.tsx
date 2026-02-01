@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, Redirect } from "wouter";
 import { useRecruitmentStore, CandidateStage } from "@/lib/recruitment-store";
 import { employees } from "@/lib/demo-data";
 import { useToast } from "@/hooks/use-toast";
+import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +24,13 @@ const PIPELINE_STAGES: { key: CandidateStage; label: string; color: string }[] =
 ];
 
 export default function RecruitmentCandidates() {
+  const { role } = useRole();
   const { toast } = useToast();
   const { candidates, jobs, updateCandidateStage } = useRecruitmentStore();
+
+  if (!canEditOrgSettings(role)) {
+    return <Redirect to="/" />;
+  }
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [searchTerm, setSearchTerm] = useState("");
   const [jobFilter, setJobFilter] = useState<string>("all");

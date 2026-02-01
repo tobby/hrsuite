@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Redirect } from "wouter";
 import { useRecruitmentStore } from "@/lib/recruitment-store";
 import { departments } from "@/lib/demo-data";
 import { useToast } from "@/hooks/use-toast";
+import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,8 +32,13 @@ const jobFormSchema = z.object({
 type JobFormData = z.infer<typeof jobFormSchema>;
 
 export default function RecruitmentJobs() {
+  const { role } = useRole();
   const { toast } = useToast();
   const { jobs, addJob, updateJob, deleteJob, getCandidatesByJob } = useRecruitmentStore();
+
+  if (!canEditOrgSettings(role)) {
+    return <Redirect to="/" />;
+  }
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<string | null>(null);
