@@ -51,7 +51,6 @@ client/
 │   │   ├── appraisal-results.tsx # Results with weighted scores
 │   │   ├── appraisal-templates.tsx # Template management (Admin)
 │   │   ├── appraisal-cycles.tsx  # Cycle management (Admin)
-│   │   ├── performance.tsx  # Performance overview (legacy)
 │   │   └── settings.tsx     # User settings
 │   ├── lib/
 │   │   ├── demo-data.ts     # Static demo data
@@ -78,7 +77,6 @@ server/
 - `/appraisals/results/:id` - View appraisal results with weighted scores
 - `/appraisals/templates` - Manage review templates (Admin-only)
 - `/appraisals/cycles` - Manage review cycles (Admin-only)
-- `/performance` - Performance overview (legacy)
 - `/settings` - User settings
 
 ## Data Model

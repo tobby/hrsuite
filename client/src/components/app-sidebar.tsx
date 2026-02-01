@@ -189,18 +189,6 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               )}
 
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive("/performance")}
-                >
-                  <Link href="/performance" data-testid="nav-performance">
-                    <ClipboardCheck className="h-4 w-4" />
-                    <span>Performance</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
               {showAppraisalsSubItems ? (
                 <Collapsible open={appraisalsExpanded} onOpenChange={setAppraisalsExpanded}>
                   <SidebarMenuItem>

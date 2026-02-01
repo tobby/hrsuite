@@ -15,7 +15,6 @@ import Departments from "@/pages/departments";
 import Leave from "@/pages/leave";
 import LeaveAnalytics from "@/pages/leave-analytics";
 import LeaveSettings from "@/pages/leave-settings";
-import Performance from "@/pages/performance";
 import Settings from "@/pages/settings";
 import Appraisals from "@/pages/appraisals";
 import AppraisalReview from "@/pages/appraisal-review";
@@ -32,7 +31,6 @@ function Router() {
       <Route path="/leave" component={Leave} />
       <Route path="/leave/analytics" component={LeaveAnalytics} />
       <Route path="/leave/settings" component={LeaveSettings} />
-      <Route path="/performance" component={Performance} />
       <Route path="/appraisals" component={Appraisals} />
       <Route path="/appraisals/review/:id" component={AppraisalReview} />
       <Route path="/appraisals/results/:id" component={AppraisalResults} />
