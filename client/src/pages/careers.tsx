@@ -137,8 +137,8 @@ export default function Careers() {
                         </span>
                       </CardDescription>
                     </div>
-                    <Link href={`/jobs/${job.id}/apply`}>
-                      <Button data-testid={`button-apply-${job.id}`}>Apply Now</Button>
+                    <Link href={`/jobs/${job.id}`}>
+                      <Button data-testid={`button-view-${job.id}`}>View Details</Button>
                     </Link>
                   </div>
                 </CardHeader>

@@ -111,8 +111,9 @@ server/
 - `/recruitment/candidates` - Candidate pipeline with Kanban/Table view (Admin-only)
 - `/recruitment/candidates/:id` - Candidate details with 5 tabs (Admin-only)
 - `/recruitment/settings` - Email templates and legal settings (Admin-only)
-- `/careers` - Public careers page with job listings
-- `/jobs/:id/apply` - Public job application form
+- `/careers` - Public careers page with job listings (standalone, no sidebar)
+- `/jobs/:id` - Public job details page (standalone, no sidebar)
+- `/jobs/:id/apply` - Public job application form (standalone, no sidebar)
 - `/settings` - User settings
 
 ## Data Model
