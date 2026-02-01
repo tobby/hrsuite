@@ -8,6 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -37,14 +43,22 @@ import {
   Trash2,
   Star,
   MessageSquare,
-  GripVertical,
+  ChevronRight,
+  Copy,
+  MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
-import { useLocation, Link } from "wouter";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import {
   appraisalTemplates,
-  templateQuestions,
   competencies,
   getQuestionsByTemplate,
   getCompetencyById,
@@ -66,7 +80,6 @@ type QuestionFormValues = z.infer<typeof questionFormSchema>;
 
 export default function AppraisalTemplates() {
   const { role } = useRole();
-  const [, navigate] = useLocation();
   const { toast } = useToast();
   
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -87,16 +100,20 @@ export default function AppraisalTemplates() {
     defaultValues: {
       questionText: "",
       questionType: "rating",
-      competencyId: "",
+      competencyId: "none",
     },
   });
 
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center p-12">
-        <p className="text-muted-foreground">Access restricted to administrators only</p>
+        <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+        <h2 className="text-lg font-semibold mb-2">Access Restricted</h2>
+        <p className="text-muted-foreground text-center mb-4">
+          Only administrators can manage appraisal templates.
+        </p>
         <Link href="/appraisals">
-          <Button variant="ghost" className="mt-4">Back to Appraisals</Button>
+          <Button variant="outline">Back to Appraisals</Button>
         </Link>
       </div>
     );
@@ -112,11 +129,16 @@ export default function AppraisalTemplates() {
   };
 
   const handleAddQuestion = (values: QuestionFormValues) => {
+    const competencyName = values.competencyId && values.competencyId !== "none" 
+      ? getCompetencyById(values.competencyId)?.name 
+      : null;
     toast({
       title: "Question Added",
-      description: "The question has been added to the template.",
+      description: competencyName 
+        ? `Added ${values.questionType} question under ${competencyName}.`
+        : `Added ${values.questionType} question to the template.`,
     });
-    questionForm.reset();
+    questionForm.reset({ questionText: "", questionType: "rating", competencyId: "none" });
     setIsAddQuestionOpen(false);
   };
 
@@ -126,16 +148,16 @@ export default function AppraisalTemplates() {
   };
 
   const handleCloseQuestionDialog = (open: boolean) => {
-    if (!open) questionForm.reset();
+    if (!open) questionForm.reset({ questionText: "", questionType: "rating", competencyId: "none" });
     setIsAddQuestionOpen(open);
   };
 
   const handleOpenAddQuestion = (templateId: string) => {
     setSelectedTemplateId(templateId);
+    questionForm.reset({ questionText: "", questionType: "rating", competencyId: "none" });
     setIsAddQuestionOpen(true);
   };
 
-  // Group competencies by category
   const competencyCategories = competencies.reduce<Record<string, typeof competencies>>((acc, comp) => {
     if (!acc[comp.category]) acc[comp.category] = [];
     acc[comp.category].push(comp);
@@ -144,103 +166,209 @@ export default function AppraisalTemplates() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <FileText className="h-6 w-6 text-primary" />
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <FileText className="h-5 w-5 text-primary" />
             <h1 className="text-2xl font-bold tracking-tight" data-testid="text-templates-title">
-              Appraisal Templates
+              Review Templates
             </h1>
           </div>
-          <p className="text-muted-foreground">
-            Create and manage reusable performance review templates
+          <p className="text-sm text-muted-foreground">
+            Create and manage templates for performance reviews
           </p>
         </div>
         <Button onClick={() => setIsCreateOpen(true)} data-testid="button-create-template">
           <Plus className="mr-2 h-4 w-4" />
-          Create Template
+          New Template
         </Button>
       </div>
 
-      {/* Templates Grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* Stats Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-2xl font-bold">{appraisalTemplates.length}</div>
+            <p className="text-xs text-muted-foreground">Total Templates</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-2xl font-bold">
+              {appraisalTemplates.filter(t => t.isDefault === 1).length}
+            </div>
+            <p className="text-xs text-muted-foreground">Default Templates</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-2xl font-bold">
+              {appraisalTemplates.reduce((acc, t) => acc + getQuestionsByTemplate(t.id).filter(q => q.questionType === "rating").length, 0)}
+            </div>
+            <p className="text-xs text-muted-foreground">Rating Questions</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="text-2xl font-bold">
+              {appraisalTemplates.reduce((acc, t) => acc + getQuestionsByTemplate(t.id).filter(q => q.questionType === "text").length, 0)}
+            </div>
+            <p className="text-xs text-muted-foreground">Text Questions</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Templates List */}
+      <div className="space-y-4">
         {appraisalTemplates.map((template) => {
           const questions = getQuestionsByTemplate(template.id);
-          const ratingCount = questions.filter(q => q.questionType === "rating").length;
-          const textCount = questions.filter(q => q.questionType === "text").length;
+          const ratingQuestions = questions.filter(q => q.questionType === "rating");
+          const textQuestions = questions.filter(q => q.questionType === "text");
+          
+          const competencyGroups = ratingQuestions.reduce<Record<string, typeof questions>>((acc, q) => {
+            const comp = q.competencyId ? getCompetencyById(q.competencyId) : null;
+            const key = comp?.category || "General";
+            if (!acc[key]) acc[key] = [];
+            acc[key].push(q);
+            return acc;
+          }, {});
           
           return (
             <Card key={template.id} data-testid={`template-card-${template.id}`}>
-              <CardHeader className="flex flex-row items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-lg">{template.name}</CardTitle>
-                    {template.isDefault === 1 && (
-                      <Badge variant="secondary">Default</Badge>
-                    )}
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <CardTitle className="text-lg">{template.name}</CardTitle>
+                      {template.isDefault === 1 && (
+                        <Badge variant="secondary" className="text-xs">Default</Badge>
+                      )}
+                    </div>
+                    <CardDescription className="mt-1">{template.description}</CardDescription>
                   </div>
-                  <CardDescription>{template.description}</CardDescription>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="icon" variant="ghost" data-testid={`button-template-menu-${template.id}`}>
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem data-testid={`button-edit-template-${template.id}`}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit Template
+                      </DropdownMenuItem>
+                      <DropdownMenuItem>
+                        <Copy className="h-4 w-4 mr-2" />
+                        Duplicate
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        className="text-destructive"
+                        disabled={template.isDefault === 1}
+                        data-testid={`button-delete-template-${template.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button size="icon" variant="ghost" data-testid={`button-edit-template-${template.id}`}>
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    size="icon" 
-                    variant="ghost" 
-                    className="text-destructive" 
-                    data-testid={`button-delete-template-${template.id}`}
-                    disabled={template.isDefault === 1}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                
+                {/* Question counts */}
+                <div className="flex items-center gap-4 mt-3 text-sm">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded bg-amber-500/10 flex items-center justify-center">
+                      <Star className="h-3 w-3 text-amber-500" />
+                    </div>
+                    <span className="text-muted-foreground">{ratingQuestions.length} ratings</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-5 h-5 rounded bg-blue-500/10 flex items-center justify-center">
+                      <MessageSquare className="h-3 w-3 text-blue-500" />
+                    </div>
+                    <span className="text-muted-foreground">{textQuestions.length} text</span>
+                  </div>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <Star className="h-4 w-4" />
-                    <span>{ratingCount} rating questions</span>
-                  </div>
-                  <div className="flex items-center gap-1 text-muted-foreground">
-                    <MessageSquare className="h-4 w-4" />
-                    <span>{textCount} text questions</span>
-                  </div>
-                </div>
-
-                {/* Questions List */}
-                <div className="space-y-2">
-                  {questions.slice(0, 4).map((question) => {
-                    const competency = question.competencyId ? getCompetencyById(question.competencyId) : null;
-                    
-                    return (
-                      <div
-                        key={question.id}
-                        className="flex items-center gap-2 p-2 rounded border text-sm"
-                      >
-                        <GripVertical className="h-4 w-4 text-muted-foreground/50" />
-                        {question.questionType === "rating" ? (
-                          <Star className="h-4 w-4 text-amber-500" />
-                        ) : (
-                          <MessageSquare className="h-4 w-4 text-blue-500" />
-                        )}
-                        <span className="flex-1 truncate">{question.questionText}</span>
-                        {competency && (
-                          <Badge variant="outline" className="text-xs">{competency.category}</Badge>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {questions.length > 4 && (
-                    <p className="text-xs text-muted-foreground text-center py-1">
-                      +{questions.length - 4} more questions
-                    </p>
+              
+              <CardContent className="pt-2">
+                <Accordion type="single" collapsible className="w-full">
+                  {/* Rating Questions by Category */}
+                  {Object.entries(competencyGroups).map(([category, categoryQuestions]) => (
+                    <AccordionItem value={`${template.id}-${category}`} key={category}>
+                      <AccordionTrigger className="text-sm hover:no-underline py-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs font-normal">{category}</Badge>
+                          <span className="text-muted-foreground">
+                            {categoryQuestions.length} question{categoryQuestions.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-2 pl-2">
+                          {categoryQuestions.map((question, idx) => (
+                            <div
+                              key={question.id}
+                              className="flex items-start gap-2 py-1.5 text-sm group"
+                            >
+                              <span className="text-muted-foreground w-5 text-right shrink-0">{idx + 1}.</span>
+                              <Star className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                              <span className="flex-1">{question.questionText}</span>
+                              <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Trash2 className="h-3 w-3 text-muted-foreground" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                  
+                  {/* Text Questions */}
+                  {textQuestions.length > 0 && (
+                    <AccordionItem value={`${template.id}-text`}>
+                      <AccordionTrigger className="text-sm hover:no-underline py-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs font-normal bg-blue-500/10">Written Feedback</Badge>
+                          <span className="text-muted-foreground">
+                            {textQuestions.length} question{textQuestions.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-2 pl-2">
+                          {textQuestions.map((question, idx) => (
+                            <div
+                              key={question.id}
+                              className="flex items-start gap-2 py-1.5 text-sm group"
+                            >
+                              <span className="text-muted-foreground w-5 text-right shrink-0">{idx + 1}.</span>
+                              <MessageSquare className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                              <span className="flex-1">{question.questionText}</span>
+                              <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Trash2 className="h-3 w-3 text-muted-foreground" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
                   )}
-                </div>
+                </Accordion>
 
                 <Button 
                   variant="outline" 
-                  className="w-full" 
+                  size="sm"
+                  className="w-full mt-4" 
                   onClick={() => handleOpenAddQuestion(template.id)}
                   data-testid={`button-add-question-${template.id}`}
                 >
@@ -290,6 +418,7 @@ export default function AppraisalTemplates() {
                     <FormControl>
                       <Textarea
                         placeholder="Brief description of this template's purpose"
+                        className="resize-none"
                         {...field}
                         data-testid="input-template-description"
                       />
@@ -328,7 +457,7 @@ export default function AppraisalTemplates() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Question Type <span className="text-destructive">*</span></FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-question-type">
                           <SelectValue placeholder="Select type" />
@@ -359,14 +488,14 @@ export default function AppraisalTemplates() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Competency Category</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-competency">
                           <SelectValue placeholder="Select competency (optional)" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="none">None (General Question)</SelectItem>
                         {Object.entries(competencyCategories).map(([category, comps]) => (
                           comps.map((comp) => (
                             <SelectItem key={comp.id} value={comp.id}>
@@ -392,6 +521,7 @@ export default function AppraisalTemplates() {
                     <FormControl>
                       <Textarea
                         placeholder="e.g., How effectively does this person communicate with team members?"
+                        className="resize-none"
                         {...field}
                         data-testid="input-question-text"
                       />
