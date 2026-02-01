@@ -125,6 +125,7 @@ export default function Leave() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [confirmAction, setConfirmAction] = useState<{ type: "approve" | "reject"; request: LeaveRequest } | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
   const { toast } = useToast();
 
   const form = useForm<LeaveRequestFormValues>({
@@ -243,6 +244,7 @@ export default function Leave() {
       description: `Leave request for ${getEmployeeById(confirmAction?.request.employeeId || "")?.firstName} has been rejected.`,
     });
     setConfirmAction(null);
+    setRejectionReason("");
     setIsDetailOpen(false);
   };
 
@@ -802,7 +804,12 @@ export default function Leave() {
       </Dialog>
 
       {/* Confirmation Dialog */}
-      <AlertDialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
+      <AlertDialog open={!!confirmAction} onOpenChange={(open) => {
+        if (!open) {
+          setConfirmAction(null);
+          setRejectionReason("");
+        }
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -816,16 +823,33 @@ export default function Leave() {
             <AlertDialogDescription>
               {confirmAction?.type === "approve" 
                 ? `Are you sure you want to approve the leave request for ${getEmployeeById(confirmAction?.request.employeeId || "")?.firstName} ${getEmployeeById(confirmAction?.request.employeeId || "")?.lastName}? This will deduct ${confirmAction?.request.totalDays} days from their balance.`
-                : `Are you sure you want to reject the leave request for ${getEmployeeById(confirmAction?.request.employeeId || "")?.firstName} ${getEmployeeById(confirmAction?.request.employeeId || "")?.lastName}? This action cannot be undone.`
+                : `You are about to reject the leave request for ${getEmployeeById(confirmAction?.request.employeeId || "")?.firstName} ${getEmployeeById(confirmAction?.request.employeeId || "")?.lastName}. Please provide a reason for the rejection.`
               }
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {confirmAction?.type === "reject" && (
+            <div className="space-y-2">
+              <Label htmlFor="rejection-reason">Reason for Rejection <span className="text-destructive">*</span></Label>
+              <Textarea
+                id="rejection-reason"
+                placeholder="Please explain why this leave request is being rejected..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                className="min-h-[100px]"
+                data-testid="input-rejection-reason"
+              />
+              {rejectionReason.trim().length === 0 && (
+                <p className="text-xs text-muted-foreground">A reason is required to reject a leave request</p>
+              )}
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel data-testid="button-cancel-confirm">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmAction?.type === "approve" ? confirmApproval : confirmRejection}
               className={confirmAction?.type === "approve" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-destructive hover:bg-destructive/90"}
               data-testid={confirmAction?.type === "approve" ? "button-confirm-approve" : "button-confirm-reject"}
+              disabled={confirmAction?.type === "reject" && rejectionReason.trim().length === 0}
             >
               {confirmAction?.type === "approve" ? "Approve" : "Reject"}
             </AlertDialogAction>
