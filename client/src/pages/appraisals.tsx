@@ -22,6 +22,7 @@ import {
   getAppraisalCycleById,
   getEmployeeById,
   appraisals,
+  calculateAppraisalScore,
 } from "@/lib/demo-data";
 import { useAppraisalStore } from "@/lib/appraisal-store";
 import type { AppraisalFeedback } from "@shared/schema";
