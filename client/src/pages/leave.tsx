@@ -61,22 +61,16 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
-  Settings,
-  BarChart3,
   Calendar,
-  Trash2,
-  Edit,
-  Star,
   AlertTriangle,
   AlertCircle,
+  Star,
 } from "lucide-react";
-import { useRole, canApproveLeave, canViewAllRequests, canEditOrgSettings } from "@/lib/role-context";
+import { useRole, canApproveLeave, canViewAllRequests } from "@/lib/role-context";
 import { 
   leaveRequests, 
   leaveTypes, 
   leaveBalances,
-  employees,
-  departments,
   companyHolidays,
   getEmployeeById,
   getLeaveTypeById,
@@ -383,18 +377,6 @@ export default function Leave() {
                 All Requests
               </TabsTrigger>
             )}
-            {canEditOrgSettings(role) && (
-              <>
-                <TabsTrigger value="analytics" data-testid="tab-analytics">
-                  <BarChart3 className="mr-1 h-4 w-4" />
-                  Analytics
-                </TabsTrigger>
-                <TabsTrigger value="settings" data-testid="tab-leave-settings">
-                  <Settings className="mr-1 h-4 w-4" />
-                  Settings
-                </TabsTrigger>
-              </>
-            )}
           </TabsList>
           {(activeTab === "my-requests" || activeTab === "pending-approvals" || activeTab === "all-requests") && (
             <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -546,258 +528,6 @@ export default function Leave() {
           </Card>
         </TabsContent>
 
-        {/* Analytics Tab - Admin Only */}
-        {canEditOrgSettings(role) && (
-          <TabsContent value="analytics" className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card data-testid="card-analytics-by-type">
-                <CardHeader>
-                  <CardTitle className="text-lg">Usage by Leave Type</CardTitle>
-                  <CardDescription>Total days used per leave type</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {leaveTypes.map((type) => {
-                      const totalUsed = leaveRequests
-                        .filter((r) => r.leaveTypeId === type.id && r.status === "approved")
-                        .reduce((sum, r) => sum + r.totalDays, 0);
-                      const maxDays = type.defaultDays * employees.length;
-                      const percentage = Math.min((totalUsed / maxDays) * 100, 100);
-                      return (
-                        <div key={type.id} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="h-3 w-3 rounded-full" style={{ backgroundColor: type.color }} />
-                              <span className="text-sm font-medium">{type.name}</span>
-                            </div>
-                            <span className="text-sm text-muted-foreground">{totalUsed} days</span>
-                          </div>
-                          <Progress value={percentage} className="h-2" style={{ backgroundColor: `${type.color}20` }} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card data-testid="card-analytics-by-dept">
-                <CardHeader>
-                  <CardTitle className="text-lg">Leave by Department</CardTitle>
-                  <CardDescription>Distribution across departments</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {departments.map((dept) => {
-                      const deptEmployees = employees.filter((e) => e.departmentId === dept.id);
-                      const totalDays = leaveRequests
-                        .filter((r) => deptEmployees.some((e) => e.id === r.employeeId) && r.status === "approved")
-                        .reduce((sum, r) => sum + r.totalDays, 0);
-                      return (
-                        <div key={dept.id} className="flex items-center justify-between">
-                          <span className="text-sm font-medium">{dept.name}</span>
-                          <Badge variant="secondary">{totalDays} days</Badge>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card data-testid="card-analytics-summary">
-                <CardHeader>
-                  <CardTitle className="text-lg">Leave Summary</CardTitle>
-                  <CardDescription>Overall statistics</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Total Requests (2026)</span>
-                      <span className="text-lg font-bold">{leaveRequests.length}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Approved</span>
-                      <span className="text-lg font-bold text-emerald-600">
-                        {leaveRequests.filter((r) => r.status === "approved").length}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Pending</span>
-                      <span className="text-lg font-bold text-amber-600">
-                        {leaveRequests.filter((r) => r.status === "pending").length}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Rejected</span>
-                      <span className="text-lg font-bold text-red-600">
-                        {leaveRequests.filter((r) => r.status === "rejected").length}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between pt-2 border-t">
-                      <span className="text-sm text-muted-foreground">Total Days Approved</span>
-                      <span className="text-lg font-bold">
-                        {leaveRequests.filter((r) => r.status === "approved").reduce((sum, r) => sum + r.totalDays, 0)}
-                      </span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        )}
-
-        {/* Settings Tab - Admin Only */}
-        {canEditOrgSettings(role) && (
-          <TabsContent value="settings" className="space-y-4">
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Leave Types Management */}
-              <Card data-testid="card-manage-leave-types">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg">Leave Types</CardTitle>
-                    <CardDescription>Configure leave type allocations</CardDescription>
-                  </div>
-                  <Button size="sm" data-testid="button-add-leave-type">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Type
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {leaveTypes.map((type) => (
-                      <div
-                        key={type.id}
-                        className="flex items-center justify-between p-3 rounded-lg border"
-                        data-testid={`leave-type-row-${type.id}`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="h-4 w-4 rounded-full" style={{ backgroundColor: type.color }} />
-                          <div>
-                            <p className="font-medium">{type.name}</p>
-                            <p className="text-xs text-muted-foreground">{type.description}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary">{type.defaultDays} days</Badge>
-                          <Button size="icon" variant="ghost" data-testid={`button-edit-leave-type-${type.id}`}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="text-destructive" data-testid={`button-delete-leave-type-${type.id}`}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Company Holidays Management */}
-              <Card data-testid="card-manage-holidays">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg">Company Holidays</CardTitle>
-                    <CardDescription>Manage company-wide holidays for 2026</CardDescription>
-                  </div>
-                  <Button size="sm" data-testid="button-add-holiday">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Holiday
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                    {companyHolidays.map((holiday) => (
-                      <div
-                        key={holiday.id}
-                        className="flex items-center justify-between p-3 rounded-lg border"
-                        data-testid={`holiday-row-${holiday.id}`}
-                      >
-                        <div>
-                          <p className="font-medium">{holiday.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(holiday.date).toLocaleDateString("en-US", {
-                              weekday: "long",
-                              month: "long",
-                              day: "numeric",
-                            })}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Button size="icon" variant="ghost" data-testid={`button-edit-holiday-${holiday.id}`}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button size="icon" variant="ghost" className="text-destructive" data-testid={`button-delete-holiday-${holiday.id}`}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Employee Balances Management */}
-              <Card className="lg:col-span-2" data-testid="card-manage-balances">
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-lg">Employee Leave Balances</CardTitle>
-                    <CardDescription>Adjust individual employee leave allocations</CardDescription>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Employee</TableHead>
-                          {leaveTypes.slice(0, 4).map((type) => (
-                            <TableHead key={type.id} className="text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: type.color }} />
-                                {type.name.split(" ")[0]}
-                              </div>
-                            </TableHead>
-                          ))}
-                          <TableHead className="w-[100px]">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {employees.slice(0, 5).map((emp) => (
-                          <TableRow key={emp.id} data-testid={`balance-row-${emp.id}`}>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-7 w-7">
-                                  <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                                    {emp.firstName[0]}{emp.lastName[0]}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span className="font-medium">{emp.firstName} {emp.lastName}</span>
-                              </div>
-                            </TableCell>
-                            {leaveTypes.slice(0, 4).map((type) => {
-                              const balance = leaveBalances.find((b) => b.employeeId === emp.id && b.leaveTypeId === type.id);
-                              return (
-                                <TableCell key={type.id} className="text-center">
-                                  <Badge variant="secondary">
-                                    {balance?.remainingDays ?? type.defaultDays} / {balance?.totalDays ?? type.defaultDays}
-                                  </Badge>
-                                </TableCell>
-                              );
-                            })}
-                            <TableCell>
-                              <Button size="sm" variant="ghost" data-testid={`button-edit-balance-${emp.id}`}>
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        )}
       </Tabs>
 
       {/* New Request Dialog with Form */}

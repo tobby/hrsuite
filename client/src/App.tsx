@@ -13,6 +13,8 @@ import Dashboard from "@/pages/dashboard";
 import Employees from "@/pages/employees";
 import Departments from "@/pages/departments";
 import Leave from "@/pages/leave";
+import LeaveAnalytics from "@/pages/leave-analytics";
+import LeaveSettings from "@/pages/leave-settings";
 import Performance from "@/pages/performance";
 import Settings from "@/pages/settings";
 
@@ -23,6 +25,8 @@ function Router() {
       <Route path="/employees" component={Employees} />
       <Route path="/departments" component={Departments} />
       <Route path="/leave" component={Leave} />
+      <Route path="/leave/analytics" component={LeaveAnalytics} />
+      <Route path="/leave/settings" component={LeaveSettings} />
       <Route path="/performance" component={Performance} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />

@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useRole, UserRole } from "@/lib/role-context";
+import { useRole, UserRole, canEditOrgSettings } from "@/lib/role-context";
 import {
   LayoutDashboard,
   Users,
@@ -7,6 +8,9 @@ import {
   ClipboardCheck,
   Building2,
   Settings,
+  BarChart3,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import {
   Sidebar,
@@ -17,11 +21,15 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   SidebarHeader,
   SidebarFooter,
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { getDepartmentById } from "@/lib/demo-data";
 
 interface NavItem {
@@ -38,11 +46,6 @@ const mainNavItems: NavItem[] = [
   { title: "Departments", url: "/departments", icon: Building2, testId: "nav-departments", roles: ["manager", "admin"] },
 ];
 
-const hrNavItems: NavItem[] = [
-  { title: "Leave Management", url: "/leave", icon: CalendarDays, testId: "nav-leave-management", roles: ["employee", "manager", "admin"] },
-  { title: "Performance", url: "/performance", icon: ClipboardCheck, testId: "nav-performance", roles: ["employee", "manager", "admin"] },
-];
-
 const settingsNavItems: NavItem[] = [
   { title: "Settings", url: "/settings", icon: Settings, testId: "nav-settings", roles: ["employee", "manager", "admin"] },
 ];
@@ -51,11 +54,15 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { role, currentUser } = useRole();
   const department = getDepartmentById(currentUser.departmentId);
+  const [leaveExpanded, setLeaveExpanded] = useState(location.startsWith("/leave"));
 
   const isActive = (url: string) => {
     if (url === "/") return location === "/";
-    return location.startsWith(url);
+    return location === url;
   };
+
+  const isLeaveActive = location.startsWith("/leave");
+  const showLeaveSubItems = canEditOrgSettings(role);
 
   const filterByRole = (items: NavItem[]) => items.filter(item => item.roles.includes(role));
 
@@ -107,19 +114,87 @@ export function AppSidebar() {
           <SidebarGroupLabel>HR Management</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {filterByRole(hrNavItems).map((item) => (
-                <SidebarMenuItem key={item.title}>
+              {showLeaveSubItems ? (
+                <Collapsible open={leaveExpanded} onOpenChange={setLeaveExpanded}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        isActive={isLeaveActive}
+                        data-testid="nav-leave-management"
+                      >
+                        <CalendarDays className="h-4 w-4" />
+                        <span>Leave Management</span>
+                        {leaveExpanded ? (
+                          <ChevronDown className="ml-auto h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="ml-auto h-4 w-4" />
+                        )}
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/leave"}
+                          >
+                            <Link href="/leave" data-testid="nav-leave-requests">
+                              <CalendarDays className="h-3 w-3" />
+                              <span>Requests</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/leave/analytics"}
+                          >
+                            <Link href="/leave/analytics" data-testid="nav-leave-analytics">
+                              <BarChart3 className="h-3 w-3" />
+                              <span>Analytics</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/leave/settings"}
+                          >
+                            <Link href="/leave/settings" data-testid="nav-leave-settings">
+                              <Settings className="h-3 w-3" />
+                              <span>Settings</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ) : (
+                <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={isActive(item.url)}
+                    isActive={isLeaveActive}
                   >
-                    <Link href={item.url} data-testid={item.testId}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                    <Link href="/leave" data-testid="nav-leave-management">
+                      <CalendarDays className="h-4 w-4" />
+                      <span>Leave Management</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              ))}
+              )}
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive("/performance")}
+                >
+                  <Link href="/performance" data-testid="nav-performance">
+                    <ClipboardCheck className="h-4 w-4" />
+                    <span>Performance</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
