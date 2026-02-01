@@ -9,6 +9,11 @@ HRFlow is a frontend-only HR management platform built for demonstration purpose
 - **Tech Stack**: React + TypeScript, Vite, Tailwind CSS, shadcn/ui components
 
 ## Recent Changes
+- 2026-02-01: Leave Management restructured with nested sidebar navigation
+  - Added `/leave/analytics` page with charts (leave usage by type, department distribution, monthly trends)
+  - Added `/leave/settings` page (Admin-only) for leave types, company holidays, and employee balances
+  - Sidebar now shows collapsible "Leave Management" with sub-items for Admin users (Requests, Analytics, Settings)
+  - Non-admin users see single "Leave Management" link
 - 2026-01-28: Initial MVP completed with all core modules
   - Dashboard with statistics and widgets
   - Employee and Department management
@@ -31,6 +36,8 @@ client/
 │   │   ├── employees.tsx    # Employee management
 │   │   ├── departments.tsx  # Department management
 │   │   ├── leave.tsx        # Leave request/approval
+│   │   ├── leave-analytics.tsx  # Leave analytics (Admin-only)
+│   │   ├── leave-settings.tsx   # Leave settings (Admin-only)
 │   │   ├── performance.tsx  # Performance appraisals
 │   │   └── settings.tsx     # User settings
 │   ├── lib/
@@ -48,7 +55,9 @@ server/
 - `/` - Dashboard
 - `/employees` - Employee management
 - `/departments` - Department management
-- `/leave` - Leave management
+- `/leave` - Leave management (requests, calendar, balances)
+- `/leave/analytics` - Leave analytics with charts (Admin-only)
+- `/leave/settings` - Leave types, holidays, and balances configuration (Admin-only)
 - `/performance` - Performance appraisals
 - `/settings` - User settings
 
