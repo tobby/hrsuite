@@ -9,6 +9,11 @@ HRFlow is a frontend-only HR management platform built for demonstration purpose
 - **Tech Stack**: React + TypeScript, Vite, Tailwind CSS, shadcn/ui, Zustand for state management
 
 ## Recent Changes
+- 2026-02-01: Peer Reviewer Assignment for 360° Cycles
+  - Admins can now assign peer reviewers for each participant in 360° cycles
+  - "Assign Peers" button appears next to each selected participant in the Manage Participants dialog
+  - Peer reviewers are limited to other cycle participants (excluding the reviewee and their manager)
+  - Peer assignments persist via Zustand store and are automatically cleaned up when participants are removed
 - 2026-02-01: Appraisal Cycles and Results redesign
   - 180° reviews now hide weight configuration (manager-only scoring, 100% manager weight)
   - New Cycle Progress page (`/appraisals/cycles/:id`) for admins to track participant review status
