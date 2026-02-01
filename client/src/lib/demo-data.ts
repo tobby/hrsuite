@@ -8,7 +8,12 @@ import type {
   Appraisal, 
   AppraisalFeedback,
   Competency,
-  CompanyHoliday
+  CompanyHoliday,
+  AppraisalTemplate,
+  TemplateQuestion,
+  FeedbackRating,
+  CycleParticipant,
+  PeerAssignment
 } from "@shared/schema";
 
 // Departments
@@ -253,32 +258,116 @@ export const competencies: Competency[] = [
   { id: "comp-8", name: "Adaptability", description: "Flexibility in changing environments", category: "Professional" },
 ];
 
+// Appraisal Templates
+export const appraisalTemplates: AppraisalTemplate[] = [
+  {
+    id: "template-1",
+    name: "Standard Performance Review",
+    description: "General performance evaluation template for all roles",
+    isDefault: 1,
+    createdAt: new Date("2025-01-01T00:00:00Z"),
+  },
+  {
+    id: "template-2",
+    name: "Engineering Review",
+    description: "Technical performance template with engineering-specific competencies",
+    isDefault: 0,
+    createdAt: new Date("2025-01-15T00:00:00Z"),
+  },
+  {
+    id: "template-3",
+    name: "Leadership Review",
+    description: "Template for managers and team leads",
+    isDefault: 0,
+    createdAt: new Date("2025-02-01T00:00:00Z"),
+  },
+];
+
+// Template Questions
+export const templateQuestions: TemplateQuestion[] = [
+  // Standard Performance Review questions
+  { id: "q-1", templateId: "template-1", competencyId: "comp-3", questionText: "How effectively does this person communicate with team members?", questionType: "rating", order: 1 },
+  { id: "q-2", templateId: "template-1", competencyId: "comp-4", questionText: "How well does this person collaborate with others on projects?", questionType: "rating", order: 2 },
+  { id: "q-3", templateId: "template-1", competencyId: "comp-7", questionText: "How effectively does this person manage their time and meet deadlines?", questionType: "rating", order: 3 },
+  { id: "q-4", templateId: "template-1", competencyId: "comp-8", questionText: "How well does this person adapt to changes in priorities or requirements?", questionType: "rating", order: 4 },
+  { id: "q-5", templateId: "template-1", competencyId: null, questionText: "What are this person's greatest strengths?", questionType: "text", order: 5 },
+  { id: "q-6", templateId: "template-1", competencyId: null, questionText: "What areas could this person improve on?", questionType: "text", order: 6 },
+  // Engineering Review questions
+  { id: "q-7", templateId: "template-2", competencyId: "comp-1", questionText: "How proficient is this person in their technical domain?", questionType: "rating", order: 1 },
+  { id: "q-8", templateId: "template-2", competencyId: "comp-2", questionText: "How effectively does this person solve complex technical problems?", questionType: "rating", order: 2 },
+  { id: "q-9", templateId: "template-2", competencyId: "comp-3", questionText: "How well does this person communicate technical concepts to others?", questionType: "rating", order: 3 },
+  { id: "q-10", templateId: "template-2", competencyId: "comp-4", questionText: "How effectively does this person collaborate on code reviews and pair programming?", questionType: "rating", order: 4 },
+  { id: "q-11", templateId: "template-2", competencyId: null, questionText: "Describe a specific technical contribution this person made that had significant impact.", questionType: "text", order: 5 },
+  { id: "q-12", templateId: "template-2", competencyId: null, questionText: "What technical skills should this person focus on developing?", questionType: "text", order: 6 },
+  // Leadership Review questions
+  { id: "q-13", templateId: "template-3", competencyId: "comp-5", questionText: "How effectively does this person lead and motivate their team?", questionType: "rating", order: 1 },
+  { id: "q-14", templateId: "template-3", competencyId: "comp-6", questionText: "How proactive is this person in identifying and addressing team needs?", questionType: "rating", order: 2 },
+  { id: "q-15", templateId: "template-3", competencyId: "comp-3", questionText: "How well does this person communicate vision and expectations?", questionType: "rating", order: 3 },
+  { id: "q-16", templateId: "template-3", competencyId: null, questionText: "Describe how this person has contributed to team development and growth.", questionType: "text", order: 4 },
+];
+
 // Appraisal Cycles
 export const appraisalCycles: AppraisalCycle[] = [
   {
     id: "cycle-1",
     name: "Q4 2025 Performance Review",
     type: "180",
+    templateId: "template-1",
     startDate: "2025-12-01",
     endDate: "2025-12-31",
     status: "completed",
+    selfWeight: 10,
+    peerWeight: 0,
+    managerWeight: 90,
   },
   {
     id: "cycle-2",
     name: "Annual 360 Review 2026",
     type: "360",
+    templateId: "template-2",
     startDate: "2026-01-15",
     endDate: "2026-02-15",
     status: "active",
+    selfWeight: 10,
+    peerWeight: 30,
+    managerWeight: 60,
   },
   {
     id: "cycle-3",
     name: "Q1 2026 Performance Review",
     type: "180",
+    templateId: "template-1",
     startDate: "2026-03-01",
     endDate: "2026-03-31",
     status: "draft",
+    selfWeight: 15,
+    peerWeight: 0,
+    managerWeight: 85,
   },
+];
+
+// Cycle Participants (who is being reviewed in each cycle)
+export const cycleParticipants: CycleParticipant[] = [
+  // Q4 2025 - Engineering team
+  { id: "cp-1", cycleId: "cycle-1", employeeId: "emp-2" },
+  { id: "cp-2", cycleId: "cycle-1", employeeId: "emp-3" },
+  // Annual 360 - Engineering team
+  { id: "cp-3", cycleId: "cycle-2", employeeId: "emp-2" },
+  { id: "cp-4", cycleId: "cycle-2", employeeId: "emp-3" },
+  { id: "cp-5", cycleId: "cycle-2", employeeId: "emp-8" },
+];
+
+// Peer Assignments (who reviews whom for peer feedback in 360 cycles)
+export const peerAssignments: PeerAssignment[] = [
+  // Annual 360 - emp-2's peer reviewers
+  { id: "pa-1", cycleId: "cycle-2", revieweeId: "emp-2", reviewerId: "emp-3" },
+  { id: "pa-2", cycleId: "cycle-2", revieweeId: "emp-2", reviewerId: "emp-8" },
+  // Annual 360 - emp-3's peer reviewers
+  { id: "pa-3", cycleId: "cycle-2", revieweeId: "emp-3", reviewerId: "emp-2" },
+  { id: "pa-4", cycleId: "cycle-2", revieweeId: "emp-3", reviewerId: "emp-8" },
+  // Annual 360 - emp-8's peer reviewers
+  { id: "pa-5", cycleId: "cycle-2", revieweeId: "emp-8", reviewerId: "emp-2" },
+  { id: "pa-6", cycleId: "cycle-2", revieweeId: "emp-8", reviewerId: "emp-3" },
 ];
 
 // Appraisals
@@ -290,14 +379,15 @@ export const appraisals: Appraisal[] = [
   { id: "apr-5", cycleId: "cycle-2", employeeId: "emp-9", status: "in_progress", overallRating: null, createdAt: new Date("2026-01-15T00:00:00Z") },
 ];
 
-// Appraisal Feedback
+// Appraisal Feedback (review assignments)
 export const appraisalFeedback: AppraisalFeedback[] = [
+  // Completed Q4 2025 feedback for emp-2 (Marcus)
   {
     id: "fb-1",
     appraisalId: "apr-1",
     reviewerId: "emp-2",
     reviewerType: "self",
-    overallComment: "Had a productive quarter with significant contributions to the main product.",
+    overallComment: "Had a productive quarter with significant contributions to the main product. Led the redesign of the user authentication system and mentored two junior developers.",
     submittedAt: new Date("2025-12-15T10:00:00Z"),
     status: "submitted",
   },
@@ -306,18 +396,19 @@ export const appraisalFeedback: AppraisalFeedback[] = [
     appraisalId: "apr-1",
     reviewerId: "emp-1",
     reviewerType: "manager",
-    overallComment: "Marcus has been a valuable team member. Looking forward to seeing more leadership from him.",
+    overallComment: "Marcus has been a valuable team member. His technical skills are excellent, and he consistently delivers high-quality work. Looking forward to seeing more leadership from him in the coming year.",
     submittedAt: new Date("2025-12-20T14:00:00Z"),
     status: "submitted",
   },
+  // Active 360 feedback for emp-2 (Marcus) - some pending, one draft
   {
     id: "fb-3",
     appraisalId: "apr-3",
     reviewerId: "emp-2",
     reviewerType: "self",
-    overallComment: null,
+    overallComment: "Working on expanding my technical skills...",
     submittedAt: null,
-    status: "pending",
+    status: "draft",
   },
   {
     id: "fb-4",
@@ -346,6 +437,64 @@ export const appraisalFeedback: AppraisalFeedback[] = [
     submittedAt: null,
     status: "pending",
   },
+  // Active 360 feedback for emp-8 (James) - emp-2 needs to review him
+  {
+    id: "fb-7",
+    appraisalId: "apr-4",
+    reviewerId: "emp-8",
+    reviewerType: "self",
+    overallComment: null,
+    submittedAt: null,
+    status: "pending",
+  },
+  {
+    id: "fb-8",
+    appraisalId: "apr-4",
+    reviewerId: "emp-1",
+    reviewerType: "manager",
+    overallComment: null,
+    submittedAt: null,
+    status: "pending",
+  },
+  {
+    id: "fb-9",
+    appraisalId: "apr-4",
+    reviewerId: "emp-2",
+    reviewerType: "peer",
+    overallComment: null,
+    submittedAt: null,
+    status: "pending",
+  },
+  {
+    id: "fb-10",
+    appraisalId: "apr-4",
+    reviewerId: "emp-3",
+    reviewerType: "peer",
+    overallComment: null,
+    submittedAt: null,
+    status: "pending",
+  },
+];
+
+// Feedback Ratings (completed ratings for Q4 2025 reviews)
+export const feedbackRatings: FeedbackRating[] = [
+  // Self-assessment ratings for fb-1 (Marcus self-review Q4 2025)
+  { id: "fr-1", feedbackId: "fb-1", questionId: "q-1", rating: 4, textResponse: null },
+  { id: "fr-2", feedbackId: "fb-1", questionId: "q-2", rating: 5, textResponse: null },
+  { id: "fr-3", feedbackId: "fb-1", questionId: "q-3", rating: 4, textResponse: null },
+  { id: "fr-4", feedbackId: "fb-1", questionId: "q-4", rating: 4, textResponse: null },
+  { id: "fr-5", feedbackId: "fb-1", questionId: "q-5", rating: null, textResponse: "Strong problem-solving skills and ability to mentor others. Quick to learn new technologies." },
+  { id: "fr-6", feedbackId: "fb-1", questionId: "q-6", rating: null, textResponse: "Could improve on delegation and sharing workload more evenly with the team." },
+  // Manager ratings for fb-2 (Sarah reviewing Marcus Q4 2025)
+  { id: "fr-7", feedbackId: "fb-2", questionId: "q-1", rating: 4, textResponse: null },
+  { id: "fr-8", feedbackId: "fb-2", questionId: "q-2", rating: 5, textResponse: null },
+  { id: "fr-9", feedbackId: "fb-2", questionId: "q-3", rating: 4, textResponse: null },
+  { id: "fr-10", feedbackId: "fb-2", questionId: "q-4", rating: 4, textResponse: null },
+  { id: "fr-11", feedbackId: "fb-2", questionId: "q-5", rating: null, textResponse: "Excellent technical skills and a natural ability to break down complex problems. Great at code reviews." },
+  { id: "fr-12", feedbackId: "fb-2", questionId: "q-6", rating: null, textResponse: "Should take on more leadership responsibilities and be more proactive in cross-team collaboration." },
+  // Draft ratings for fb-3 (Marcus self-review 360, in progress)
+  { id: "fr-13", feedbackId: "fb-3", questionId: "q-7", rating: 4, textResponse: null },
+  { id: "fr-14", feedbackId: "fb-3", questionId: "q-8", rating: 5, textResponse: null },
 ];
 
 // Helper functions
@@ -383,6 +532,119 @@ export function getAppraisalCycleById(id: string): AppraisalCycle | undefined {
 
 export function getFeedbackByAppraisal(appraisalId: string): AppraisalFeedback[] {
   return appraisalFeedback.filter(f => f.appraisalId === appraisalId);
+}
+
+export function getTemplateById(id: string): AppraisalTemplate | undefined {
+  return appraisalTemplates.find(t => t.id === id);
+}
+
+export function getQuestionsByTemplate(templateId: string): TemplateQuestion[] {
+  return templateQuestions.filter(q => q.templateId === templateId).sort((a, b) => a.order - b.order);
+}
+
+export function getCompetencyById(id: string): Competency | undefined {
+  return competencies.find(c => c.id === id);
+}
+
+export function getRatingsByFeedback(feedbackId: string): FeedbackRating[] {
+  return feedbackRatings.filter(r => r.feedbackId === feedbackId);
+}
+
+export function getParticipantsByCycle(cycleId: string): CycleParticipant[] {
+  return cycleParticipants.filter(p => p.cycleId === cycleId);
+}
+
+export function getPeerAssignmentsByCycle(cycleId: string): PeerAssignment[] {
+  return peerAssignments.filter(p => p.cycleId === cycleId);
+}
+
+export function getPeerAssignmentsForReviewee(cycleId: string, revieweeId: string): PeerAssignment[] {
+  return peerAssignments.filter(p => p.cycleId === cycleId && p.revieweeId === revieweeId);
+}
+
+// Get reviews that a user needs to complete (as reviewer)
+export function getPendingReviewsForUser(userId: string): AppraisalFeedback[] {
+  return appraisalFeedback.filter(f => 
+    f.reviewerId === userId && 
+    (f.status === "pending" || f.status === "draft")
+  );
+}
+
+// Get reviews that have been completed by a user
+export function getCompletedReviewsByUser(userId: string): AppraisalFeedback[] {
+  return appraisalFeedback.filter(f => 
+    f.reviewerId === userId && 
+    f.status === "submitted"
+  );
+}
+
+// Get reviews received by a user (reviews about them)
+export function getReceivedReviewsForUser(userId: string): AppraisalFeedback[] {
+  const userAppraisals = appraisals.filter(a => a.employeeId === userId);
+  const appraisalIds = userAppraisals.map(a => a.id);
+  return appraisalFeedback.filter(f => 
+    appraisalIds.includes(f.appraisalId) && 
+    f.status === "submitted"
+  );
+}
+
+// Calculate weighted average score for an appraisal
+export function calculateAppraisalScore(appraisalId: string): number | null {
+  const appraisal = appraisals.find(a => a.id === appraisalId);
+  if (!appraisal) return null;
+  
+  const cycle = getAppraisalCycleById(appraisal.cycleId);
+  if (!cycle) return null;
+  
+  const feedback = getFeedbackByAppraisal(appraisalId).filter(f => f.status === "submitted");
+  if (feedback.length === 0) return null;
+  
+  let selfScore = 0, peerScore = 0, managerScore = 0;
+  let selfCount = 0, peerCount = 0, managerCount = 0;
+  
+  feedback.forEach(f => {
+    const ratings = getRatingsByFeedback(f.id).filter(r => r.rating !== null);
+    if (ratings.length === 0) return;
+    
+    const avgRating = ratings.reduce((sum, r) => sum + (r.rating || 0), 0) / ratings.length;
+    
+    if (f.reviewerType === "self") {
+      selfScore += avgRating;
+      selfCount++;
+    } else if (f.reviewerType === "peer") {
+      peerScore += avgRating;
+      peerCount++;
+    } else if (f.reviewerType === "manager") {
+      managerScore += avgRating;
+      managerCount++;
+    }
+  });
+  
+  let weightedSum = 0;
+  let totalWeight = 0;
+  
+  if (selfCount > 0) {
+    weightedSum += (selfScore / selfCount) * cycle.selfWeight;
+    totalWeight += cycle.selfWeight;
+  }
+  if (peerCount > 0) {
+    weightedSum += (peerScore / peerCount) * cycle.peerWeight;
+    totalWeight += cycle.peerWeight;
+  }
+  if (managerCount > 0) {
+    weightedSum += (managerScore / managerCount) * cycle.managerWeight;
+    totalWeight += cycle.managerWeight;
+  }
+  
+  return totalWeight > 0 ? weightedSum / totalWeight : null;
+}
+
+export function getFeedbackById(id: string): AppraisalFeedback | undefined {
+  return appraisalFeedback.find(f => f.id === id);
+}
+
+export function getAppraisalById(id: string): Appraisal | undefined {
+  return appraisals.find(a => a.id === id);
 }
 
 // Company Holidays

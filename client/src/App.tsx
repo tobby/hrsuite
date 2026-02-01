@@ -17,6 +17,11 @@ import LeaveAnalytics from "@/pages/leave-analytics";
 import LeaveSettings from "@/pages/leave-settings";
 import Performance from "@/pages/performance";
 import Settings from "@/pages/settings";
+import Appraisals from "@/pages/appraisals";
+import AppraisalReview from "@/pages/appraisal-review";
+import AppraisalResults from "@/pages/appraisal-results";
+import AppraisalTemplates from "@/pages/appraisal-templates";
+import AppraisalCycles from "@/pages/appraisal-cycles";
 
 function Router() {
   return (
@@ -28,6 +33,11 @@ function Router() {
       <Route path="/leave/analytics" component={LeaveAnalytics} />
       <Route path="/leave/settings" component={LeaveSettings} />
       <Route path="/performance" component={Performance} />
+      <Route path="/appraisals" component={Appraisals} />
+      <Route path="/appraisals/review/:id" component={AppraisalReview} />
+      <Route path="/appraisals/results/:id" component={AppraisalResults} />
+      <Route path="/appraisals/templates" component={AppraisalTemplates} />
+      <Route path="/appraisals/cycles" component={AppraisalCycles} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

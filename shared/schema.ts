@@ -103,14 +103,41 @@ export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
 export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
 export type LeaveRequest = typeof leaveRequests.$inferSelect;
 
+// Appraisal Templates Table
+export const appraisalTemplates = pgTable("appraisal_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  isDefault: integer("is_default").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type AppraisalTemplate = typeof appraisalTemplates.$inferSelect;
+
+// Template Questions Table
+export const templateQuestions = pgTable("template_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull(),
+  competencyId: varchar("competency_id"), // nullable for custom questions
+  questionText: text("question_text").notNull(),
+  questionType: text("question_type").notNull(), // "rating" or "text"
+  order: integer("order").notNull().default(0),
+});
+
+export type TemplateQuestion = typeof templateQuestions.$inferSelect;
+
 // Appraisal Cycles Table
 export const appraisalCycles = pgTable("appraisal_cycles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   type: text("type").notNull(), // "180" or "360"
+  templateId: varchar("template_id"),
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),
-  status: text("status").notNull().default("draft"),
+  status: text("status").notNull().default("draft"), // "draft", "active", "completed", "cancelled"
+  selfWeight: integer("self_weight").notNull().default(10),
+  peerWeight: integer("peer_weight").notNull().default(30),
+  managerWeight: integer("manager_weight").notNull().default(60),
 });
 
 export const insertAppraisalCycleSchema = createInsertSchema(appraisalCycles).omit({ id: true });
@@ -129,7 +156,7 @@ export const appraisals = pgTable("appraisals", {
 
 export type Appraisal = typeof appraisals.$inferSelect;
 
-// Appraisal Feedback Table
+// Appraisal Feedback Table (review assignments)
 export const appraisalFeedback = pgTable("appraisal_feedback", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   appraisalId: varchar("appraisal_id").notNull(),
@@ -137,7 +164,7 @@ export const appraisalFeedback = pgTable("appraisal_feedback", {
   reviewerType: text("reviewer_type").notNull(), // "self", "manager", "peer", "subordinate"
   overallComment: text("overall_comment"),
   submittedAt: timestamp("submitted_at"),
-  status: text("status").notNull().default("pending"),
+  status: text("status").notNull().default("pending"), // "pending", "draft", "submitted"
 });
 
 export const insertAppraisalFeedbackSchema = createInsertSchema(appraisalFeedback).omit({ 
@@ -148,6 +175,36 @@ export const insertAppraisalFeedbackSchema = createInsertSchema(appraisalFeedbac
 });
 export type InsertAppraisalFeedback = z.infer<typeof insertAppraisalFeedbackSchema>;
 export type AppraisalFeedback = typeof appraisalFeedback.$inferSelect;
+
+// Feedback Ratings Table (individual question ratings)
+export const feedbackRatings = pgTable("feedback_ratings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  feedbackId: varchar("feedback_id").notNull(),
+  questionId: varchar("question_id").notNull(),
+  rating: integer("rating"), // 1-5 for rating questions
+  textResponse: text("text_response"), // for text questions
+});
+
+export type FeedbackRating = typeof feedbackRatings.$inferSelect;
+
+// Cycle Participants Table (who is being reviewed in a cycle)
+export const cycleParticipants = pgTable("cycle_participants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  cycleId: varchar("cycle_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+});
+
+export type CycleParticipant = typeof cycleParticipants.$inferSelect;
+
+// Peer Assignments Table (who reviews whom for peer feedback)
+export const peerAssignments = pgTable("peer_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  cycleId: varchar("cycle_id").notNull(),
+  revieweeId: varchar("reviewee_id").notNull(), // person being reviewed
+  reviewerId: varchar("reviewer_id").notNull(), // peer doing the review
+});
+
+export type PeerAssignment = typeof peerAssignments.$inferSelect;
 
 // Competencies Table
 export const competencies = pgTable("competencies", {

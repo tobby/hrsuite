@@ -11,6 +11,8 @@ import {
   BarChart3,
   ChevronDown,
   ChevronRight,
+  FileText,
+  Calendar,
 } from "lucide-react";
 import {
   Sidebar,
@@ -55,6 +57,7 @@ export function AppSidebar() {
   const { role, currentUser } = useRole();
   const department = getDepartmentById(currentUser.departmentId);
   const [leaveExpanded, setLeaveExpanded] = useState(location.startsWith("/leave"));
+  const [appraisalsExpanded, setAppraisalsExpanded] = useState(location.startsWith("/appraisals"));
 
   const isActive = (url: string) => {
     if (url === "/") return location === "/";
@@ -62,7 +65,9 @@ export function AppSidebar() {
   };
 
   const isLeaveActive = location.startsWith("/leave");
+  const isAppraisalsActive = location.startsWith("/appraisals");
   const showLeaveSubItems = canEditOrgSettings(role);
+  const showAppraisalsSubItems = canEditOrgSettings(role);
 
   const filterByRole = (items: NavItem[]) => items.filter(item => item.roles.includes(role));
 
@@ -195,6 +200,76 @@ export function AppSidebar() {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+
+              {showAppraisalsSubItems ? (
+                <Collapsible open={appraisalsExpanded} onOpenChange={setAppraisalsExpanded}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        isActive={isAppraisalsActive}
+                        data-testid="nav-appraisals-management"
+                      >
+                        <ClipboardCheck className="h-4 w-4" />
+                        <span>Appraisals</span>
+                        {appraisalsExpanded ? (
+                          <ChevronDown className="ml-auto h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="ml-auto h-4 w-4" />
+                        )}
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/appraisals"}
+                          >
+                            <Link href="/appraisals" data-testid="nav-my-appraisals">
+                              <ClipboardCheck className="h-3 w-3" />
+                              <span>My Appraisals</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/appraisals/templates"}
+                          >
+                            <Link href="/appraisals/templates" data-testid="nav-appraisal-templates">
+                              <FileText className="h-3 w-3" />
+                              <span>Templates</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/appraisals/cycles"}
+                          >
+                            <Link href="/appraisals/cycles" data-testid="nav-appraisal-cycles">
+                              <Calendar className="h-3 w-3" />
+                              <span>Cycles</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ) : (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isAppraisalsActive}
+                  >
+                    <Link href="/appraisals" data-testid="nav-appraisals">
+                      <ClipboardCheck className="h-4 w-4" />
+                      <span>Appraisals</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
