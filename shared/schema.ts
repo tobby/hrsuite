@@ -158,3 +158,15 @@ export const competencies = pgTable("competencies", {
 });
 
 export type Competency = typeof competencies.$inferSelect;
+
+// Company Holidays Table
+export const companyHolidays = pgTable("company_holidays", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  date: date("date").notNull(),
+  year: integer("year").notNull(),
+});
+
+export const insertCompanyHolidaySchema = createInsertSchema(companyHolidays).omit({ id: true });
+export type InsertCompanyHoliday = z.infer<typeof insertCompanyHolidaySchema>;
+export type CompanyHoliday = typeof companyHolidays.$inferSelect;

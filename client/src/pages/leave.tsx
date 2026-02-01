@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -42,6 +42,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   Plus, 
   Clock,
@@ -49,17 +59,29 @@ import {
   XCircle,
   CalendarDays,
   Filter,
+  ChevronLeft,
+  ChevronRight,
+  Settings,
+  BarChart3,
+  Calendar,
+  Trash2,
+  Edit,
+  Star,
+  AlertTriangle,
+  AlertCircle,
 } from "lucide-react";
-import { useRole, canApproveLeave, canViewAllRequests } from "@/lib/role-context";
+import { useRole, canApproveLeave, canViewAllRequests, canEditOrgSettings } from "@/lib/role-context";
 import { 
   leaveRequests, 
   leaveTypes, 
   leaveBalances,
   employees,
+  departments,
+  companyHolidays,
   getEmployeeById,
   getLeaveTypeById,
 } from "@/lib/demo-data";
-import type { LeaveRequest } from "@shared/schema";
+import type { LeaveRequest, LeaveType as LeaveTypeSchema, CompanyHoliday } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 const leaveRequestFormSchema = z.object({
@@ -71,17 +93,34 @@ const leaveRequestFormSchema = z.object({
 
 type LeaveRequestFormValues = z.infer<typeof leaveRequestFormSchema>;
 
-const statusColors = {
+const statusColors: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
   approved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
   rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  active: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  completed: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
 };
 
-const statusIcons = {
+const statusIcons: Record<string, typeof Clock> = {
   pending: Clock,
   approved: CheckCircle2,
   rejected: XCircle,
+  active: Star,
+  completed: CheckCircle2,
 };
+
+function isCurrentlyOnLeave(request: LeaveRequest): boolean {
+  const today = new Date();
+  const start = new Date(request.startDate);
+  const end = new Date(request.endDate);
+  return request.status === "approved" && today >= start && today <= end;
+}
+
+function getRequestDisplayStatus(request: LeaveRequest): string {
+  if (isCurrentlyOnLeave(request)) return "active";
+  if (request.status === "approved" && new Date(request.endDate) < new Date()) return "completed";
+  return request.status;
+}
 
 export default function Leave() {
   const { role, currentUser } = useRole();
@@ -90,6 +129,8 @@ export default function Leave() {
   const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [confirmAction, setConfirmAction] = useState<{ type: "approve" | "reject"; request: LeaveRequest } | null>(null);
   const { toast } = useToast();
 
   const form = useForm<LeaveRequestFormValues>({
@@ -102,12 +143,39 @@ export default function Leave() {
     },
   });
 
+  const watchedLeaveType = form.watch("leaveTypeId");
+  const watchedStartDate = form.watch("startDate");
+  const watchedEndDate = form.watch("endDate");
+
+  const requestedDaysPreview = useMemo(() => {
+    if (!watchedStartDate || !watchedEndDate) return null;
+    const start = new Date(watchedStartDate);
+    const end = new Date(watchedEndDate);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+    if (end < start) return { days: 0, error: "End date must be after start date" };
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return { days: diffDays, error: null };
+  }, [watchedStartDate, watchedEndDate]);
+
+  const balanceValidation = useMemo(() => {
+    if (!watchedLeaveType || !requestedDaysPreview || requestedDaysPreview.error) return null;
+    const available = leaveBalances.find(
+      b => b.employeeId === currentUser.id && b.leaveTypeId === watchedLeaveType
+    )?.remainingDays || 0;
+    const exceeds = requestedDaysPreview.days > available;
+    return { available, exceeds, requested: requestedDaysPreview.days };
+  }, [watchedLeaveType, requestedDaysPreview, currentUser.id]);
+
   const myRequests = leaveRequests.filter(r => r.employeeId === currentUser.id);
   const pendingApprovals = leaveRequests.filter(r => r.status === "pending");
   const allRequests = leaveRequests;
 
   const filterRequests = (requests: LeaveRequest[]) => {
     if (statusFilter === "all") return requests;
+    if (statusFilter === "active" || statusFilter === "completed") {
+      return requests.filter(r => getRequestDisplayStatus(r) === statusFilter);
+    }
     return requests.filter(r => r.status === statusFilter);
   };
 
@@ -116,29 +184,127 @@ export default function Leave() {
     setIsDetailOpen(true);
   };
 
+  const calculateDays = (startDate: string, endDate: string): number => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays;
+  };
+
   const onSubmit = (data: LeaveRequestFormValues) => {
+    const requestedDays = calculateDays(data.startDate, data.endDate);
+    const availableDays = getUserBalance(data.leaveTypeId);
+    
+    if (requestedDays > availableDays) {
+      toast({
+        title: "Insufficient Balance",
+        description: `You only have ${availableDays} days available for this leave type. You're requesting ${requestedDays} days.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (new Date(data.endDate) < new Date(data.startDate)) {
+      toast({
+        title: "Invalid Dates",
+        description: "End date must be after start date.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     toast({
       title: "Leave Request Submitted",
-      description: "Your leave request has been submitted for approval.",
+      description: `Your ${requestedDays}-day leave request has been submitted for approval.`,
     });
     setIsNewRequestOpen(false);
     form.reset();
   };
 
-  const handleApprove = () => {
+  const handleApprove = (request?: LeaveRequest) => {
+    const targetRequest = request || selectedRequest;
+    if (!targetRequest) return;
+    setConfirmAction({ type: "approve", request: targetRequest });
+  };
+
+  const handleReject = (request?: LeaveRequest) => {
+    const targetRequest = request || selectedRequest;
+    if (!targetRequest) return;
+    setConfirmAction({ type: "reject", request: targetRequest });
+  };
+
+  const confirmApproval = () => {
     toast({
       title: "Leave Approved",
-      description: "The leave request has been approved.",
+      description: `Leave request for ${getEmployeeById(confirmAction?.request.employeeId || "")?.firstName} has been approved.`,
     });
+    setConfirmAction(null);
     setIsDetailOpen(false);
   };
 
-  const handleReject = () => {
+  const confirmRejection = () => {
     toast({
       title: "Leave Rejected",
-      description: "The leave request has been rejected.",
+      description: `Leave request for ${getEmployeeById(confirmAction?.request.employeeId || "")?.firstName} has been rejected.`,
     });
+    setConfirmAction(null);
     setIsDetailOpen(false);
+  };
+
+  // Calendar helpers
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const calendarDays = useMemo(() => {
+    const days: { date: Date; isCurrentMonth: boolean }[] = [];
+    const daysInMonth = getDaysInMonth(calendarDate);
+    const firstDay = getFirstDayOfMonth(calendarDate);
+    const prevMonthDays = getDaysInMonth(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1));
+
+    for (let i = firstDay - 1; i >= 0; i--) {
+      days.push({
+        date: new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, prevMonthDays - i),
+        isCurrentMonth: false,
+      });
+    }
+
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push({
+        date: new Date(calendarDate.getFullYear(), calendarDate.getMonth(), i),
+        isCurrentMonth: true,
+      });
+    }
+
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i++) {
+      days.push({
+        date: new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, i),
+        isCurrentMonth: false,
+      });
+    }
+
+    return days;
+  }, [calendarDate]);
+
+  const getEventsForDate = (date: Date) => {
+    const dateStr = date.toISOString().split("T")[0];
+    const leaves = leaveRequests.filter(r => {
+      if (r.status !== "approved") return false;
+      return dateStr >= r.startDate && dateStr <= r.endDate;
+    });
+    const holidays = companyHolidays.filter(h => h.date === dateStr);
+    return { leaves, holidays };
+  };
+
+  const getUserBalance = (leaveTypeId: string) => {
+    const balance = leaveBalances.find(b => b.employeeId === currentUser.id && b.leaveTypeId === leaveTypeId);
+    return balance?.remainingDays || 0;
   };
 
   return (
@@ -193,12 +359,16 @@ export default function Leave() {
       {/* Leave Requests Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="my-requests" data-testid="tab-my-requests">
               My Requests
               <Badge variant="secondary" className="ml-2 text-xs">
                 {myRequests.length}
               </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="calendar" data-testid="tab-calendar">
+              <Calendar className="mr-1 h-4 w-4" />
+              Calendar
             </TabsTrigger>
             {canApproveLeave(role) && (
               <TabsTrigger value="pending-approvals" data-testid="tab-pending-approvals">
@@ -213,19 +383,35 @@ export default function Leave() {
                 All Requests
               </TabsTrigger>
             )}
+            {canEditOrgSettings(role) && (
+              <>
+                <TabsTrigger value="analytics" data-testid="tab-analytics">
+                  <BarChart3 className="mr-1 h-4 w-4" />
+                  Analytics
+                </TabsTrigger>
+                <TabsTrigger value="settings" data-testid="tab-leave-settings">
+                  <Settings className="mr-1 h-4 w-4" />
+                  Settings
+                </TabsTrigger>
+              </>
+            )}
           </TabsList>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[150px]" data-testid="select-leave-status-filter">
-              <Filter className="mr-2 h-4 w-4" />
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all" data-testid="option-status-all">All Status</SelectItem>
-              <SelectItem value="pending" data-testid="option-status-pending">Pending</SelectItem>
-              <SelectItem value="approved" data-testid="option-status-approved">Approved</SelectItem>
-              <SelectItem value="rejected" data-testid="option-status-rejected">Rejected</SelectItem>
-            </SelectContent>
-          </Select>
+          {(activeTab === "my-requests" || activeTab === "pending-approvals" || activeTab === "all-requests") && (
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[160px]" data-testid="select-leave-status-filter">
+                <Filter className="mr-2 h-4 w-4" />
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" data-testid="option-status-all">All Status</SelectItem>
+                <SelectItem value="pending" data-testid="option-status-pending">Pending</SelectItem>
+                <SelectItem value="approved" data-testid="option-status-approved">Approved</SelectItem>
+                <SelectItem value="active" data-testid="option-status-active">Active (On Leave)</SelectItem>
+                <SelectItem value="completed" data-testid="option-status-completed">Completed</SelectItem>
+                <SelectItem value="rejected" data-testid="option-status-rejected">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         <TabsContent value="my-requests" className="space-y-4">
@@ -264,6 +450,354 @@ export default function Leave() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Calendar Tab */}
+        <TabsContent value="calendar" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Leave Calendar</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1))}
+                    data-testid="button-prev-month"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm font-medium min-w-[120px] text-center" data-testid="text-calendar-month">
+                    {calendarDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1))}
+                    data-testid="button-next-month"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 mt-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="h-3 w-3 rounded-full bg-blue-500" />
+                  <span className="text-muted-foreground">Approved Leave</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <div className="h-3 w-3 rounded-full bg-red-500" />
+                  <span className="text-muted-foreground">Company Holiday</span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-7 gap-px bg-muted rounded-lg overflow-hidden">
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                  <div key={day} className="bg-muted-foreground/5 p-2 text-center text-xs font-medium text-muted-foreground">
+                    {day}
+                  </div>
+                ))}
+                {calendarDays.map(({ date, isCurrentMonth }, index) => {
+                  const { leaves, holidays } = getEventsForDate(date);
+                  const isToday = date.toDateString() === new Date().toDateString();
+                  const dateStr = date.toISOString().split("T")[0];
+                  return (
+                    <div
+                      key={index}
+                      className={`bg-background p-1 min-h-[80px] ${!isCurrentMonth ? "opacity-50" : ""}`}
+                      data-testid={`calendar-day-${dateStr}`}
+                    >
+                      <div className={`text-xs font-medium mb-1 ${isToday ? "bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center" : ""}`}>
+                        {date.getDate()}
+                      </div>
+                      <div className="space-y-0.5">
+                        {holidays.map((h) => (
+                          <div
+                            key={h.id}
+                            className="text-[10px] px-1 py-0.5 rounded bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 truncate"
+                            title={h.name}
+                          >
+                            {h.name}
+                          </div>
+                        ))}
+                        {leaves.slice(0, 2).map((l) => {
+                          const emp = getEmployeeById(l.employeeId);
+                          return (
+                            <div
+                              key={l.id}
+                              className="text-[10px] px-1 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 truncate"
+                              title={`${emp?.firstName} ${emp?.lastName}`}
+                            >
+                              {emp?.firstName?.charAt(0)}. {emp?.lastName}
+                            </div>
+                          );
+                        })}
+                        {leaves.length > 2 && (
+                          <div className="text-[10px] text-muted-foreground">
+                            +{leaves.length - 2} more
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Analytics Tab - Admin Only */}
+        {canEditOrgSettings(role) && (
+          <TabsContent value="analytics" className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+              <Card data-testid="card-analytics-by-type">
+                <CardHeader>
+                  <CardTitle className="text-lg">Usage by Leave Type</CardTitle>
+                  <CardDescription>Total days used per leave type</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {leaveTypes.map((type) => {
+                      const totalUsed = leaveRequests
+                        .filter((r) => r.leaveTypeId === type.id && r.status === "approved")
+                        .reduce((sum, r) => sum + r.totalDays, 0);
+                      const maxDays = type.defaultDays * employees.length;
+                      const percentage = Math.min((totalUsed / maxDays) * 100, 100);
+                      return (
+                        <div key={type.id} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="h-3 w-3 rounded-full" style={{ backgroundColor: type.color }} />
+                              <span className="text-sm font-medium">{type.name}</span>
+                            </div>
+                            <span className="text-sm text-muted-foreground">{totalUsed} days</span>
+                          </div>
+                          <Progress value={percentage} className="h-2" style={{ backgroundColor: `${type.color}20` }} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-analytics-by-dept">
+                <CardHeader>
+                  <CardTitle className="text-lg">Leave by Department</CardTitle>
+                  <CardDescription>Distribution across departments</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {departments.map((dept) => {
+                      const deptEmployees = employees.filter((e) => e.departmentId === dept.id);
+                      const totalDays = leaveRequests
+                        .filter((r) => deptEmployees.some((e) => e.id === r.employeeId) && r.status === "approved")
+                        .reduce((sum, r) => sum + r.totalDays, 0);
+                      return (
+                        <div key={dept.id} className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{dept.name}</span>
+                          <Badge variant="secondary">{totalDays} days</Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-analytics-summary">
+                <CardHeader>
+                  <CardTitle className="text-lg">Leave Summary</CardTitle>
+                  <CardDescription>Overall statistics</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Total Requests (2026)</span>
+                      <span className="text-lg font-bold">{leaveRequests.length}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Approved</span>
+                      <span className="text-lg font-bold text-emerald-600">
+                        {leaveRequests.filter((r) => r.status === "approved").length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Pending</span>
+                      <span className="text-lg font-bold text-amber-600">
+                        {leaveRequests.filter((r) => r.status === "pending").length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Rejected</span>
+                      <span className="text-lg font-bold text-red-600">
+                        {leaveRequests.filter((r) => r.status === "rejected").length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <span className="text-sm text-muted-foreground">Total Days Approved</span>
+                      <span className="text-lg font-bold">
+                        {leaveRequests.filter((r) => r.status === "approved").reduce((sum, r) => sum + r.totalDays, 0)}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        )}
+
+        {/* Settings Tab - Admin Only */}
+        {canEditOrgSettings(role) && (
+          <TabsContent value="settings" className="space-y-4">
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Leave Types Management */}
+              <Card data-testid="card-manage-leave-types">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">Leave Types</CardTitle>
+                    <CardDescription>Configure leave type allocations</CardDescription>
+                  </div>
+                  <Button size="sm" data-testid="button-add-leave-type">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Type
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {leaveTypes.map((type) => (
+                      <div
+                        key={type.id}
+                        className="flex items-center justify-between p-3 rounded-lg border"
+                        data-testid={`leave-type-row-${type.id}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-4 w-4 rounded-full" style={{ backgroundColor: type.color }} />
+                          <div>
+                            <p className="font-medium">{type.name}</p>
+                            <p className="text-xs text-muted-foreground">{type.description}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">{type.defaultDays} days</Badge>
+                          <Button size="icon" variant="ghost" data-testid={`button-edit-leave-type-${type.id}`}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="text-destructive" data-testid={`button-delete-leave-type-${type.id}`}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Company Holidays Management */}
+              <Card data-testid="card-manage-holidays">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">Company Holidays</CardTitle>
+                    <CardDescription>Manage company-wide holidays for 2026</CardDescription>
+                  </div>
+                  <Button size="sm" data-testid="button-add-holiday">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Holiday
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {companyHolidays.map((holiday) => (
+                      <div
+                        key={holiday.id}
+                        className="flex items-center justify-between p-3 rounded-lg border"
+                        data-testid={`holiday-row-${holiday.id}`}
+                      >
+                        <div>
+                          <p className="font-medium">{holiday.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(holiday.date).toLocaleDateString("en-US", {
+                              weekday: "long",
+                              month: "long",
+                              day: "numeric",
+                            })}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Button size="icon" variant="ghost" data-testid={`button-edit-holiday-${holiday.id}`}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="text-destructive" data-testid={`button-delete-holiday-${holiday.id}`}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Employee Balances Management */}
+              <Card className="lg:col-span-2" data-testid="card-manage-balances">
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg">Employee Leave Balances</CardTitle>
+                    <CardDescription>Adjust individual employee leave allocations</CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Employee</TableHead>
+                          {leaveTypes.slice(0, 4).map((type) => (
+                            <TableHead key={type.id} className="text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: type.color }} />
+                                {type.name.split(" ")[0]}
+                              </div>
+                            </TableHead>
+                          ))}
+                          <TableHead className="w-[100px]">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {employees.slice(0, 5).map((emp) => (
+                          <TableRow key={emp.id} data-testid={`balance-row-${emp.id}`}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Avatar className="h-7 w-7">
+                                  <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                                    {emp.firstName[0]}{emp.lastName[0]}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="font-medium">{emp.firstName} {emp.lastName}</span>
+                              </div>
+                            </TableCell>
+                            {leaveTypes.slice(0, 4).map((type) => {
+                              const balance = leaveBalances.find((b) => b.employeeId === emp.id && b.leaveTypeId === type.id);
+                              return (
+                                <TableCell key={type.id} className="text-center">
+                                  <Badge variant="secondary">
+                                    {balance?.remainingDays ?? type.defaultDays} / {balance?.totalDays ?? type.defaultDays}
+                                  </Badge>
+                                </TableCell>
+                              );
+                            })}
+                            <TableCell>
+                              <Button size="sm" variant="ghost" data-testid={`button-edit-balance-${emp.id}`}>
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* New Request Dialog with Form */}
@@ -280,32 +814,49 @@ export default function Leave() {
               <FormField
                 control={form.control}
                 name="leaveTypeId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Leave Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-leave-type">
-                          <SelectValue placeholder="Select leave type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {leaveTypes.map((type) => (
-                          <SelectItem key={type.id} value={type.id} data-testid={`option-leave-type-${type.id}`}>
-                            <div className="flex items-center gap-2">
-                              <div 
-                                className="h-2 w-2 rounded-full" 
-                                style={{ backgroundColor: type.color }}
-                              />
-                              {type.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const selectedType = leaveTypes.find(t => t.id === field.value);
+                  const availableDays = field.value ? getUserBalance(field.value) : null;
+                  return (
+                    <FormItem>
+                      <FormLabel>Leave Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-leave-type">
+                            <SelectValue placeholder="Select leave type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {leaveTypes.map((type) => {
+                            const balance = getUserBalance(type.id);
+                            return (
+                              <SelectItem key={type.id} value={type.id} data-testid={`option-leave-type-${type.id}`}>
+                                <div className="flex items-center justify-between gap-4 w-full">
+                                  <div className="flex items-center gap-2">
+                                    <div 
+                                      className="h-2 w-2 rounded-full" 
+                                      style={{ backgroundColor: type.color }}
+                                    />
+                                    {type.name}
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">
+                                    {balance} days left
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      {selectedType && availableDays !== null && (
+                        <p className="text-xs text-muted-foreground" data-testid="text-available-balance">
+                          Available: {availableDays} days of {selectedType.name}
+                        </p>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
               <div className="grid grid-cols-2 gap-4">
                 <FormField
@@ -335,6 +886,39 @@ export default function Leave() {
                   )}
                 />
               </div>
+
+              {/* Real-time validation feedback */}
+              {requestedDaysPreview?.error && (
+                <div className="flex items-center gap-2 text-destructive text-sm" data-testid="error-date-validation">
+                  <AlertCircle className="h-4 w-4" />
+                  {requestedDaysPreview.error}
+                </div>
+              )}
+              {balanceValidation && (
+                <div className={`flex items-center gap-2 text-sm p-3 rounded-md ${
+                  balanceValidation.exceeds 
+                    ? "bg-destructive/10 text-destructive border border-destructive/20" 
+                    : "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800"
+                }`} data-testid={balanceValidation.exceeds ? "error-balance-exceeded" : "info-balance-ok"}>
+                  {balanceValidation.exceeds ? (
+                    <>
+                      <AlertCircle className="h-4 w-4" />
+                      <span>
+                        Insufficient balance: You're requesting <strong>{balanceValidation.requested} days</strong> but only have{" "}
+                        <strong>{balanceValidation.available} days</strong> available.
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span>
+                        Requesting <strong>{balanceValidation.requested} days</strong> — {balanceValidation.available - balanceValidation.requested} days will remain after this request.
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+
               <FormField
                 control={form.control}
                 name="reason"
@@ -358,7 +942,11 @@ export default function Leave() {
                 <Button type="button" variant="outline" onClick={() => setIsNewRequestOpen(false)} data-testid="button-cancel-leave-request">
                   Cancel
                 </Button>
-                <Button type="submit" data-testid="button-submit-leave-request">
+                <Button 
+                  type="submit" 
+                  disabled={!!balanceValidation?.exceeds || !!requestedDaysPreview?.error}
+                  data-testid="button-submit-leave-request"
+                >
                   Submit Request
                 </Button>
               </DialogFooter>
@@ -448,11 +1036,11 @@ export default function Leave() {
                   </div>
                 )}
 
-                {selectedRequest.status === "pending" && selectedRequest.employeeId !== currentUser.id && (
+                {selectedRequest.status === "pending" && selectedRequest.employeeId !== currentUser.id && canApproveLeave(role) && (
                   <div className="flex gap-2 pt-4">
                     <Button 
                       className="flex-1 bg-emerald-600 hover:bg-emerald-700" 
-                      onClick={handleApprove}
+                      onClick={() => handleApprove()}
                       data-testid="button-approve-leave"
                     >
                       <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -461,7 +1049,7 @@ export default function Leave() {
                     <Button 
                       variant="destructive" 
                       className="flex-1" 
-                      onClick={handleReject}
+                      onClick={() => handleReject()}
                       data-testid="button-reject-leave"
                     >
                       <XCircle className="mr-2 h-4 w-4" />
@@ -469,11 +1057,51 @@ export default function Leave() {
                     </Button>
                   </div>
                 )}
+
+                {/* Active Leave Badge */}
+                {isCurrentlyOnLeave(selectedRequest) && (
+                  <div className="flex items-center gap-2 p-3 mt-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                    <Star className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm text-blue-700 dark:text-blue-400">Currently on leave</span>
+                  </div>
+                )}
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {confirmAction?.type === "approve" ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              )}
+              {confirmAction?.type === "approve" ? "Approve Leave Request" : "Reject Leave Request"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.type === "approve" 
+                ? `Are you sure you want to approve the leave request for ${getEmployeeById(confirmAction?.request.employeeId || "")?.firstName} ${getEmployeeById(confirmAction?.request.employeeId || "")?.lastName}? This will deduct ${confirmAction?.request.totalDays} days from their balance.`
+                : `Are you sure you want to reject the leave request for ${getEmployeeById(confirmAction?.request.employeeId || "")?.firstName} ${getEmployeeById(confirmAction?.request.employeeId || "")?.lastName}? This action cannot be undone.`
+              }
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-confirm">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmAction?.type === "approve" ? confirmApproval : confirmRejection}
+              className={confirmAction?.type === "approve" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-destructive hover:bg-destructive/90"}
+              data-testid={confirmAction?.type === "approve" ? "button-confirm-approve" : "button-confirm-reject"}
+            >
+              {confirmAction?.type === "approve" ? "Approve" : "Reject"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -512,7 +1140,8 @@ function LeaveRequestsTable({ requests, onRowClick, showEmployee = true, showAct
           {requests.map((request) => {
             const employee = getEmployeeById(request.employeeId);
             const leaveType = getLeaveTypeById(request.leaveTypeId);
-            const StatusIcon = statusIcons[request.status];
+            const displayStatus = getRequestDisplayStatus(request);
+            const StatusIcon = statusIcons[displayStatus] || Clock;
             return (
               <TableRow 
                 key={request.id}
@@ -528,9 +1157,16 @@ function LeaveRequestsTable({ requests, onRowClick, showEmployee = true, showAct
                           {employee?.firstName[0]}{employee?.lastName[0]}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="font-medium" data-testid={`text-employee-name-${request.id}`}>
-                        {employee?.firstName} {employee?.lastName}
-                      </span>
+                      <div>
+                        <span className="font-medium" data-testid={`text-employee-name-${request.id}`}>
+                          {employee?.firstName} {employee?.lastName}
+                        </span>
+                        {isCurrentlyOnLeave(request) && (
+                          <Badge variant="secondary" className="ml-2 text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                            On Leave
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </TableCell>
                 )}
@@ -550,9 +1186,9 @@ function LeaveRequestsTable({ requests, onRowClick, showEmployee = true, showAct
                   </span>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className={statusColors[request.status]} data-testid={`badge-status-${request.id}`}>
+                  <Badge variant="secondary" className={statusColors[displayStatus]} data-testid={`badge-status-${request.id}`}>
                     <StatusIcon className="mr-1 h-3 w-3" />
-                    {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                    {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)}
                   </Badge>
                 </TableCell>
                 {showActions && (

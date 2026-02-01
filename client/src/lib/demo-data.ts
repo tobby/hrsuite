@@ -7,7 +7,8 @@ import type {
   AppraisalCycle, 
   Appraisal, 
   AppraisalFeedback,
-  Competency 
+  Competency,
+  CompanyHoliday
 } from "@shared/schema";
 
 // Departments
@@ -382,6 +383,24 @@ export function getAppraisalCycleById(id: string): AppraisalCycle | undefined {
 
 export function getFeedbackByAppraisal(appraisalId: string): AppraisalFeedback[] {
   return appraisalFeedback.filter(f => f.appraisalId === appraisalId);
+}
+
+// Company Holidays
+export const companyHolidays: CompanyHoliday[] = [
+  { id: "hol-1", name: "New Year's Day", date: "2026-01-01", year: 2026 },
+  { id: "hol-2", name: "Martin Luther King Jr. Day", date: "2026-01-19", year: 2026 },
+  { id: "hol-3", name: "Presidents' Day", date: "2026-02-16", year: 2026 },
+  { id: "hol-4", name: "Memorial Day", date: "2026-05-25", year: 2026 },
+  { id: "hol-5", name: "Independence Day", date: "2026-07-03", year: 2026 },
+  { id: "hol-6", name: "Labor Day", date: "2026-09-07", year: 2026 },
+  { id: "hol-7", name: "Thanksgiving", date: "2026-11-26", year: 2026 },
+  { id: "hol-8", name: "Day After Thanksgiving", date: "2026-11-27", year: 2026 },
+  { id: "hol-9", name: "Christmas Eve", date: "2026-12-24", year: 2026 },
+  { id: "hol-10", name: "Christmas Day", date: "2026-12-25", year: 2026 },
+];
+
+export function getCompanyHolidaysByYear(year: number): CompanyHoliday[] {
+  return companyHolidays.filter(h => h.year === year);
 }
 
 // Current logged in user (for demo)
