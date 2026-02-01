@@ -13,6 +13,8 @@ import {
   ChevronRight,
   FileText,
   Calendar,
+  Briefcase,
+  UserPlus,
 } from "lucide-react";
 import {
   Sidebar,
@@ -58,6 +60,7 @@ export function AppSidebar() {
   const department = getDepartmentById(currentUser.departmentId);
   const [leaveExpanded, setLeaveExpanded] = useState(location.startsWith("/leave"));
   const [appraisalsExpanded, setAppraisalsExpanded] = useState(location.startsWith("/appraisals"));
+  const [recruitmentExpanded, setRecruitmentExpanded] = useState(location.startsWith("/recruitment"));
 
   const isActive = (url: string) => {
     if (url === "/") return location === "/";
@@ -66,8 +69,10 @@ export function AppSidebar() {
 
   const isLeaveActive = location.startsWith("/leave");
   const isAppraisalsActive = location.startsWith("/appraisals");
+  const isRecruitmentActive = location.startsWith("/recruitment");
   const showLeaveSubItems = canEditOrgSettings(role);
   const showAppraisalsSubItems = canEditOrgSettings(role);
+  const showRecruitment = canEditOrgSettings(role);
 
   const filterByRole = (items: NavItem[]) => items.filter(item => item.roles.includes(role));
 
@@ -257,6 +262,64 @@ export function AppSidebar() {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+              )}
+
+              {showRecruitment && (
+                <Collapsible open={recruitmentExpanded} onOpenChange={setRecruitmentExpanded}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        isActive={isRecruitmentActive}
+                        data-testid="nav-recruitment-management"
+                      >
+                        <Briefcase className="h-4 w-4" />
+                        <span>Recruitment</span>
+                        {recruitmentExpanded ? (
+                          <ChevronDown className="ml-auto h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="ml-auto h-4 w-4" />
+                        )}
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/recruitment/jobs"}
+                          >
+                            <Link href="/recruitment/jobs" data-testid="nav-recruitment-jobs">
+                              <Briefcase className="h-3 w-3" />
+                              <span>Jobs</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/recruitment/candidates"}
+                          >
+                            <Link href="/recruitment/candidates" data-testid="nav-recruitment-candidates">
+                              <UserPlus className="h-3 w-3" />
+                              <span>Candidates</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/recruitment/settings"}
+                          >
+                            <Link href="/recruitment/settings" data-testid="nav-recruitment-settings">
+                              <Settings className="h-3 w-3" />
+                              <span>Settings</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
               )}
             </SidebarMenu>
           </SidebarGroupContent>

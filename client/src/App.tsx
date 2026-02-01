@@ -22,6 +22,12 @@ import AppraisalResults from "@/pages/appraisal-results";
 import AppraisalTemplates from "@/pages/appraisal-templates";
 import AppraisalCycles from "@/pages/appraisal-cycles";
 import CycleProgress from "@/pages/cycle-progress";
+import RecruitmentJobs from "@/pages/recruitment-jobs";
+import RecruitmentCandidates from "@/pages/recruitment-candidates";
+import CandidateDetail from "@/pages/candidate-detail";
+import RecruitmentSettings from "@/pages/recruitment-settings";
+import Careers from "@/pages/careers";
+import JobApplication from "@/pages/job-application";
 
 function Router() {
   return (
@@ -38,6 +44,12 @@ function Router() {
       <Route path="/appraisals/templates" component={AppraisalTemplates} />
       <Route path="/appraisals/cycles" component={AppraisalCycles} />
       <Route path="/appraisals/cycles/:id" component={CycleProgress} />
+      <Route path="/recruitment/jobs" component={RecruitmentJobs} />
+      <Route path="/recruitment/candidates" component={RecruitmentCandidates} />
+      <Route path="/recruitment/candidates/:id" component={CandidateDetail} />
+      <Route path="/recruitment/settings" component={RecruitmentSettings} />
+      <Route path="/careers" component={Careers} />
+      <Route path="/jobs/:id/apply" component={JobApplication} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

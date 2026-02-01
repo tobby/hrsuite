@@ -227,3 +227,154 @@ export const companyHolidays = pgTable("company_holidays", {
 export const insertCompanyHolidaySchema = createInsertSchema(companyHolidays).omit({ id: true });
 export type InsertCompanyHoliday = z.infer<typeof insertCompanyHolidaySchema>;
 export type CompanyHoliday = typeof companyHolidays.$inferSelect;
+
+// ==================== RECRUITMENT/ATS TYPES ====================
+
+// Job Postings Table
+export const jobPostings = pgTable("job_postings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  departmentId: varchar("department_id").notNull(),
+  location: text("location").notNull(),
+  employmentType: text("employment_type").notNull(), // "full-time", "contract", "intern"
+  experienceYears: integer("experience_years").notNull().default(0),
+  status: text("status").notNull().default("open"), // "open", "closed", "draft"
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertJobPostingSchema = createInsertSchema(jobPostings).omit({ id: true, createdAt: true }).extend({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().min(1, "Description is required"),
+  departmentId: z.string().min(1, "Department is required"),
+  location: z.string().min(1, "Location is required"),
+  employmentType: z.enum(["full-time", "contract", "intern"]),
+  experienceYears: z.number().min(0),
+  status: z.enum(["open", "closed", "draft"]).optional(),
+});
+export type InsertJobPosting = z.infer<typeof insertJobPostingSchema>;
+export type JobPosting = typeof jobPostings.$inferSelect;
+
+// Candidates Table
+export const candidates = pgTable("candidates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull(),
+  firstName: text("first_name").notNull(),
+  lastName: text("last_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone"),
+  location: text("location"),
+  linkedinUrl: text("linkedin_url"),
+  gender: text("gender"), // "male", "female", "other", "prefer_not_to_say"
+  resumeFileName: text("resume_file_name"),
+  stage: text("stage").notNull().default("applied"), // "applied", "screening", "interview", "offer", "hired", "rejected"
+  appliedAt: timestamp("applied_at").defaultNow(),
+});
+
+export const insertCandidateSchema = createInsertSchema(candidates).omit({ id: true, appliedAt: true }).extend({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().optional(),
+  location: z.string().optional(),
+  linkedinUrl: z.string().optional(),
+  gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
+  resumeFileName: z.string().optional(),
+  stage: z.enum(["applied", "screening", "interview", "offer", "hired", "rejected"]).optional(),
+});
+export type InsertCandidate = z.infer<typeof insertCandidateSchema>;
+export type Candidate = typeof candidates.$inferSelect;
+
+// Candidate Activities (Timeline)
+export const candidateActivities = pgTable("candidate_activities", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  candidateId: varchar("candidate_id").notNull(),
+  type: text("type").notNull(), // "stage_change", "note_added", "email_sent", "email_received", "interview_scheduled", "assessment_added"
+  description: text("description").notNull(),
+  metadata: text("metadata"), // JSON string for additional data
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: varchar("created_by"), // employee id
+});
+
+export type CandidateActivity = typeof candidateActivities.$inferSelect;
+
+// Candidate Notes
+export const candidateNotes = pgTable("candidate_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  candidateId: varchar("candidate_id").notNull(),
+  content: text("content").notNull(),
+  category: text("category").notNull().default("general"), // "general", "feedback", "concern", "positive"
+  createdAt: timestamp("created_at").defaultNow(),
+  createdBy: varchar("created_by").notNull(),
+});
+
+export type CandidateNote = typeof candidateNotes.$inferSelect;
+
+// Candidate Assessments
+export const candidateAssessments = pgTable("candidate_assessments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  candidateId: varchar("candidate_id").notNull(),
+  assessorId: varchar("assessor_id").notNull(),
+  category: text("category").notNull(), // "technical", "communication", "culture_fit", "experience"
+  score: integer("score").notNull(), // 1-5
+  comments: text("comments"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type CandidateAssessment = typeof candidateAssessments.$inferSelect;
+
+// Candidate Interviews
+export const candidateInterviews = pgTable("candidate_interviews", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  candidateId: varchar("candidate_id").notNull(),
+  interviewerId: varchar("interviewer_id").notNull(),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  duration: integer("duration").notNull().default(60), // minutes
+  type: text("type").notNull(), // "phone", "video", "onsite"
+  status: text("status").notNull().default("scheduled"), // "scheduled", "completed", "cancelled"
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type CandidateInterview = typeof candidateInterviews.$inferSelect;
+
+// Candidate Communications (Emails)
+export const candidateCommunications = pgTable("candidate_communications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  candidateId: varchar("candidate_id").notNull(),
+  direction: text("direction").notNull(), // "sent", "received"
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  sentAt: timestamp("sent_at").defaultNow(),
+  sentBy: varchar("sent_by"), // employee id if sent
+});
+
+export type CandidateCommunication = typeof candidateCommunications.$inferSelect;
+
+// Email Templates
+export const emailTemplates = pgTable("email_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  category: text("category").notNull(), // "application_received", "interview_scheduled", "offer_extended", "rejection", "general"
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({ id: true, createdAt: true }).extend({
+  name: z.string().min(1, "Name is required"),
+  subject: z.string().min(1, "Subject is required"),
+  body: z.string().min(1, "Body is required"),
+  category: z.enum(["application_received", "interview_scheduled", "offer_extended", "rejection", "general"]),
+});
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+
+// Recruitment Settings
+export const recruitmentSettings = pgTable("recruitment_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(),
+  value: text("value").notNull(),
+});
+
+export type RecruitmentSetting = typeof recruitmentSettings.$inferSelect;
