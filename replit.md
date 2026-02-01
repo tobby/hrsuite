@@ -9,6 +9,13 @@ HRFlow is a frontend-only HR management platform built for demonstration purpose
 - **Tech Stack**: React + TypeScript, Vite, Tailwind CSS, shadcn/ui, Zustand for state management
 
 ## Recent Changes
+- 2026-02-01: Appraisal Cycles and Results redesign
+  - 180° reviews now hide weight configuration (manager-only scoring, 100% manager weight)
+  - New Cycle Progress page (`/appraisals/cycles/:id`) for admins to track participant review status
+  - Progress page shows overall stats, review completion progress bar, and expandable participant details
+  - Results page redesigned with unified header (employee info + score integrated)
+  - Results now use tabs for "Competency Ratings" and "Written Feedback" sections
+  - Competency ratings grouped by category with category averages
 - 2026-02-01: Comprehensive Performance Appraisals system implemented
   - My Appraisals page with Pending/Completed/Received tabs
   - Review Form with star ratings (1-5), text questions, and overall comments
@@ -51,6 +58,7 @@ client/
 │   │   ├── appraisal-results.tsx # Results with weighted scores
 │   │   ├── appraisal-templates.tsx # Template management (Admin)
 │   │   ├── appraisal-cycles.tsx  # Cycle management (Admin)
+│   │   ├── cycle-progress.tsx    # Cycle progress tracking (Admin)
 │   │   └── settings.tsx     # User settings
 │   ├── lib/
 │   │   ├── demo-data.ts     # Static demo data
@@ -74,9 +82,10 @@ server/
 - `/leave/settings` - Leave types, holidays, and balances configuration (Admin-only)
 - `/appraisals` - My Appraisals dashboard
 - `/appraisals/review/:id` - Fill/view a review form
-- `/appraisals/results/:id` - View appraisal results with weighted scores
+- `/appraisals/results/:id` - View appraisal results with tabbed ratings/feedback
 - `/appraisals/templates` - Manage review templates (Admin-only)
 - `/appraisals/cycles` - Manage review cycles (Admin-only)
+- `/appraisals/cycles/:id` - View cycle progress and participant status (Admin-only)
 - `/settings` - User settings
 
 ## Data Model

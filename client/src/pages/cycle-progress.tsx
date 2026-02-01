@@ -64,9 +64,9 @@ export default function CycleProgress() {
   if (!cycle) {
     return (
       <div className="flex flex-col items-center justify-center p-12">
-        <p className="text-muted-foreground">Cycle not found</p>
+        <p className="text-muted-foreground" data-testid="text-cycle-not-found">Cycle not found</p>
         <Link href="/appraisals/cycles">
-          <Button variant="ghost" className="mt-4">Back to Cycles</Button>
+          <Button variant="ghost" className="mt-4" data-testid="button-back-cycles-error">Back to Cycles</Button>
         </Link>
       </div>
     );
@@ -75,9 +75,9 @@ export default function CycleProgress() {
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center p-12">
-        <p className="text-muted-foreground">Access restricted to administrators only</p>
+        <p className="text-muted-foreground" data-testid="text-access-restricted">Access restricted to administrators only</p>
         <Link href="/appraisals">
-          <Button variant="ghost" className="mt-4">Back to Appraisals</Button>
+          <Button variant="ghost" className="mt-4" data-testid="button-back-appraisals-error">Back to Appraisals</Button>
         </Link>
       </div>
     );
@@ -168,7 +168,7 @@ export default function CycleProgress() {
           <CardContent>
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
-              <span className="text-2xl font-bold">{overallStats.total}</span>
+              <span className="text-2xl font-bold" data-testid="stat-total-participants">{overallStats.total}</span>
             </div>
           </CardContent>
         </Card>
@@ -179,7 +179,7 @@ export default function CycleProgress() {
           <CardContent>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-              <span className="text-2xl font-bold">{overallStats.completed}</span>
+              <span className="text-2xl font-bold" data-testid="stat-completed">{overallStats.completed}</span>
             </div>
           </CardContent>
         </Card>
@@ -190,7 +190,7 @@ export default function CycleProgress() {
           <CardContent>
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-amber-500" />
-              <span className="text-2xl font-bold">{overallStats.inProgress}</span>
+              <span className="text-2xl font-bold" data-testid="stat-in-progress">{overallStats.inProgress}</span>
             </div>
           </CardContent>
         </Card>
@@ -201,7 +201,7 @@ export default function CycleProgress() {
           <CardContent>
             <div className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-muted-foreground" />
-              <span className="text-2xl font-bold">{overallStats.pending}</span>
+              <span className="text-2xl font-bold" data-testid="stat-pending">{overallStats.pending}</span>
             </div>
           </CardContent>
         </Card>
@@ -212,27 +212,27 @@ export default function CycleProgress() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <CardTitle>Overall Review Progress</CardTitle>
-              <CardDescription>
+              <CardDescription data-testid="text-progress-description">
                 {feedbackStats.submitted} of {feedbackStats.total} reviews submitted
               </CardDescription>
             </div>
-            <span className="text-2xl font-bold">{Math.round(overallProgress)}%</span>
+            <span className="text-2xl font-bold" data-testid="text-progress-percent">{Math.round(overallProgress)}%</span>
           </div>
         </CardHeader>
         <CardContent>
-          <Progress value={overallProgress} className="h-3" />
+          <Progress value={overallProgress} className="h-3" data-testid="progress-overall" />
           <div className="flex items-center gap-6 mt-4 text-sm flex-wrap">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-emerald-500" />
-              <span className="text-muted-foreground">Submitted: {feedbackStats.submitted}</span>
+              <span className="text-muted-foreground" data-testid="text-submitted-count">Submitted: {feedbackStats.submitted}</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-amber-500" />
-              <span className="text-muted-foreground">Draft: {feedbackStats.draft}</span>
+              <span className="text-muted-foreground" data-testid="text-draft-count">Draft: {feedbackStats.draft}</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 rounded-full bg-muted-foreground" />
-              <span className="text-muted-foreground">Pending: {feedbackStats.pending}</span>
+              <span className="text-muted-foreground" data-testid="text-pending-count">Pending: {feedbackStats.pending}</span>
             </div>
           </div>
         </CardContent>
