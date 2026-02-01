@@ -526,6 +526,10 @@ export function getAppraisalsByEmployee(employeeId: string): Appraisal[] {
   return appraisals.filter(a => a.employeeId === employeeId);
 }
 
+export function getAppraisalsByCycle(cycleId: string): Appraisal[] {
+  return appraisals.filter(a => a.cycleId === cycleId);
+}
+
 export function getAppraisalCycleById(id: string): AppraisalCycle | undefined {
   return appraisalCycles.find(c => c.id === id);
 }

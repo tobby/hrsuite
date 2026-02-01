@@ -137,15 +137,19 @@ export default function AppraisalCycles() {
   }
 
   const handleCreateCycle = (values: CycleFormValues) => {
-    const totalWeight = values.selfWeight + values.peerWeight + values.managerWeight;
-    if (totalWeight !== 100) {
-      toast({
-        title: "Invalid Weights",
-        description: "Weights must add up to 100%",
-        variant: "destructive",
-      });
-      return;
+    // For 360° reviews, validate weights add up to 100%
+    if (values.type === "360") {
+      const totalWeight = values.selfWeight + values.peerWeight + values.managerWeight;
+      if (totalWeight !== 100) {
+        toast({
+          title: "Invalid Weights",
+          description: "Weights must add up to 100%",
+          variant: "destructive",
+        });
+        return;
+      }
     }
+    // For 180° reviews, manager weight is automatically 100%
     
     toast({
       title: "Cycle Created",
@@ -190,7 +194,7 @@ export default function AppraisalCycles() {
     if (allSelected) {
       setSelectedParticipants(prev => prev.filter(id => !deptEmployees.includes(id)));
     } else {
-      setSelectedParticipants(prev => [...new Set([...prev, ...deptEmployees])]);
+      setSelectedParticipants(prev => Array.from(new Set([...prev, ...deptEmployees])));
     }
   };
 
@@ -282,6 +286,16 @@ export default function AppraisalCycles() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
+                          <Link href={`/appraisals/cycles/${cycle.id}`}>
+                            <Button 
+                              size="sm" 
+                              variant="outline"
+                              data-testid={`button-view-progress-${cycle.id}`}
+                            >
+                              <ChevronRight className="h-3 w-3 mr-1" />
+                              Progress
+                            </Button>
+                          </Link>
                           {cycle.status === "draft" && (
                             <Button 
                               size="sm" 
@@ -312,39 +326,7 @@ export default function AppraisalCycles() {
         </CardContent>
       </Card>
 
-      {/* Weights Legend */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Scoring Weights</CardTitle>
-          <CardDescription>
-            How final scores are calculated for each cycle
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            {appraisalCycles.map((cycle) => (
-              <div key={cycle.id} className="p-4 rounded-lg border">
-                <p className="font-medium text-sm mb-2">{cycle.name}</p>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Self</span>
-                    <Badge variant="outline">{cycle.selfWeight}%</Badge>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Peer</span>
-                    <Badge variant="outline">{cycle.peerWeight}%</Badge>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Manager</span>
-                    <Badge variant="outline">{cycle.managerWeight}%</Badge>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
+      
       {/* Create Cycle Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={handleCloseCycleDialog}>
         <DialogContent className="sm:max-w-[600px]">
@@ -453,78 +435,89 @@ export default function AppraisalCycles() {
                 />
               </div>
 
-              {/* Weights */}
-              <div className="space-y-4 pt-4 border-t">
-                <Label>Scoring Weights (must total 100%)</Label>
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField
-                    control={cycleForm.control}
-                    name="selfWeight"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm">Self: {field.value}%</FormLabel>
-                        <FormControl>
-                          <Slider
-                            min={0}
-                            max={100}
-                            step={5}
-                            value={[field.value]}
-                            onValueChange={([value]) => field.onChange(value)}
-                            data-testid="slider-self-weight"
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={cycleForm.control}
-                    name="peerWeight"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm">Peer: {field.value}%</FormLabel>
-                        <FormControl>
-                          <Slider
-                            min={0}
-                            max={100}
-                            step={5}
-                            value={[field.value]}
-                            onValueChange={([value]) => field.onChange(value)}
-                            disabled={watchedType === "180"}
-                            data-testid="slider-peer-weight"
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={cycleForm.control}
-                    name="managerWeight"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm">Manager: {field.value}%</FormLabel>
-                        <FormControl>
-                          <Slider
-                            min={0}
-                            max={100}
-                            step={5}
-                            value={[field.value]}
-                            onValueChange={([value]) => field.onChange(value)}
-                            data-testid="slider-manager-weight"
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
+              {/* Weights - Only show for 360° reviews */}
+              {watchedType === "360" && (
+                <div className="space-y-4 pt-4 border-t">
+                  <Label>Scoring Weights (must total 100%)</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Configure how self, peer, and manager ratings contribute to the final score.
+                  </p>
+                  <div className="grid grid-cols-3 gap-4">
+                    <FormField
+                      control={cycleForm.control}
+                      name="selfWeight"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm">Self: {field.value}%</FormLabel>
+                          <FormControl>
+                            <Slider
+                              min={0}
+                              max={100}
+                              step={5}
+                              value={[field.value]}
+                              onValueChange={([value]) => field.onChange(value)}
+                              data-testid="slider-self-weight"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={cycleForm.control}
+                      name="peerWeight"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm">Peer: {field.value}%</FormLabel>
+                          <FormControl>
+                            <Slider
+                              min={0}
+                              max={100}
+                              step={5}
+                              value={[field.value]}
+                              onValueChange={([value]) => field.onChange(value)}
+                              data-testid="slider-peer-weight"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={cycleForm.control}
+                      name="managerWeight"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-sm">Manager: {field.value}%</FormLabel>
+                          <FormControl>
+                            <Slider
+                              min={0}
+                              max={100}
+                              step={5}
+                              value={[field.value]}
+                              onValueChange={([value]) => field.onChange(value)}
+                              data-testid="slider-manager-weight"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  {(() => {
+                    const total = cycleForm.watch("selfWeight") + cycleForm.watch("peerWeight") + cycleForm.watch("managerWeight");
+                    return total !== 100 && (
+                      <p className="text-sm text-destructive">
+                        Total: {total}% (must equal 100%)
+                      </p>
+                    );
+                  })()}
                 </div>
-                {(() => {
-                  const total = cycleForm.watch("selfWeight") + cycleForm.watch("peerWeight") + cycleForm.watch("managerWeight");
-                  return total !== 100 && (
-                    <p className="text-sm text-destructive">
-                      Total: {total}% (must equal 100%)
-                    </p>
-                  );
-                })()}
-              </div>
+              )}
+              {watchedType === "180" && (
+                <div className="pt-4 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    180° reviews use manager-only scoring (100% manager weight).
+                  </p>
+                </div>
+              )}
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => handleCloseCycleDialog(false)}>

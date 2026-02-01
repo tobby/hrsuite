@@ -21,6 +21,7 @@ import AppraisalReview from "@/pages/appraisal-review";
 import AppraisalResults from "@/pages/appraisal-results";
 import AppraisalTemplates from "@/pages/appraisal-templates";
 import AppraisalCycles from "@/pages/appraisal-cycles";
+import CycleProgress from "@/pages/cycle-progress";
 
 function Router() {
   return (
@@ -36,6 +37,7 @@ function Router() {
       <Route path="/appraisals/results/:id" component={AppraisalResults} />
       <Route path="/appraisals/templates" component={AppraisalTemplates} />
       <Route path="/appraisals/cycles" component={AppraisalCycles} />
+      <Route path="/appraisals/cycles/:id" component={CycleProgress} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
