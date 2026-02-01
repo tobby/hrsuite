@@ -69,6 +69,7 @@ import {
   getDepartmentById,
   getTemplateById,
 } from "@/lib/demo-data";
+import { useAppraisalStore } from "@/lib/appraisal-store";
 
 const cycleFormSchema = z.object({
   name: z.string().min(1, "Cycle name is required"),
@@ -104,10 +105,19 @@ export default function AppraisalCycles() {
   
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isParticipantsOpen, setIsParticipantsOpen] = useState(false);
+  const [isPeerAssignOpen, setIsPeerAssignOpen] = useState(false);
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [currentParticipantForPeers, setCurrentParticipantForPeers] = useState<string | null>(null);
+  const [tempPeerAssignments, setTempPeerAssignments] = useState<string[]>([]);
   const isAdmin = canEditOrgSettings(role);
+  
+  const { 
+    getPeerAssignmentsForReviewee, 
+    setPeerAssignments, 
+    clearPeerAssignmentsForReviewee 
+  } = useAppraisalStore();
 
   const cycleForm = useForm<CycleFormValues>({
     resolver: zodResolver(cycleFormSchema),
@@ -170,6 +180,59 @@ export default function AppraisalCycles() {
     setSelectedParticipants(participants.map(p => p.employeeId));
     setIsParticipantsOpen(true);
   };
+  
+  const handleOpenPeerAssignment = (participantId: string) => {
+    setCurrentParticipantForPeers(participantId);
+    // Load existing assignments from store
+    const existingPeers = getPeerAssignmentsForReviewee(selectedCycleId || "", participantId);
+    setTempPeerAssignments(existingPeers.map(pa => pa.reviewerId));
+    setIsPeerAssignOpen(true);
+  };
+  
+  const handleTogglePeerReviewer = (reviewerId: string) => {
+    setTempPeerAssignments(prev => {
+      if (prev.includes(reviewerId)) {
+        return prev.filter(id => id !== reviewerId);
+      } else {
+        return [...prev, reviewerId];
+      }
+    });
+  };
+  
+  const handleSavePeerAssignment = () => {
+    if (!currentParticipantForPeers || !selectedCycleId) return;
+    
+    // Persist to Zustand store
+    setPeerAssignments(selectedCycleId, currentParticipantForPeers, tempPeerAssignments);
+    
+    const participant = getEmployeeById(currentParticipantForPeers);
+    toast({
+      title: "Peer Reviewers Assigned",
+      description: `${tempPeerAssignments.length} peer reviewer(s) assigned to ${participant?.firstName} ${participant?.lastName}.`,
+    });
+    setIsPeerAssignOpen(false);
+    setCurrentParticipantForPeers(null);
+    setTempPeerAssignments([]);
+  };
+  
+  // Get available peers: only other participants in the same cycle (excluding the reviewee and their manager)
+  const getAvailablePeers = (participantId: string): typeof employees => {
+    const participant = getEmployeeById(participantId);
+    if (!participant) return [];
+    
+    // Available peers: only selected participants, excluding the participant and their manager
+    return employees.filter(emp => 
+      selectedParticipants.includes(emp.id) &&
+      emp.id !== participantId && 
+      emp.id !== participant.managerId
+    );
+  };
+  
+  // Get peer count from store
+  const getPeerCountForParticipant = (participantId: string): number => {
+    if (!selectedCycleId) return 0;
+    return getPeerAssignmentsForReviewee(selectedCycleId, participantId).length;
+  };
 
   const handleSaveParticipants = () => {
     toast({
@@ -180,6 +243,24 @@ export default function AppraisalCycles() {
   };
 
   const handleToggleParticipant = (employeeId: string) => {
+    const isRemoving = selectedParticipants.includes(employeeId);
+    
+    if (isRemoving && selectedCycleId) {
+      // Clear peer assignments when removing a participant
+      clearPeerAssignmentsForReviewee(selectedCycleId, employeeId);
+      
+      // Also remove this employee as a peer reviewer from other participants
+      selectedParticipants.forEach(participantId => {
+        if (participantId !== employeeId) {
+          const currentPeers = getPeerAssignmentsForReviewee(selectedCycleId, participantId);
+          const filteredPeers = currentPeers.filter(pa => pa.reviewerId !== employeeId);
+          if (currentPeers.length !== filteredPeers.length) {
+            setPeerAssignments(selectedCycleId, participantId, filteredPeers.map(pa => pa.reviewerId));
+          }
+        }
+      });
+    }
+    
     setSelectedParticipants(prev =>
       prev.includes(employeeId)
         ? prev.filter(id => id !== employeeId)
@@ -191,7 +272,24 @@ export default function AppraisalCycles() {
     const deptEmployees = employees.filter(e => e.departmentId === deptId).map(e => e.id);
     const allSelected = deptEmployees.every(id => selectedParticipants.includes(id));
     
-    if (allSelected) {
+    if (allSelected && selectedCycleId) {
+      // Clean up peer assignments for removed participants
+      deptEmployees.forEach(empId => {
+        // Clear their peer assignments
+        clearPeerAssignmentsForReviewee(selectedCycleId, empId);
+        
+        // Remove them as a reviewer from other participants
+        selectedParticipants.forEach(participantId => {
+          if (!deptEmployees.includes(participantId)) {
+            const currentPeers = getPeerAssignmentsForReviewee(selectedCycleId, participantId);
+            const filteredPeers = currentPeers.filter(pa => pa.reviewerId !== empId);
+            if (currentPeers.length !== filteredPeers.length) {
+              setPeerAssignments(selectedCycleId, participantId, filteredPeers.map(pa => pa.reviewerId));
+            }
+          }
+        });
+      });
+      
       setSelectedParticipants(prev => prev.filter(id => !deptEmployees.includes(id)));
     } else {
       setSelectedParticipants(prev => Array.from(new Set([...prev, ...deptEmployees])));
@@ -534,15 +632,18 @@ export default function AppraisalCycles() {
 
       {/* Participants Dialog */}
       <Dialog open={isParticipantsOpen} onOpenChange={setIsParticipantsOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[80vh]">
+        <DialogContent className="sm:max-w-[700px] max-h-[85vh]">
           <DialogHeader>
             <DialogTitle>Manage Participants</DialogTitle>
             <DialogDescription>
-              Select employees to include in this review cycle. You can select by department or individually.
+              Select employees to include in this review cycle. 
+              {selectedCycleId && appraisalCycles.find(c => c.id === selectedCycleId)?.type === "360" && (
+                " For 360° reviews, you can also assign peer reviewers for each participant."
+              )}
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 overflow-y-auto max-h-[400px]">
+          <div className="space-y-4 overflow-y-auto max-h-[500px]">
             {/* Department Selection */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">By Department</Label>
@@ -570,35 +671,74 @@ export default function AppraisalCycles() {
               </div>
             </div>
 
-            {/* Individual Selection */}
+            {/* Individual Selection with Peer Assignment */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Individual Employees</Label>
-              <div className="rounded-md border divide-y max-h-[250px] overflow-y-auto">
-                {employees.map((emp) => (
-                  <div 
-                    key={emp.id}
-                    className="flex items-center gap-3 p-3 hover-elevate cursor-pointer"
-                    onClick={() => handleToggleParticipant(emp.id)}
-                  >
-                    <Checkbox 
-                      checked={selectedParticipants.includes(emp.id)}
-                      onCheckedChange={() => handleToggleParticipant(emp.id)}
-                      data-testid={`checkbox-participant-${emp.id}`}
-                    />
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                        {emp.firstName[0]}{emp.lastName[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{emp.firstName} {emp.lastName}</p>
-                      <p className="text-xs text-muted-foreground">{emp.position}</p>
+              <Label className="text-sm font-medium">
+                Participants
+                {selectedCycleId && appraisalCycles.find(c => c.id === selectedCycleId)?.type === "360" && (
+                  <span className="font-normal text-muted-foreground ml-2">
+                    (Click "Assign Peers" to select peer reviewers)
+                  </span>
+                )}
+              </Label>
+              <div className="rounded-md border divide-y max-h-[300px] overflow-y-auto">
+                {employees.map((emp) => {
+                  const isSelected = selectedParticipants.includes(emp.id);
+                  const is360Cycle = selectedCycleId && appraisalCycles.find(c => c.id === selectedCycleId)?.type === "360";
+                  const assignedPeerCount = getPeerCountForParticipant(emp.id);
+                  
+                  return (
+                    <div 
+                      key={emp.id}
+                      className="flex items-center gap-3 p-3"
+                    >
+                      <div 
+                        className="flex items-center gap-3 flex-1 cursor-pointer hover-elevate rounded-md p-1 -m-1"
+                        onClick={() => handleToggleParticipant(emp.id)}
+                      >
+                        <Checkbox 
+                          checked={isSelected}
+                          onCheckedChange={() => handleToggleParticipant(emp.id)}
+                          data-testid={`checkbox-participant-${emp.id}`}
+                        />
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                            {emp.firstName[0]}{emp.lastName[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{emp.firstName} {emp.lastName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{emp.position}</p>
+                        </div>
+                        <Badge variant="outline" className="text-xs shrink-0">
+                          {getDepartmentById(emp.departmentId)?.name}
+                        </Badge>
+                      </div>
+                      
+                      {/* Peer Assignment Button (only for 360° cycles and selected participants) */}
+                      {is360Cycle && isSelected && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenPeerAssignment(emp.id);
+                          }}
+                          className="shrink-0"
+                          data-testid={`button-assign-peers-${emp.id}`}
+                        >
+                          <Users className="h-3 w-3 mr-1" />
+                          Assign Peers
+                          {assignedPeerCount > 0 && (
+                            <Badge variant="secondary" className="ml-1">
+                              {assignedPeerCount}
+                            </Badge>
+                          )}
+                        </Button>
+                      )}
                     </div>
-                    <Badge variant="outline" className="text-xs">
-                      {getDepartmentById(emp.departmentId)?.name}
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -617,6 +757,79 @@ export default function AppraisalCycles() {
                 </Button>
               </div>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Peer Assignment Dialog */}
+      <Dialog open={isPeerAssignOpen} onOpenChange={setIsPeerAssignOpen}>
+        <DialogContent className="sm:max-w-[500px] max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-primary" />
+              Assign Peer Reviewers
+            </DialogTitle>
+            <DialogDescription>
+              {currentParticipantForPeers && (() => {
+                const participant = getEmployeeById(currentParticipantForPeers);
+                return participant ? (
+                  <>
+                    Select employees who will provide peer feedback for <span className="font-medium text-foreground">{participant.firstName} {participant.lastName}</span>.
+                  </>
+                ) : null;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="rounded-md border divide-y max-h-[350px] overflow-y-auto">
+              {currentParticipantForPeers && getAvailablePeers(currentParticipantForPeers).map((peer) => {
+                const isAssigned = tempPeerAssignments.includes(peer.id);
+                
+                return (
+                  <div 
+                    key={peer.id}
+                    className="flex items-center gap-3 p-3 hover-elevate cursor-pointer"
+                    onClick={() => handleTogglePeerReviewer(peer.id)}
+                  >
+                    <Checkbox 
+                      checked={isAssigned}
+                      onCheckedChange={() => handleTogglePeerReviewer(peer.id)}
+                      data-testid={`checkbox-peer-${peer.id}`}
+                    />
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                        {peer.firstName[0]}{peer.lastName[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">{peer.firstName} {peer.lastName}</p>
+                      <p className="text-xs text-muted-foreground">{peer.position}</p>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {getDepartmentById(peer.departmentId)?.name}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <p className="text-sm text-muted-foreground">
+              {tempPeerAssignments.length} peer reviewer(s) selected
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsPeerAssignOpen(false);
+              setCurrentParticipantForPeers(null);
+              setTempPeerAssignments([]);
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleSavePeerAssignment} data-testid="button-save-peer-assignment">
+              Save Peer Reviewers
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

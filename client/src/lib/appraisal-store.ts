@@ -1,10 +1,11 @@
 import { create } from "zustand";
-import type { AppraisalFeedback, FeedbackRating } from "@shared/schema";
-import { appraisalFeedback as initialFeedback, feedbackRatings as initialRatings } from "./demo-data";
+import type { AppraisalFeedback, FeedbackRating, PeerAssignment } from "@shared/schema";
+import { appraisalFeedback as initialFeedback, feedbackRatings as initialRatings, peerAssignments as initialPeerAssignments } from "./demo-data";
 
 interface AppraisalState {
   feedback: AppraisalFeedback[];
   ratings: FeedbackRating[];
+  peerAssignments: PeerAssignment[];
   
   updateFeedbackStatus: (feedbackId: string, status: "pending" | "draft" | "submitted", submittedAt?: string | null) => void;
   updateFeedbackComment: (feedbackId: string, comment: string) => void;
@@ -15,11 +16,17 @@ interface AppraisalState {
   getRatingsByFeedback: (feedbackId: string) => FeedbackRating[];
   getPendingReviewsForUser: (userId: string) => AppraisalFeedback[];
   getCompletedReviewsByUser: (userId: string) => AppraisalFeedback[];
+  
+  // Peer assignment methods
+  getPeerAssignmentsForReviewee: (cycleId: string, revieweeId: string) => PeerAssignment[];
+  setPeerAssignments: (cycleId: string, revieweeId: string, reviewerIds: string[]) => void;
+  clearPeerAssignmentsForReviewee: (cycleId: string, revieweeId: string) => void;
 }
 
 export const useAppraisalStore = create<AppraisalState>()((set, get) => ({
   feedback: [...initialFeedback],
   ratings: [...initialRatings],
+  peerAssignments: [...initialPeerAssignments],
 
   updateFeedbackStatus: (feedbackId, status, submittedAt = null) => {
     set((state) => ({
@@ -121,5 +128,38 @@ export const useAppraisalStore = create<AppraisalState>()((set, get) => ({
     return get().feedback.filter(
       (f) => f.reviewerId === userId && f.status === "submitted"
     );
+  },
+  
+  getPeerAssignmentsForReviewee: (cycleId, revieweeId) => {
+    return get().peerAssignments.filter(
+      (pa) => pa.cycleId === cycleId && pa.revieweeId === revieweeId
+    );
+  },
+  
+  setPeerAssignments: (cycleId, revieweeId, reviewerIds) => {
+    set((state) => {
+      // Remove existing assignments for this reviewee in this cycle
+      const filtered = state.peerAssignments.filter(
+        (pa) => !(pa.cycleId === cycleId && pa.revieweeId === revieweeId)
+      );
+      
+      // Add new assignments
+      const newAssignments = reviewerIds.map((reviewerId, index) => ({
+        id: `pa-new-${Date.now()}-${index}`,
+        cycleId,
+        revieweeId,
+        reviewerId,
+      }));
+      
+      return { peerAssignments: [...filtered, ...newAssignments] };
+    });
+  },
+  
+  clearPeerAssignmentsForReviewee: (cycleId, revieweeId) => {
+    set((state) => ({
+      peerAssignments: state.peerAssignments.filter(
+        (pa) => !(pa.cycleId === cycleId && pa.revieweeId === revieweeId)
+      ),
+    }));
   },
 }));
