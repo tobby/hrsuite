@@ -113,7 +113,7 @@ export default function AppraisalTemplates() {
           Only administrators can manage appraisal templates.
         </p>
         <Link href="/appraisals">
-          <Button variant="outline">Back to Appraisals</Button>
+          <Button variant="outline" data-testid="button-back-to-appraisals">Back to Appraisals</Button>
         </Link>
       </div>
     );
@@ -167,7 +167,7 @@ export default function AppraisalTemplates() {
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <FileText className="h-5 w-5 text-primary" />
@@ -258,7 +258,7 @@ export default function AppraisalTemplates() {
                         <Edit className="h-4 w-4 mr-2" />
                         Edit Template
                       </DropdownMenuItem>
-                      <DropdownMenuItem>
+                      <DropdownMenuItem data-testid={`button-duplicate-template-${template.id}`}>
                         <Copy className="h-4 w-4 mr-2" />
                         Duplicate
                       </DropdownMenuItem>
@@ -276,17 +276,13 @@ export default function AppraisalTemplates() {
                 </div>
                 
                 {/* Question counts */}
-                <div className="flex items-center gap-4 mt-3 text-sm">
+                <div className="flex items-center gap-4 mt-3 text-sm flex-wrap">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-5 h-5 rounded bg-amber-500/10 flex items-center justify-center">
-                      <Star className="h-3 w-3 text-amber-500" />
-                    </div>
+                    <Star className="h-4 w-4 text-amber-500" />
                     <span className="text-muted-foreground">{ratingQuestions.length} ratings</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="w-5 h-5 rounded bg-blue-500/10 flex items-center justify-center">
-                      <MessageSquare className="h-3 w-3 text-blue-500" />
-                    </div>
+                    <MessageSquare className="h-4 w-4 text-blue-500" />
                     <span className="text-muted-foreground">{textQuestions.length} text</span>
                   </div>
                 </div>
@@ -297,7 +293,7 @@ export default function AppraisalTemplates() {
                   {/* Rating Questions by Category */}
                   {Object.entries(competencyGroups).map(([category, categoryQuestions]) => (
                     <AccordionItem value={`${template.id}-${category}`} key={category}>
-                      <AccordionTrigger className="text-sm hover:no-underline py-2">
+                      <AccordionTrigger className="text-sm py-2">
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="text-xs font-normal">{category}</Badge>
                           <span className="text-muted-foreground">
@@ -318,9 +314,10 @@ export default function AppraisalTemplates() {
                               <Button 
                                 size="icon" 
                                 variant="ghost" 
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="invisible group-hover:visible group-focus-within:visible"
+                                data-testid={`button-delete-question-${question.id}`}
                               >
-                                <Trash2 className="h-3 w-3 text-muted-foreground" />
+                                <Trash2 className="h-4 w-4 text-muted-foreground" />
                               </Button>
                             </div>
                           ))}
@@ -332,9 +329,9 @@ export default function AppraisalTemplates() {
                   {/* Text Questions */}
                   {textQuestions.length > 0 && (
                     <AccordionItem value={`${template.id}-text`}>
-                      <AccordionTrigger className="text-sm hover:no-underline py-2">
+                      <AccordionTrigger className="text-sm py-2">
                         <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs font-normal bg-blue-500/10">Written Feedback</Badge>
+                          <Badge variant="outline" className="text-xs font-normal">Written Feedback</Badge>
                           <span className="text-muted-foreground">
                             {textQuestions.length} question{textQuestions.length !== 1 ? 's' : ''}
                           </span>
@@ -353,9 +350,10 @@ export default function AppraisalTemplates() {
                               <Button 
                                 size="icon" 
                                 variant="ghost" 
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="invisible group-hover:visible group-focus-within:visible"
+                                data-testid={`button-delete-question-${question.id}`}
                               >
-                                <Trash2 className="h-3 w-3 text-muted-foreground" />
+                                <Trash2 className="h-4 w-4 text-muted-foreground" />
                               </Button>
                             </div>
                           ))}
