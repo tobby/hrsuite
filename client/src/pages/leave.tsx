@@ -65,6 +65,8 @@ import {
   AlertTriangle,
   AlertCircle,
   Star,
+  Search,
+  X,
 } from "lucide-react";
 import { useRole, canApproveLeave, canViewAllRequests } from "@/lib/role-context";
 import { 
@@ -120,6 +122,9 @@ export default function Leave() {
   const { role, currentUser } = useRole();
   const [activeTab, setActiveTab] = useState("my-requests");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -167,11 +172,44 @@ export default function Leave() {
   const allRequests = leaveRequests;
 
   const filterRequests = (requests: LeaveRequest[]) => {
-    if (statusFilter === "all") return requests;
-    if (statusFilter === "active" || statusFilter === "completed") {
-      return requests.filter(r => getRequestDisplayStatus(r) === statusFilter);
+    let filtered = requests;
+
+    if (statusFilter !== "all") {
+      if (statusFilter === "active" || statusFilter === "completed") {
+        filtered = filtered.filter(r => getRequestDisplayStatus(r) === statusFilter);
+      } else {
+        filtered = filtered.filter(r => r.status === statusFilter);
+      }
     }
-    return requests.filter(r => r.status === statusFilter);
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(r => {
+        const employee = getEmployeeById(r.employeeId);
+        const leaveType = getLeaveTypeById(r.leaveTypeId);
+        const employeeName = `${employee?.firstName ?? ""} ${employee?.lastName ?? ""}`.toLowerCase();
+        const typeName = (leaveType?.name ?? "").toLowerCase();
+        return employeeName.includes(query) || typeName.includes(query);
+      });
+    }
+
+    if (dateFrom) {
+      filtered = filtered.filter(r => r.endDate >= dateFrom);
+    }
+    if (dateTo) {
+      filtered = filtered.filter(r => r.startDate <= dateTo);
+    }
+
+    return filtered;
+  };
+
+  const hasActiveFilters = searchQuery.trim() !== "" || dateFrom !== "" || dateTo !== "" || statusFilter !== "all";
+
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setDateFrom("");
+    setDateTo("");
+    setStatusFilter("all");
   };
 
   const openRequestDetail = (request: LeaveRequest) => {
@@ -354,47 +392,89 @@ export default function Leave() {
 
       {/* Leave Requests Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <TabsList className="flex-wrap">
-            <TabsTrigger value="my-requests" data-testid="tab-my-requests">
-              My Requests
-              <Badge variant="secondary" className="ml-2 text-xs">
-                {myRequests.length}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="calendar" data-testid="tab-calendar">
-              <Calendar className="mr-1 h-4 w-4" />
-              Calendar
-            </TabsTrigger>
-            {canApproveLeave(role) && (
-              <TabsTrigger value="pending-approvals" data-testid="tab-pending-approvals">
-                Pending Approvals
-                <Badge variant="secondary" className="ml-2 text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                  {pendingApprovals.length}
+        <div className="space-y-3">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <TabsList className="flex-wrap">
+              <TabsTrigger value="my-requests" data-testid="tab-my-requests">
+                My Requests
+                <Badge variant="secondary" className="ml-2 text-xs">
+                  {myRequests.length}
                 </Badge>
               </TabsTrigger>
-            )}
-            {canViewAllRequests(role) && (
-              <TabsTrigger value="all-requests" data-testid="tab-all-requests">
-                All Requests
+              <TabsTrigger value="calendar" data-testid="tab-calendar">
+                <Calendar className="mr-1 h-4 w-4" />
+                Calendar
               </TabsTrigger>
-            )}
-          </TabsList>
+              {canApproveLeave(role) && (
+                <TabsTrigger value="pending-approvals" data-testid="tab-pending-approvals">
+                  Pending Approvals
+                  <Badge variant="secondary" className="ml-2 text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    {pendingApprovals.length}
+                  </Badge>
+                </TabsTrigger>
+              )}
+              {canViewAllRequests(role) && (
+                <TabsTrigger value="all-requests" data-testid="tab-all-requests">
+                  All Requests
+                </TabsTrigger>
+              )}
+            </TabsList>
+          </div>
           {(activeTab === "my-requests" || activeTab === "pending-approvals" || activeTab === "all-requests") && (
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[160px]" data-testid="select-leave-status-filter">
-                <Filter className="mr-2 h-4 w-4" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all" data-testid="option-status-all">All Status</SelectItem>
-                <SelectItem value="pending" data-testid="option-status-pending">Pending</SelectItem>
-                <SelectItem value="approved" data-testid="option-status-approved">Approved</SelectItem>
-                <SelectItem value="active" data-testid="option-status-active">Active (On Leave)</SelectItem>
-                <SelectItem value="completed" data-testid="option-status-completed">Completed</SelectItem>
-                <SelectItem value="rejected" data-testid="option-status-rejected">Rejected</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+              <div className="relative flex-1 min-w-[200px] max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or leave type..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                  data-testid="input-leave-search"
+                />
+              </div>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[160px]" data-testid="select-leave-status-filter">
+                  <Filter className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" data-testid="option-status-all">All Status</SelectItem>
+                  <SelectItem value="pending" data-testid="option-status-pending">Pending</SelectItem>
+                  <SelectItem value="approved" data-testid="option-status-approved">Approved</SelectItem>
+                  <SelectItem value="active" data-testid="option-status-active">Active (On Leave)</SelectItem>
+                  <SelectItem value="completed" data-testid="option-status-completed">Completed</SelectItem>
+                  <SelectItem value="rejected" data-testid="option-status-rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-sm text-muted-foreground whitespace-nowrap">From</label>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-[150px]"
+                    data-testid="input-date-from"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-sm text-muted-foreground whitespace-nowrap">To</label>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-[150px]"
+                    data-testid="input-date-to"
+                  />
+                </div>
+              </div>
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={clearAllFilters} data-testid="button-clear-filters">
+                  <X className="mr-1 h-4 w-4" />
+                  Clear
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
