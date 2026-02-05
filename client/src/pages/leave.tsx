@@ -52,6 +52,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { 
   Plus, 
   Clock,
@@ -203,10 +208,10 @@ export default function Leave() {
     return filtered;
   };
 
-  const hasActiveFilters = searchQuery.trim() !== "" || dateFrom !== "" || dateTo !== "" || statusFilter !== "all";
+  const popoverFilterCount = (statusFilter !== "all" ? 1 : 0) + (dateFrom ? 1 : 0) + (dateTo ? 1 : 0);
+  const hasActiveFilters = searchQuery.trim() !== "" || popoverFilterCount > 0;
 
-  const clearAllFilters = () => {
-    setSearchQuery("");
+  const clearPopoverFilters = () => {
     setDateFrom("");
     setDateTo("");
     setStatusFilter("all");
@@ -421,7 +426,7 @@ export default function Leave() {
             </TabsList>
           </div>
           {(activeTab === "my-requests" || activeTab === "pending-approvals" || activeTab === "all-requests") && (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="relative flex-1 min-w-[200px] max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -432,48 +437,71 @@ export default function Leave() {
                   data-testid="input-leave-search"
                 />
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[160px]" data-testid="select-leave-status-filter">
-                  <Filter className="mr-2 h-4 w-4" />
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all" data-testid="option-status-all">All Status</SelectItem>
-                  <SelectItem value="pending" data-testid="option-status-pending">Pending</SelectItem>
-                  <SelectItem value="approved" data-testid="option-status-approved">Approved</SelectItem>
-                  <SelectItem value="active" data-testid="option-status-active">Active (On Leave)</SelectItem>
-                  <SelectItem value="completed" data-testid="option-status-completed">Completed</SelectItem>
-                  <SelectItem value="rejected" data-testid="option-status-rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5">
-                  <label className="text-sm text-muted-foreground whitespace-nowrap">From</label>
-                  <Input
-                    type="date"
-                    value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-[150px]"
-                    data-testid="input-date-from"
-                  />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <label className="text-sm text-muted-foreground whitespace-nowrap">To</label>
-                  <Input
-                    type="date"
-                    value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
-                    className="w-[150px]"
-                    data-testid="input-date-to"
-                  />
-                </div>
-              </div>
-              {hasActiveFilters && (
-                <Button variant="ghost" size="sm" onClick={clearAllFilters} data-testid="button-clear-filters">
-                  <X className="mr-1 h-4 w-4" />
-                  Clear
-                </Button>
-              )}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" data-testid="button-open-filters">
+                    <Filter className="mr-2 h-4 w-4" />
+                    Filters
+                    {popoverFilterCount > 0 && (
+                      <Badge variant="secondary" className="ml-2 text-xs">
+                        {popoverFilterCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80" align="end">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-medium text-sm">Filters</h4>
+                      {popoverFilterCount > 0 && (
+                        <Button variant="ghost" size="sm" onClick={clearPopoverFilters} data-testid="button-clear-filters">
+                          <X className="mr-1 h-3 w-3" />
+                          Clear all
+                        </Button>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">Status</label>
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger data-testid="select-leave-status-filter">
+                          <SelectValue placeholder="All Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all" data-testid="option-status-all">All Status</SelectItem>
+                          <SelectItem value="pending" data-testid="option-status-pending">Pending</SelectItem>
+                          <SelectItem value="approved" data-testid="option-status-approved">Approved</SelectItem>
+                          <SelectItem value="active" data-testid="option-status-active">Active (On Leave)</SelectItem>
+                          <SelectItem value="completed" data-testid="option-status-completed">Completed</SelectItem>
+                          <SelectItem value="rejected" data-testid="option-status-rejected">Rejected</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm text-muted-foreground">Date Range</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">From</label>
+                          <Input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                            data-testid="input-date-from"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">To</label>
+                          <Input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                            data-testid="input-date-to"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
         </div>
