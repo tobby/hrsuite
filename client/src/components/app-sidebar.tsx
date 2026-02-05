@@ -46,8 +46,8 @@ interface NavItem {
 
 const mainNavItems: NavItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, testId: "nav-dashboard", roles: ["employee", "manager", "admin"] },
-  { title: "Employees", url: "/employees", icon: Users, testId: "nav-employees", roles: ["manager", "admin"] },
-  { title: "Departments", url: "/departments", icon: Building2, testId: "nav-departments", roles: ["manager", "admin"] },
+  { title: "Employees", url: "/employees", icon: Users, testId: "nav-employees", roles: ["employee", "manager", "admin"] },
+  { title: "Departments", url: "/departments", icon: Building2, testId: "nav-departments", roles: ["employee", "manager", "admin"] },
 ];
 
 const settingsNavItems: NavItem[] = [

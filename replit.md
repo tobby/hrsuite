@@ -9,6 +9,17 @@ HRFlow is a frontend-only HR management platform built for demonstration purpose
 - **Tech Stack**: React + TypeScript, Vite, Tailwind CSS, shadcn/ui, Zustand for state management
 
 ## Recent Changes
+- 2026-02-05: Employees & Departments tabs rework
+  - Employees and Departments pages now visible to ALL roles (employee, manager, admin)
+  - Employees page has Directory/Organogram tab views
+  - Directory view: table with search, department filter, status filter - all roles see all employees
+  - Organogram view: tree visualization grouped by department with color-coded headers, CSS connecting lines
+  - Admin-only: Add Employee button, Edit Employee dialog with full form (name, email, phone, position, department, manager, status)
+  - Employee edits persist in React state within session via employeeEdits pattern
+  - Departments page: all roles can view, admin-only Add/Edit/Delete department operations
+  - Admin edit department dialog with name, description, department head dropdown
+  - Admin delete department with session persistence
+  - Sidebar updated to show Employees and Departments to all roles
 - 2026-02-01: Comprehensive Recruitment/ATS Module implemented
   - Jobs page (`/recruitment/jobs`) with card/table view toggle, CRUD operations, and shareable application links
   - Public Careers page (`/careers`) with job listings, filters by department and type
