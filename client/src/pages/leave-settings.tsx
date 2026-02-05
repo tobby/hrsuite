@@ -39,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Settings, Plus, Edit, Trash2 } from "lucide-react";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useLocation } from "wouter";
@@ -49,6 +50,7 @@ import {
   leaveBalances,
   companyHolidays,
 } from "@/lib/demo-data";
+import type { Employee } from "@shared/schema";
 
 const colorOptions = [
   { name: "Blue", value: "#3b82f6" },
@@ -83,6 +85,9 @@ export default function LeaveSettings() {
   
   const [isAddTypeOpen, setIsAddTypeOpen] = useState(false);
   const [isAddHolidayOpen, setIsAddHolidayOpen] = useState(false);
+  const [editBalanceEmployee, setEditBalanceEmployee] = useState<Employee | null>(null);
+  const [balanceEdits, setBalanceEdits] = useState<Record<string, { remaining: number; total: number }>>({});
+  const [savedBalances, setSavedBalances] = useState<Record<string, Record<string, { remaining: number; total: number }>>>({});
 
   const leaveTypeForm = useForm<LeaveTypeFormValues>({
     resolver: zodResolver(leaveTypeFormSchema),
@@ -123,6 +128,62 @@ export default function LeaveSettings() {
     });
     holidayForm.reset();
     setIsAddHolidayOpen(false);
+  };
+
+  const getBalance = (empId: string, typeId: string) => {
+    if (savedBalances[empId]?.[typeId]) return savedBalances[empId][typeId];
+    const balance = leaveBalances.find((b) => b.employeeId === empId && b.leaveTypeId === typeId);
+    const type = leaveTypes.find((t) => t.id === typeId);
+    return {
+      remaining: balance?.remainingDays ?? type?.defaultDays ?? 0,
+      total: balance?.totalDays ?? type?.defaultDays ?? 0,
+    };
+  };
+
+  const openEditBalance = (emp: Employee) => {
+    const edits: Record<string, { remaining: number; total: number }> = {};
+    leaveTypes.forEach((type) => {
+      edits[type.id] = getBalance(emp.id, type.id);
+    });
+    setBalanceEdits(edits);
+    setEditBalanceEmployee(emp);
+  };
+
+  const handleSaveBalances = () => {
+    if (!editBalanceEmployee) return;
+    setSavedBalances((prev) => ({
+      ...prev,
+      [editBalanceEmployee.id]: { ...balanceEdits },
+    }));
+    toast({
+      title: "Balances Updated",
+      description: `Leave balances for ${editBalanceEmployee.firstName} ${editBalanceEmployee.lastName} have been saved.`,
+    });
+    setEditBalanceEmployee(null);
+    setBalanceEdits({});
+  };
+
+  const updateBalanceEdit = (typeId: string, field: "remaining" | "total", value: number) => {
+    setBalanceEdits((prev) => {
+      const current = prev[typeId];
+      const safeValue = Math.max(0, value);
+      if (field === "total") {
+        return {
+          ...prev,
+          [typeId]: {
+            total: safeValue,
+            remaining: Math.min(current.remaining, safeValue),
+          },
+        };
+      }
+      return {
+        ...prev,
+        [typeId]: {
+          ...current,
+          remaining: Math.min(safeValue, current.total),
+        },
+      };
+    });
   };
 
   const handleCloseTypeDialog = (open: boolean) => {
@@ -276,17 +337,17 @@ export default function LeaveSettings() {
                         </div>
                       </TableCell>
                       {leaveTypes.slice(0, 4).map((type) => {
-                        const balance = leaveBalances.find((b) => b.employeeId === emp.id && b.leaveTypeId === type.id);
+                        const bal = getBalance(emp.id, type.id);
                         return (
                           <TableCell key={type.id} className="text-center">
                             <Badge variant="secondary">
-                              {balance?.remainingDays ?? type.defaultDays} / {balance?.totalDays ?? type.defaultDays}
+                              {bal.remaining} / {bal.total}
                             </Badge>
                           </TableCell>
                         );
                       })}
                       <TableCell>
-                        <Button size="sm" variant="ghost" data-testid={`button-edit-balance-${emp.id}`}>
+                        <Button size="sm" variant="ghost" onClick={() => openEditBalance(emp)} data-testid={`button-edit-balance-${emp.id}`}>
                           <Edit className="h-4 w-4" />
                         </Button>
                       </TableCell>
@@ -407,6 +468,86 @@ export default function LeaveSettings() {
               </DialogFooter>
             </form>
           </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Balance Dialog */}
+      <Dialog open={!!editBalanceEmployee} onOpenChange={(open) => {
+        if (!open) {
+          setEditBalanceEmployee(null);
+          setBalanceEdits({});
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Leave Balances</DialogTitle>
+            <DialogDescription>
+              Adjust leave balances for {editBalanceEmployee?.firstName} {editBalanceEmployee?.lastName}
+            </DialogDescription>
+          </DialogHeader>
+          {editBalanceEmployee && (
+            <div className="space-y-4 py-2">
+              <div className="flex items-center gap-3 pb-2 border-b">
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    {editBalanceEmployee.firstName[0]}{editBalanceEmployee.lastName[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">{editBalanceEmployee.firstName} {editBalanceEmployee.lastName}</p>
+                  <p className="text-sm text-muted-foreground">{editBalanceEmployee.position}</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {leaveTypes.map((type) => {
+                  const edit = balanceEdits[type.id];
+                  if (!edit) return null;
+                  return (
+                    <div key={type.id} className="flex items-center gap-3 p-3 rounded-lg border" data-testid={`edit-balance-row-${type.id}`}>
+                      <div className="h-3 w-3 rounded-full flex-shrink-0" style={{ backgroundColor: type.color }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{type.name}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Remaining</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            max={edit.total}
+                            value={edit.remaining}
+                            onChange={(e) => updateBalanceEdit(type.id, "remaining", Number(e.target.value))}
+                            className="w-20 text-center"
+                            data-testid={`input-remaining-${type.id}`}
+                          />
+                        </div>
+                        <span className="text-muted-foreground mt-5">/</span>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Total</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={edit.total}
+                            onChange={(e) => updateBalanceEdit(type.id, "total", Number(e.target.value))}
+                            className="w-20 text-center"
+                            data-testid={`input-total-${type.id}`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => { setEditBalanceEmployee(null); setBalanceEdits({}); }} data-testid="button-cancel-edit-balance">
+              Cancel
+            </Button>
+            <Button onClick={handleSaveBalances} data-testid="button-save-balance">
+              Save Changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
