@@ -15,6 +15,7 @@ import {
   Calendar,
   Briefcase,
   UserPlus,
+  HelpCircle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -48,6 +49,7 @@ const mainNavItems: NavItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, testId: "nav-dashboard", roles: ["employee", "manager", "admin"] },
   { title: "Employees", url: "/employees", icon: Users, testId: "nav-employees", roles: ["employee", "manager", "admin"] },
   { title: "Departments", url: "/departments", icon: Building2, testId: "nav-departments", roles: ["admin"] },
+  { title: "Queries", url: "/queries", icon: HelpCircle, testId: "nav-queries", roles: ["employee", "manager", "admin"] },
 ];
 
 const settingsNavItems: NavItem[] = [
@@ -64,6 +66,7 @@ export function AppSidebar() {
 
   const isActive = (url: string) => {
     if (url === "/") return location === "/";
+    if (url === "/queries") return location.startsWith("/queries");
     return location === url;
   };
 

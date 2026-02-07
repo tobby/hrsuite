@@ -5,10 +5,20 @@ HRFlow is a frontend-only HR management platform built for demonstration purpose
 
 ## Current State
 - **Status**: Complete MVP with all core modules functional
-- **Last Updated**: February 01, 2026
+- **Last Updated**: February 07, 2026
 - **Tech Stack**: React + TypeScript, Vite, Tailwind CSS, shadcn/ui, Zustand for state management
 
 ## Recent Changes
+- 2026-02-07: HR Query/Grievance System
+  - New Queries page (`/queries`) with submit query dialog, filters (status, category, priority), and search
+  - Query Detail page (`/queries/:id`) with description, comments thread, timeline, and admin controls
+  - Categories: Leave, Workplace, Policy, Other
+  - Priority levels: Low, Medium, High, Urgent
+  - Status workflow: Open, In Progress, Resolved, Closed
+  - Role-based visibility: Employee sees own queries, Manager sees team queries, Admin sees all
+  - Admin controls: status updates, assignee management, internal notes (visible only to admins)
+  - Zustand store for state management with 6 demo queries, comments, and timeline events
+  - Sidebar navigation visible to all roles
 - 2026-02-05: Employees & Departments tabs rework
   - Employees and Departments pages now visible to ALL roles (employee, manager, admin)
   - Employees page has Directory/Organogram tab views
@@ -88,6 +98,8 @@ client/
 │   │   ├── recruitment-candidates.tsx  # Candidate pipeline (Admin)
 │   │   ├── candidate-detail.tsx  # Candidate details with 5 tabs (Admin)
 │   │   ├── recruitment-settings.tsx  # Email templates & settings (Admin)
+│   │   ├── queries.tsx       # HR queries list (All roles)
+│   │   ├── query-detail.tsx  # Query detail with comments/timeline (All roles)
 │   │   ├── careers.tsx       # Public job listings
 │   │   ├── job-application.tsx  # Public job application form
 │   │   └── settings.tsx     # User settings
@@ -95,6 +107,7 @@ client/
 │   │   ├── demo-data.ts     # Static demo data
 │   │   ├── appraisal-store.ts # Zustand store for appraisal state
 │   │   ├── recruitment-store.ts # Zustand store for recruitment/ATS state
+│   │   ├── query-store.ts   # Zustand store for HR queries state
 │   │   ├── role-context.tsx # Role-based access control
 │   │   └── queryClient.ts   # TanStack Query setup
 │   └── App.tsx              # Root component with routing
@@ -122,6 +135,8 @@ server/
 - `/recruitment/candidates` - Candidate pipeline with Kanban/Table view (Admin-only)
 - `/recruitment/candidates/:id` - Candidate details with 5 tabs (Admin-only)
 - `/recruitment/settings` - Email templates and legal settings (Admin-only)
+- `/queries` - HR queries list with filters and search (All roles, role-based visibility)
+- `/queries/:id` - Query detail with comments, timeline, and admin controls (All roles)
 - `/careers` - Public careers page with job listings (standalone, no sidebar)
 - `/jobs/:id` - Public job details page (standalone, no sidebar)
 - `/jobs/:id/apply` - Public job application form (standalone, no sidebar)

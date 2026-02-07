@@ -26,6 +26,8 @@ import RecruitmentJobs from "@/pages/recruitment-jobs";
 import RecruitmentCandidates from "@/pages/recruitment-candidates";
 import CandidateDetail from "@/pages/candidate-detail";
 import RecruitmentSettings from "@/pages/recruitment-settings";
+import Queries from "@/pages/queries";
+import QueryDetail from "@/pages/query-detail";
 import Careers from "@/pages/careers";
 import JobDetails from "@/pages/job-details";
 import JobApplication from "@/pages/job-application";
@@ -60,6 +62,8 @@ function PrivateRouter() {
       <Route path="/recruitment/candidates" component={RecruitmentCandidates} />
       <Route path="/recruitment/candidates/:id" component={CandidateDetail} />
       <Route path="/recruitment/settings" component={RecruitmentSettings} />
+      <Route path="/queries/:id" component={QueryDetail} />
+      <Route path="/queries" component={Queries} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

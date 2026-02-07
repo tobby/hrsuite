@@ -378,3 +378,51 @@ export const recruitmentSettings = pgTable("recruitment_settings", {
 });
 
 export type RecruitmentSetting = typeof recruitmentSettings.$inferSelect;
+
+// HR Queries / Grievances
+export const hrQueries = pgTable("hr_queries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  subject: text("subject").notNull(),
+  description: text("description").notNull(),
+  category: text("category").notNull(), // "leave", "workplace", "policy", "other"
+  priority: text("priority").notNull().default("medium"), // "low", "medium", "high", "urgent"
+  status: text("status").notNull().default("open"), // "open", "in_progress", "resolved", "closed"
+  employeeId: varchar("employee_id").notNull(),
+  assignedTo: varchar("assigned_to"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+});
+
+export const insertHrQuerySchema = createInsertSchema(hrQueries).omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true }).extend({
+  subject: z.string().min(1, "Subject is required"),
+  description: z.string().min(10, "Description must be at least 10 characters"),
+  category: z.enum(["leave", "workplace", "policy", "other"]),
+  priority: z.enum(["low", "medium", "high", "urgent"]),
+});
+export type InsertHrQuery = z.infer<typeof insertHrQuerySchema>;
+export type HrQuery = typeof hrQueries.$inferSelect;
+
+// HR Query Comments
+export const hrQueryComments = pgTable("hr_query_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  queryId: varchar("query_id").notNull(),
+  content: text("content").notNull(),
+  authorId: varchar("author_id").notNull(),
+  isInternal: text("is_internal").notNull().default("false"), // "true" or "false" - internal notes visible only to admin
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type HrQueryComment = typeof hrQueryComments.$inferSelect;
+
+// HR Query Timeline Events
+export const hrQueryTimeline = pgTable("hr_query_timeline", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  queryId: varchar("query_id").notNull(),
+  action: text("action").notNull(), // "created", "status_changed", "assigned", "commented", "resolved", "closed"
+  details: text("details"),
+  actorId: varchar("actor_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type HrQueryTimeline = typeof hrQueryTimeline.$inferSelect;
