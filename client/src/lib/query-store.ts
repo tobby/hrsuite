@@ -1,6 +1,18 @@
 import { create } from "zustand";
 import type { HrQuery, HrQueryComment, HrQueryTimeline } from "@shared/schema";
 
+export interface CommentAttachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+}
+
+export type CommentWithAttachments = HrQueryComment & {
+  attachments?: CommentAttachment[];
+};
+
 const demoQueries: HrQuery[] = [
   {
     id: "query-1",
@@ -185,16 +197,16 @@ const demoTimeline: HrQueryTimeline[] = [
 
 interface QueryStore {
   queries: HrQuery[];
-  comments: HrQueryComment[];
+  comments: CommentWithAttachments[];
   timeline: HrQueryTimeline[];
 
   addQuery: (query: Omit<HrQuery, "id" | "createdAt" | "updatedAt" | "resolvedAt" | "status" | "assignedTo">) => string;
   updateQueryStatus: (queryId: string, status: string, actorId: string) => void;
   assignQuery: (queryId: string, assigneeId: string | null, actorId: string) => void;
-  addComment: (queryId: string, content: string, authorId: string, isInternal: boolean) => void;
-  addResponse: (queryId: string, content: string, employeeId: string) => void;
+  addComment: (queryId: string, content: string, authorId: string, isInternal: boolean, attachments?: CommentAttachment[]) => void;
+  addResponse: (queryId: string, content: string, employeeId: string, attachments?: CommentAttachment[]) => void;
   getQueryById: (queryId: string) => HrQuery | undefined;
-  getCommentsForQuery: (queryId: string) => HrQueryComment[];
+  getCommentsForQuery: (queryId: string) => CommentWithAttachments[];
   getTimelineForQuery: (queryId: string) => HrQueryTimeline[];
 }
 
@@ -284,7 +296,7 @@ export const useQueryStore = create<QueryStore>((set, get) => ({
     }));
   },
 
-  addComment: (queryId, content, authorId, isInternal) => {
+  addComment: (queryId, content, authorId, isInternal, attachments) => {
     const now = new Date();
     set(state => ({
       comments: [
@@ -296,6 +308,7 @@ export const useQueryStore = create<QueryStore>((set, get) => ({
           authorId,
           isInternal: isInternal ? "true" : "false",
           createdAt: now,
+          attachments: attachments && attachments.length > 0 ? attachments : undefined,
         },
       ],
       queries: state.queries.map(q =>
@@ -307,7 +320,7 @@ export const useQueryStore = create<QueryStore>((set, get) => ({
           id: `tl-${Date.now()}-comment`,
           queryId,
           action: "commented",
-          details: isInternal ? "Internal note added" : "Comment added",
+          details: isInternal ? "Internal note added" : attachments && attachments.length > 0 ? `Comment added with ${attachments.length} attachment${attachments.length > 1 ? "s" : ""}` : "Comment added",
           actorId: authorId,
           createdAt: now,
         },
@@ -315,7 +328,7 @@ export const useQueryStore = create<QueryStore>((set, get) => ({
     }));
   },
 
-  addResponse: (queryId, content, employeeId) => {
+  addResponse: (queryId, content, employeeId, attachments) => {
     const now = new Date();
     set(state => ({
       comments: [
@@ -327,6 +340,7 @@ export const useQueryStore = create<QueryStore>((set, get) => ({
           authorId: employeeId,
           isInternal: "false",
           createdAt: now,
+          attachments: attachments && attachments.length > 0 ? attachments : undefined,
         },
       ],
       queries: state.queries.map(q =>

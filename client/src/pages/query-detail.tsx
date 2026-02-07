@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/lib/role-context";
-import { useQueryStore } from "@/lib/query-store";
+import { useQueryStore, type CommentAttachment } from "@/lib/query-store";
 import { employees } from "@/lib/demo-data";
 import {
   ArrowLeft,
@@ -26,9 +26,27 @@ import {
   UserPlus,
   Reply,
   FileWarning,
+  Paperclip,
+  FileText,
+  Image,
+  File,
+  X,
+  Download,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileIcon(type: string) {
+  if (type.startsWith("image/")) return Image;
+  if (type.includes("pdf") || type.includes("document") || type.includes("text")) return FileText;
+  return File;
+}
 
 const categoryLabels: Record<string, string> = {
   attendance: "Attendance",
@@ -100,6 +118,10 @@ export default function QueryDetail() {
   const [commentText, setCommentText] = useState("");
   const [responseText, setResponseText] = useState("");
   const [isInternal, setIsInternal] = useState(false);
+  const [commentFiles, setCommentFiles] = useState<CommentAttachment[]>([]);
+  const [responseFiles, setResponseFiles] = useState<CommentAttachment[]>([]);
+  const commentFileRef = useRef<HTMLInputElement>(null);
+  const responseFileRef = useRef<HTMLInputElement>(null);
 
   const queryId = params?.id;
   const query = queryId ? getQueryById(queryId) : undefined;
@@ -143,12 +165,55 @@ export default function QueryDetail() {
 
   const hrEmployees = employees.filter(e => e.departmentId === "dept-2");
 
+  function handleFilesSelected(files: FileList | null, target: "comment" | "response") {
+    if (!files || files.length === 0) return;
+    const maxSize = 10 * 1024 * 1024;
+    const newAttachments: CommentAttachment[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > maxSize) {
+        toast({ title: "File too large", description: `${file.name} exceeds the 10 MB limit.`, variant: "destructive" });
+        continue;
+      }
+      newAttachments.push({
+        id: `att-${Date.now()}-${i}`,
+        name: file.name,
+        size: file.size,
+        type: file.type || "application/octet-stream",
+        url: URL.createObjectURL(file),
+      });
+    }
+    if (target === "comment") {
+      setCommentFiles(prev => [...prev, ...newAttachments]);
+    } else {
+      setResponseFiles(prev => [...prev, ...newAttachments]);
+    }
+  }
+
+  function removeFile(id: string, target: "comment" | "response") {
+    if (target === "comment") {
+      setCommentFiles(prev => {
+        const file = prev.find(f => f.id === id);
+        if (file) URL.revokeObjectURL(file.url);
+        return prev.filter(f => f.id !== id);
+      });
+    } else {
+      setResponseFiles(prev => {
+        const file = prev.find(f => f.id === id);
+        if (file) URL.revokeObjectURL(file.url);
+        return prev.filter(f => f.id !== id);
+      });
+    }
+  }
+
   function handleAddComment() {
-    if (!commentText.trim()) return;
-    addComment(queryId!, commentText.trim(), currentUser.id, isInternal);
+    if (!commentText.trim() && commentFiles.length === 0) return;
+    addComment(queryId!, commentText.trim() || (commentFiles.length > 0 ? `Attached ${commentFiles.length} file${commentFiles.length > 1 ? "s" : ""}` : ""), currentUser.id, isInternal, commentFiles.length > 0 ? commentFiles : undefined);
     toast({ title: isInternal ? "Internal note added" : "Comment added" });
     setCommentText("");
     setIsInternal(false);
+    setCommentFiles([]);
+    if (commentFileRef.current) commentFileRef.current.value = "";
   }
 
   function handleSubmitResponse() {
@@ -156,9 +221,11 @@ export default function QueryDetail() {
       toast({ title: "Validation Error", description: "Your response must be at least 10 characters.", variant: "destructive" });
       return;
     }
-    addResponse(queryId!, responseText.trim(), currentUser.id);
+    addResponse(queryId!, responseText.trim(), currentUser.id, responseFiles.length > 0 ? responseFiles : undefined);
     toast({ title: "Response submitted", description: "Your response has been submitted and is now under review." });
     setResponseText("");
+    setResponseFiles([]);
+    if (responseFileRef.current) responseFileRef.current.value = "";
   }
 
   function handleStatusChange(newStatus: string) {
@@ -205,7 +272,36 @@ export default function QueryDetail() {
                   rows={4}
                   data-testid="input-response"
                 />
-                <div className="flex justify-end">
+                {responseFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {responseFiles.map(file => {
+                      const IconComp = getFileIcon(file.type);
+                      return (
+                        <div key={file.id} className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm" data-testid={`response-file-${file.id}`}>
+                          <IconComp className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate max-w-[150px]">{file.name}</span>
+                          <span className="text-xs text-muted-foreground flex-shrink-0">({formatFileSize(file.size)})</span>
+                          <button type="button" onClick={() => removeFile(file.id, "response")} className="ml-1 text-muted-foreground hover:text-foreground flex-shrink-0" data-testid={`remove-response-file-${file.id}`}>
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <input
+                  type="file"
+                  ref={responseFileRef}
+                  className="hidden"
+                  multiple
+                  onChange={e => handleFilesSelected(e.target.files, "response")}
+                  data-testid="input-response-file"
+                />
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <Button variant="outline" size="sm" onClick={() => responseFileRef.current?.click()} data-testid="button-attach-response-file">
+                    <Paperclip className="h-4 w-4 mr-2" />
+                    Attach File
+                  </Button>
                   <Button onClick={handleSubmitResponse} disabled={responseText.trim().length < 10} data-testid="button-submit-response">
                     <Reply className="h-4 w-4 mr-2" />
                     Submit Response
@@ -274,6 +370,29 @@ export default function QueryDetail() {
                         </span>
                       </div>
                       <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+                      {comment.attachments && comment.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {comment.attachments.map(att => {
+                            const IconComp = getFileIcon(att.type);
+                            return (
+                              <a
+                                key={att.id}
+                                href={att.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                download={att.name}
+                                className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm hover-elevate"
+                                data-testid={`attachment-${att.id}`}
+                              >
+                                <IconComp className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                <span className="truncate max-w-[150px]">{att.name}</span>
+                                <span className="text-xs text-muted-foreground flex-shrink-0">({formatFileSize(att.size)})</span>
+                                <Download className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                              </a>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })
@@ -290,23 +409,54 @@ export default function QueryDetail() {
                       rows={3}
                       data-testid="input-comment"
                     />
+                    {commentFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {commentFiles.map(file => {
+                          const IconComp = getFileIcon(file.type);
+                          return (
+                            <div key={file.id} className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm" data-testid={`comment-file-${file.id}`}>
+                              <IconComp className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                              <span className="truncate max-w-[150px]">{file.name}</span>
+                              <span className="text-xs text-muted-foreground flex-shrink-0">({formatFileSize(file.size)})</span>
+                              <button type="button" onClick={() => removeFile(file.id, "comment")} className="ml-1 text-muted-foreground hover:text-foreground flex-shrink-0" data-testid={`remove-comment-file-${file.id}`}>
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <input
+                      type="file"
+                      ref={commentFileRef}
+                      className="hidden"
+                      multiple
+                      onChange={e => handleFilesSelected(e.target.files, "comment")}
+                      data-testid="input-comment-file"
+                    />
                     <div className="flex items-center justify-between gap-4 flex-wrap">
-                      {isAdmin && (
-                        <div className="flex items-center gap-2">
-                          <Checkbox
-                            id="internal-note"
-                            checked={isInternal}
-                            onCheckedChange={(checked) => setIsInternal(checked === true)}
-                            data-testid="checkbox-internal"
-                          />
-                          <Label htmlFor="internal-note" className="text-sm text-muted-foreground cursor-pointer">
-                            Internal note (only visible to HR)
-                          </Label>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {isAdmin && (
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id="internal-note"
+                              checked={isInternal}
+                              onCheckedChange={(checked) => setIsInternal(checked === true)}
+                              data-testid="checkbox-internal"
+                            />
+                            <Label htmlFor="internal-note" className="text-sm text-muted-foreground cursor-pointer">
+                              Internal note (only visible to HR)
+                            </Label>
+                          </div>
+                        )}
+                        <Button variant="outline" size="sm" onClick={() => commentFileRef.current?.click()} data-testid="button-attach-comment-file">
+                          <Paperclip className="h-4 w-4 mr-2" />
+                          Attach File
+                        </Button>
+                      </div>
                       <Button
                         onClick={handleAddComment}
-                        disabled={!commentText.trim()}
+                        disabled={!commentText.trim() && commentFiles.length === 0}
                         className="ml-auto"
                         data-testid="button-add-comment"
                       >
