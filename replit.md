@@ -21,6 +21,7 @@ HRFlow is a frontend-only HR management platform built for demonstration purpose
   - Admin/Manager controls: status updates, assignee management, follow-up comments
   - Admin-only: internal notes (visible only to HR)
   - Zustand store for state management with 6 demo disciplinary queries
+  - Queries listed under "People Operations" sidebar group (renamed from "HR Management")
   - Sidebar navigation visible to all roles
 - 2026-02-05: Employees & Departments tabs rework
   - Employees and Departments pages now visible to ALL roles (employee, manager, admin)

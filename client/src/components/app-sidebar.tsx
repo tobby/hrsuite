@@ -49,7 +49,6 @@ const mainNavItems: NavItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard, testId: "nav-dashboard", roles: ["employee", "manager", "admin"] },
   { title: "Employees", url: "/employees", icon: Users, testId: "nav-employees", roles: ["employee", "manager", "admin"] },
   { title: "Departments", url: "/departments", icon: Building2, testId: "nav-departments", roles: ["admin"] },
-  { title: "Queries", url: "/queries", icon: HelpCircle, testId: "nav-queries", roles: ["employee", "manager", "admin"] },
 ];
 
 const settingsNavItems: NavItem[] = [
@@ -66,9 +65,10 @@ export function AppSidebar() {
 
   const isActive = (url: string) => {
     if (url === "/") return location === "/";
-    if (url === "/queries") return location.startsWith("/queries");
     return location === url;
   };
+
+  const isQueriesActive = location.startsWith("/queries");
 
   const isLeaveActive = location.startsWith("/leave");
   const isAppraisalsActive = location.startsWith("/appraisals");
@@ -124,7 +124,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>HR Management</SidebarGroupLabel>
+          <SidebarGroupLabel>People Operations</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {showLeaveSubItems ? (
@@ -324,6 +324,18 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 </Collapsible>
               )}
+
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isQueriesActive}
+                >
+                  <Link href="/queries" data-testid="nav-queries">
+                    <HelpCircle className="h-4 w-4" />
+                    <span>Queries</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
