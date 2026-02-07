@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,11 +11,23 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/lib/role-context";
-import { useQueryStore } from "@/lib/query-store";
+import { useQueryStore, type CommentAttachment } from "@/lib/query-store";
 import { employees } from "@/lib/demo-data";
-import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning } from "lucide-react";
+import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning, Paperclip, FileText, Image, File, X } from "lucide-react";
 import { format } from "date-fns";
 import type { HrQuery } from "@shared/schema";
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getFileIcon(type: string) {
+  if (type.startsWith("image/")) return Image;
+  if (type.includes("pdf") || type.includes("document") || type.includes("text")) return FileText;
+  return File;
+}
 
 const categoryLabels: Record<string, string> = {
   attendance: "Attendance",
@@ -91,6 +103,8 @@ export default function Queries() {
   const [newCategory, setNewCategory] = useState<string>("attendance");
   const [newPriority, setNewPriority] = useState<string>("medium");
   const [newEmployeeId, setNewEmployeeId] = useState<string>("");
+  const [queryFiles, setQueryFiles] = useState<CommentAttachment[]>([]);
+  const queryFileRef = useRef<HTMLInputElement>(null);
 
   const canIssueQuery = role === "admin" || role === "manager";
 
@@ -132,6 +146,35 @@ export default function Queries() {
     return [];
   })();
 
+  function handleQueryFilesSelected(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const maxSize = 10 * 1024 * 1024;
+    const newAttachments: CommentAttachment[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file.size > maxSize) {
+        toast({ title: "File too large", description: `${file.name} exceeds the 10 MB limit.`, variant: "destructive" });
+        continue;
+      }
+      newAttachments.push({
+        id: `att-${Date.now()}-${i}`,
+        name: file.name,
+        size: file.size,
+        type: file.type || "application/octet-stream",
+        url: URL.createObjectURL(file),
+      });
+    }
+    setQueryFiles(prev => [...prev, ...newAttachments]);
+  }
+
+  function removeQueryFile(id: string) {
+    setQueryFiles(prev => {
+      const file = prev.find(f => f.id === id);
+      if (file) URL.revokeObjectURL(file.url);
+      return prev.filter(f => f.id !== id);
+    });
+  }
+
   function handleIssueQuery() {
     if (!newSubject.trim() || newDescription.trim().length < 10 || !newEmployeeId) {
       toast({ title: "Validation Error", description: "Please fill in all required fields. Select an employee and provide a description (at least 10 characters).", variant: "destructive" });
@@ -144,7 +187,7 @@ export default function Queries() {
       priority: newPriority,
       employeeId: newEmployeeId,
       issuedBy: currentUser.id,
-    });
+    }, queryFiles.length > 0 ? queryFiles : undefined);
     toast({ title: "Query issued", description: "The disciplinary query has been issued successfully." });
     setIsIssueOpen(false);
     setNewSubject("");
@@ -152,6 +195,8 @@ export default function Queries() {
     setNewCategory("attendance");
     setNewPriority("medium");
     setNewEmployeeId("");
+    setQueryFiles([]);
+    if (queryFileRef.current) queryFileRef.current.value = "";
   }
 
   function handleOpenIssue() {
@@ -160,6 +205,7 @@ export default function Queries() {
     setNewCategory("attendance");
     setNewPriority("medium");
     setNewEmployeeId("");
+    setQueryFiles([]);
     setIsIssueOpen(true);
   }
 
@@ -355,6 +401,39 @@ export default function Queries() {
                 rows={5}
                 data-testid="input-query-description"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Attachments</Label>
+              {queryFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {queryFiles.map(file => {
+                    const IconComp = getFileIcon(file.type);
+                    return (
+                      <div key={file.id} className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm" data-testid={`query-file-${file.id}`}>
+                        <IconComp className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                        <span className="truncate max-w-[150px]">{file.name}</span>
+                        <span className="text-xs text-muted-foreground flex-shrink-0">({formatFileSize(file.size)})</span>
+                        <button type="button" onClick={() => removeQueryFile(file.id)} className="ml-1 text-muted-foreground hover:text-foreground flex-shrink-0" data-testid={`remove-query-file-${file.id}`}>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <input
+                type="file"
+                ref={queryFileRef}
+                className="hidden"
+                multiple
+                onChange={e => handleQueryFilesSelected(e.target.files)}
+                data-testid="input-query-file"
+              />
+              <Button variant="outline" size="sm" type="button" onClick={() => queryFileRef.current?.click()} data-testid="button-attach-query-file">
+                <Paperclip className="h-4 w-4 mr-2" />
+                Attach File
+              </Button>
+              <p className="text-xs text-muted-foreground">Attach supporting evidence such as documents, screenshots, or reports. Max 10 MB per file.</p>
             </div>
           </div>
           <DialogFooter>

@@ -13,6 +13,10 @@ export type CommentWithAttachments = HrQueryComment & {
   attachments?: CommentAttachment[];
 };
 
+export type QueryWithAttachments = HrQuery & {
+  attachments?: CommentAttachment[];
+};
+
 const demoQueries: HrQuery[] = [
   {
     id: "query-1",
@@ -196,16 +200,16 @@ const demoTimeline: HrQueryTimeline[] = [
 ];
 
 interface QueryStore {
-  queries: HrQuery[];
+  queries: QueryWithAttachments[];
   comments: CommentWithAttachments[];
   timeline: HrQueryTimeline[];
 
-  addQuery: (query: Omit<HrQuery, "id" | "createdAt" | "updatedAt" | "resolvedAt" | "status" | "assignedTo">) => string;
+  addQuery: (query: Omit<HrQuery, "id" | "createdAt" | "updatedAt" | "resolvedAt" | "status" | "assignedTo">, attachments?: CommentAttachment[]) => string;
   updateQueryStatus: (queryId: string, status: string, actorId: string) => void;
   assignQuery: (queryId: string, assigneeId: string | null, actorId: string) => void;
   addComment: (queryId: string, content: string, authorId: string, isInternal: boolean, attachments?: CommentAttachment[]) => void;
   addResponse: (queryId: string, content: string, employeeId: string, attachments?: CommentAttachment[]) => void;
-  getQueryById: (queryId: string) => HrQuery | undefined;
+  getQueryById: (queryId: string) => QueryWithAttachments | undefined;
   getCommentsForQuery: (queryId: string) => CommentWithAttachments[];
   getTimelineForQuery: (queryId: string) => HrQueryTimeline[];
 }
@@ -215,10 +219,10 @@ export const useQueryStore = create<QueryStore>((set, get) => ({
   comments: demoComments,
   timeline: demoTimeline,
 
-  addQuery: (queryData) => {
+  addQuery: (queryData, attachments) => {
     const id = `query-${Date.now()}`;
     const now = new Date();
-    const newQuery: HrQuery = {
+    const newQuery: QueryWithAttachments = {
       ...queryData,
       id,
       status: "open",
@@ -226,6 +230,7 @@ export const useQueryStore = create<QueryStore>((set, get) => ({
       createdAt: now,
       updatedAt: now,
       resolvedAt: null,
+      attachments: attachments && attachments.length > 0 ? attachments : undefined,
     };
     const timelineEntry: HrQueryTimeline = {
       id: `tl-${Date.now()}`,

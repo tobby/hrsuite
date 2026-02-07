@@ -319,8 +319,34 @@ export default function QueryDetail() {
             <CardHeader>
               <CardTitle className="text-base">Query Details</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <p className="text-sm whitespace-pre-wrap" data-testid="text-query-description">{query.description}</p>
+              {query.attachments && query.attachments.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Attachments</div>
+                  <div className="flex flex-wrap gap-2">
+                    {query.attachments.map(att => {
+                      const IconComp = getFileIcon(att.type);
+                      return (
+                        <a
+                          key={att.id}
+                          href={att.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          download={att.name}
+                          className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm hover-elevate"
+                          data-testid={`query-attachment-${att.id}`}
+                        >
+                          <IconComp className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                          <span className="truncate max-w-[150px]">{att.name}</span>
+                          <span className="text-xs text-muted-foreground flex-shrink-0">({formatFileSize(att.size)})</span>
+                          <Download className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
