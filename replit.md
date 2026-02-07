@@ -9,15 +9,18 @@ HRFlow is a frontend-only HR management platform built for demonstration purpose
 - **Tech Stack**: React + TypeScript, Vite, Tailwind CSS, shadcn/ui, Zustand for state management
 
 ## Recent Changes
-- 2026-02-07: HR Query/Grievance System
-  - New Queries page (`/queries`) with submit query dialog, filters (status, category, priority), and search
-  - Query Detail page (`/queries/:id`) with description, comments thread, timeline, and admin controls
-  - Categories: Leave, Workplace, Policy, Other
+- 2026-02-07: HR Disciplinary Query System (reworked)
+  - Queries are formal disciplinary notices issued BY admin/manager AGAINST an employee
+  - Queries page (`/queries`) with Issue Query dialog (admin/manager only), employee selector, filters, and search
+  - Query Detail page (`/queries/:id`) with description, response form (for target employee), comments/responses thread, timeline, and admin/manager controls
+  - Categories: Attendance, Conduct, Performance, Policy Violation, Other
   - Priority levels: Low, Medium, High, Urgent
-  - Status workflow: Open, In Progress, Resolved, Closed
-  - Role-based visibility: Employee sees own queries, Manager sees team queries, Admin sees all
-  - Admin controls: status updates, assignee management, internal notes (visible only to admins)
-  - Zustand store for state management with 6 demo queries, comments, and timeline events
+  - Status workflow: Open, Awaiting Response, Responded, Resolved, Closed
+  - Role-based visibility: Employee sees queries issued against them, Manager sees queries they issued or against team, Admin sees all
+  - Target employee can submit a formal response which auto-updates status to "Responded"
+  - Admin/Manager controls: status updates, assignee management, follow-up comments
+  - Admin-only: internal notes (visible only to HR)
+  - Zustand store for state management with 6 demo disciplinary queries
   - Sidebar navigation visible to all roles
 - 2026-02-05: Employees & Departments tabs rework
   - Employees and Departments pages now visible to ALL roles (employee, manager, admin)

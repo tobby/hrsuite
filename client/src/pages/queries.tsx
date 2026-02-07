@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -13,21 +13,23 @@ import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/lib/role-context";
 import { useQueryStore } from "@/lib/query-store";
 import { employees } from "@/lib/demo-data";
-import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Filter } from "lucide-react";
+import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning } from "lucide-react";
 import { format } from "date-fns";
 import type { HrQuery } from "@shared/schema";
 
 const categoryLabels: Record<string, string> = {
-  leave: "Leave",
-  workplace: "Workplace",
-  policy: "Policy",
+  attendance: "Attendance",
+  conduct: "Conduct",
+  performance: "Performance",
+  policy_violation: "Policy Violation",
   other: "Other",
 };
 
 const categoryColors: Record<string, string> = {
-  leave: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-  workplace: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
-  policy: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+  attendance: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+  conduct: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  performance: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+  policy_violation: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
   other: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300",
 };
 
@@ -47,21 +49,24 @@ const priorityColors: Record<string, string> = {
 
 const statusLabels: Record<string, string> = {
   open: "Open",
-  in_progress: "In Progress",
+  awaiting_response: "Awaiting Response",
+  responded: "Responded",
   resolved: "Resolved",
   closed: "Closed",
 };
 
 const statusIcons: Record<string, typeof AlertCircle> = {
   open: AlertCircle,
-  in_progress: Clock,
+  awaiting_response: Send,
+  responded: MessageSquare,
   resolved: CheckCircle2,
   closed: XCircle,
 };
 
 const statusColors: Record<string, string> = {
   open: "text-blue-600 dark:text-blue-400",
-  in_progress: "text-yellow-600 dark:text-yellow-400",
+  awaiting_response: "text-amber-600 dark:text-amber-400",
+  responded: "text-indigo-600 dark:text-indigo-400",
   resolved: "text-green-600 dark:text-green-400",
   closed: "text-muted-foreground",
 };
@@ -79,28 +84,35 @@ export default function Queries() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
-  const [isSubmitOpen, setIsSubmitOpen] = useState(false);
+  const [isIssueOpen, setIsIssueOpen] = useState(false);
 
   const [newSubject, setNewSubject] = useState("");
   const [newDescription, setNewDescription] = useState("");
-  const [newCategory, setNewCategory] = useState<string>("leave");
+  const [newCategory, setNewCategory] = useState<string>("attendance");
   const [newPriority, setNewPriority] = useState<string>("medium");
+  const [newEmployeeId, setNewEmployeeId] = useState<string>("");
+
+  const canIssueQuery = role === "admin" || role === "manager";
 
   const visibleQueries = queries.filter(q => {
-    if (role === "employee") return q.employeeId === currentUser.id;
+    if (role === "admin") return true;
     if (role === "manager") {
       const teamIds = employees.filter(e => e.managerId === currentUser.id).map(e => e.id);
-      return q.employeeId === currentUser.id || teamIds.includes(q.employeeId);
+      return q.issuedBy === currentUser.id || q.employeeId === currentUser.id || teamIds.includes(q.employeeId);
     }
-    return true;
+    return q.employeeId === currentUser.id;
   });
 
   const filteredQueries = visibleQueries.filter(q => {
+    const emp = getEmployee(q.employeeId);
+    const issuer = getEmployee(q.issuedBy);
     const matchesSearch =
       q.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
       q.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getEmployee(q.employeeId)?.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getEmployee(q.employeeId)?.lastName.toLowerCase().includes(searchTerm.toLowerCase());
+      emp?.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp?.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      issuer?.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      issuer?.lastName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || q.status === statusFilter;
     const matchesCategory = categoryFilter === "all" || q.category === categoryFilter;
     const matchesPriority = priorityFilter === "all" || q.priority === priorityFilter;
@@ -110,13 +122,19 @@ export default function Queries() {
   const stats = {
     total: visibleQueries.length,
     open: visibleQueries.filter(q => q.status === "open").length,
-    inProgress: visibleQueries.filter(q => q.status === "in_progress").length,
-    resolved: visibleQueries.filter(q => q.status === "resolved").length,
+    awaitingResponse: visibleQueries.filter(q => q.status === "awaiting_response").length,
+    responded: visibleQueries.filter(q => q.status === "responded").length,
   };
 
-  function handleSubmitQuery() {
-    if (!newSubject.trim() || newDescription.trim().length < 10) {
-      toast({ title: "Validation Error", description: "Please fill in all required fields. Description must be at least 10 characters.", variant: "destructive" });
+  const issuableEmployees = (() => {
+    if (role === "admin") return employees.filter(e => e.id !== currentUser.id);
+    if (role === "manager") return employees.filter(e => e.managerId === currentUser.id);
+    return [];
+  })();
+
+  function handleIssueQuery() {
+    if (!newSubject.trim() || newDescription.trim().length < 10 || !newEmployeeId) {
+      toast({ title: "Validation Error", description: "Please fill in all required fields. Select an employee and provide a description (at least 10 characters).", variant: "destructive" });
       return;
     }
     addQuery({
@@ -124,22 +142,25 @@ export default function Queries() {
       description: newDescription.trim(),
       category: newCategory,
       priority: newPriority,
-      employeeId: currentUser.id,
+      employeeId: newEmployeeId,
+      issuedBy: currentUser.id,
     });
-    toast({ title: "Query submitted", description: "Your query has been submitted successfully." });
-    setIsSubmitOpen(false);
+    toast({ title: "Query issued", description: "The disciplinary query has been issued successfully." });
+    setIsIssueOpen(false);
     setNewSubject("");
     setNewDescription("");
-    setNewCategory("leave");
+    setNewCategory("attendance");
     setNewPriority("medium");
+    setNewEmployeeId("");
   }
 
-  function handleOpenSubmit() {
+  function handleOpenIssue() {
     setNewSubject("");
     setNewDescription("");
-    setNewCategory("leave");
+    setNewCategory("attendance");
     setNewPriority("medium");
-    setIsSubmitOpen(true);
+    setNewEmployeeId("");
+    setIsIssueOpen(true);
   }
 
   return (
@@ -148,13 +169,19 @@ export default function Queries() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight" data-testid="text-queries-title">Queries</h1>
           <p className="text-muted-foreground text-sm">
-            {role === "employee" ? "Submit and track your HR queries" : role === "manager" ? "View your team's HR queries" : "Manage all HR queries and grievances"}
+            {role === "employee"
+              ? "View and respond to queries issued to you"
+              : role === "manager"
+                ? "Issue and manage queries for your team"
+                : "Issue and manage all disciplinary queries"}
           </p>
         </div>
-        <Button onClick={handleOpenSubmit} data-testid="button-submit-query">
-          <Plus className="h-4 w-4 mr-2" />
-          Submit Query
-        </Button>
+        {canIssueQuery && (
+          <Button onClick={handleOpenIssue} data-testid="button-issue-query">
+            <Plus className="h-4 w-4 mr-2" />
+            Issue Query
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -172,14 +199,14 @@ export default function Queries() {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-sm text-muted-foreground">In Progress</div>
-            <div className="text-2xl font-bold text-yellow-600" data-testid="stat-in-progress">{stats.inProgress}</div>
+            <div className="text-sm text-muted-foreground">Awaiting Response</div>
+            <div className="text-2xl font-bold text-amber-600" data-testid="stat-awaiting">{stats.awaitingResponse}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
-            <div className="text-sm text-muted-foreground">Resolved</div>
-            <div className="text-2xl font-bold text-green-600" data-testid="stat-resolved">{stats.resolved}</div>
+            <div className="text-sm text-muted-foreground">Responded</div>
+            <div className="text-2xl font-bold text-indigo-600" data-testid="stat-responded">{stats.responded}</div>
           </CardContent>
         </Card>
       </div>
@@ -196,26 +223,28 @@ export default function Queries() {
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px]" data-testid="filter-status">
+          <SelectTrigger className="w-[160px]" data-testid="filter-status">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="open">Open</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
+            <SelectItem value="awaiting_response">Awaiting Response</SelectItem>
+            <SelectItem value="responded">Responded</SelectItem>
             <SelectItem value="resolved">Resolved</SelectItem>
             <SelectItem value="closed">Closed</SelectItem>
           </SelectContent>
         </Select>
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-[140px]" data-testid="filter-category">
+          <SelectTrigger className="w-[160px]" data-testid="filter-category">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            <SelectItem value="leave">Leave</SelectItem>
-            <SelectItem value="workplace">Workplace</SelectItem>
-            <SelectItem value="policy">Policy</SelectItem>
+            <SelectItem value="attendance">Attendance</SelectItem>
+            <SelectItem value="conduct">Conduct</SelectItem>
+            <SelectItem value="performance">Performance</SelectItem>
+            <SelectItem value="policy_violation">Policy Violation</SelectItem>
             <SelectItem value="other">Other</SelectItem>
           </SelectContent>
         </Select>
@@ -237,34 +266,51 @@ export default function Queries() {
         {filteredQueries.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
-              <MessageSquare className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
+              <FileWarning className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
               <h3 className="font-medium mb-1">No queries found</h3>
               <p className="text-sm text-muted-foreground">
                 {searchTerm || statusFilter !== "all" || categoryFilter !== "all" || priorityFilter !== "all"
                   ? "Try adjusting your filters"
-                  : "Submit your first query to get started"}
+                  : role === "employee"
+                    ? "No queries have been issued to you"
+                    : "No queries have been issued yet"}
               </p>
             </CardContent>
           </Card>
         ) : (
-          filteredQueries.map(query => <QueryCard key={query.id} query={query} role={role} />)
+          filteredQueries.map(query => <QueryCard key={query.id} query={query} role={role} currentUserId={currentUser.id} />)
         )}
       </div>
 
-      <Dialog open={isSubmitOpen} onOpenChange={setIsSubmitOpen}>
-        <DialogContent className="sm:max-w-[500px]" data-testid="dialog-submit-query">
+      <Dialog open={isIssueOpen} onOpenChange={setIsIssueOpen}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="dialog-issue-query">
           <DialogHeader>
-            <DialogTitle>Submit a Query</DialogTitle>
-            <DialogDescription>Describe your query or concern and we will get back to you.</DialogDescription>
+            <DialogTitle>Issue a Query</DialogTitle>
+            <DialogDescription>Issue a formal disciplinary query to an employee. They will be notified and required to respond.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Employee</Label>
+              <Select value={newEmployeeId} onValueChange={setNewEmployeeId}>
+                <SelectTrigger data-testid="select-query-employee">
+                  <SelectValue placeholder="Select employee..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {issuableEmployees.map(emp => (
+                    <SelectItem key={emp.id} value={emp.id}>
+                      {emp.firstName} {emp.lastName} - {emp.position}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="query-subject">Subject</Label>
               <Input
                 id="query-subject"
                 value={newSubject}
                 onChange={e => setNewSubject(e.target.value)}
-                placeholder="Brief summary of your query"
+                placeholder="Brief summary of the issue"
                 data-testid="input-query-subject"
               />
             </div>
@@ -276,9 +322,10 @@ export default function Queries() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="leave">Leave</SelectItem>
-                    <SelectItem value="workplace">Workplace</SelectItem>
-                    <SelectItem value="policy">Policy</SelectItem>
+                    <SelectItem value="attendance">Attendance</SelectItem>
+                    <SelectItem value="conduct">Conduct</SelectItem>
+                    <SelectItem value="performance">Performance</SelectItem>
+                    <SelectItem value="policy_violation">Policy Violation</SelectItem>
                     <SelectItem value="other">Other</SelectItem>
                   </SelectContent>
                 </Select>
@@ -304,15 +351,15 @@ export default function Queries() {
                 id="query-description"
                 value={newDescription}
                 onChange={e => setNewDescription(e.target.value)}
-                placeholder="Describe your query in detail (minimum 10 characters)"
+                placeholder="Describe the issue in detail, including dates, evidence, and what response is expected (minimum 10 characters)"
                 rows={5}
                 data-testid="input-query-description"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSubmitOpen(false)} data-testid="button-cancel-query">Cancel</Button>
-            <Button onClick={handleSubmitQuery} data-testid="button-confirm-submit-query">Submit Query</Button>
+            <Button variant="outline" onClick={() => setIsIssueOpen(false)} data-testid="button-cancel-query">Cancel</Button>
+            <Button onClick={handleIssueQuery} data-testid="button-confirm-issue-query">Issue Query</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -320,12 +367,13 @@ export default function Queries() {
   );
 }
 
-function QueryCard({ query, role }: { query: HrQuery; role: string }) {
+function QueryCard({ query, role, currentUserId }: { query: HrQuery; role: string; currentUserId: string }) {
   const emp = getEmployee(query.employeeId);
-  const assignee = query.assignedTo ? getEmployee(query.assignedTo) : null;
+  const issuer = getEmployee(query.issuedBy);
   const StatusIcon = statusIcons[query.status] || AlertCircle;
   const { getCommentsForQuery } = useQueryStore();
   const commentCount = getCommentsForQuery(query.id).filter(c => role === "admin" || c.isInternal !== "true").length;
+  const isIssuedToMe = query.employeeId === currentUserId;
 
   return (
     <Link href={`/queries/${query.id}`}>
@@ -336,6 +384,9 @@ function QueryCard({ query, role }: { query: HrQuery; role: string }) {
               <div className="flex items-center gap-2 flex-wrap">
                 <StatusIcon className={`h-4 w-4 flex-shrink-0 ${statusColors[query.status]}`} />
                 <span className="font-medium truncate" data-testid={`text-query-subject-${query.id}`}>{query.subject}</span>
+                {isIssuedToMe && role !== "employee" && (
+                  <Badge variant="outline" className="text-xs">Issued to you</Badge>
+                )}
               </div>
               <p className="text-sm text-muted-foreground line-clamp-2">{query.description}</p>
               <div className="flex items-center gap-2 flex-wrap">
@@ -360,16 +411,20 @@ function QueryCard({ query, role }: { query: HrQuery; role: string }) {
               <Badge variant="outline" className={statusColors[query.status]} data-testid={`badge-status-${query.id}`}>
                 {statusLabels[query.status]}
               </Badge>
-              {(role === "admin" || role === "manager") && emp && (
+              {emp && (
                 <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Against:</span>
                   <Avatar className="h-5 w-5">
                     <AvatarFallback className="text-[10px]">{emp.firstName[0]}{emp.lastName[0]}</AvatarFallback>
                   </Avatar>
                   <span className="text-xs text-muted-foreground">{emp.firstName} {emp.lastName}</span>
                 </div>
               )}
-              {role === "admin" && assignee && (
-                <span className="text-xs text-muted-foreground">Assigned: {assignee.firstName}</span>
+              {issuer && (role === "admin" || role === "manager") && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">By:</span>
+                  <span className="text-xs text-muted-foreground">{issuer.firstName} {issuer.lastName}</span>
+                </div>
               )}
             </div>
           </div>

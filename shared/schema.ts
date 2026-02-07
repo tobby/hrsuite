@@ -384,21 +384,24 @@ export const hrQueries = pgTable("hr_queries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   subject: text("subject").notNull(),
   description: text("description").notNull(),
-  category: text("category").notNull(), // "leave", "workplace", "policy", "other"
+  category: text("category").notNull(), // "attendance", "conduct", "performance", "policy_violation", "other"
   priority: text("priority").notNull().default("medium"), // "low", "medium", "high", "urgent"
-  status: text("status").notNull().default("open"), // "open", "in_progress", "resolved", "closed"
-  employeeId: varchar("employee_id").notNull(),
+  status: text("status").notNull().default("open"), // "open", "awaiting_response", "responded", "resolved", "closed"
+  employeeId: varchar("employee_id").notNull(), // employee the query is issued against
+  issuedBy: varchar("issued_by").notNull(), // admin or manager who issued the query
   assignedTo: varchar("assigned_to"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   resolvedAt: timestamp("resolved_at"),
 });
 
-export const insertHrQuerySchema = createInsertSchema(hrQueries).omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true }).extend({
+export const insertHrQuerySchema = createInsertSchema(hrQueries).omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true, status: true, assignedTo: true }).extend({
   subject: z.string().min(1, "Subject is required"),
   description: z.string().min(10, "Description must be at least 10 characters"),
-  category: z.enum(["leave", "workplace", "policy", "other"]),
+  category: z.enum(["attendance", "conduct", "performance", "policy_violation", "other"]),
   priority: z.enum(["low", "medium", "high", "urgent"]),
+  employeeId: z.string().min(1, "Employee is required"),
+  issuedBy: z.string().min(1),
 });
 export type InsertHrQuery = z.infer<typeof insertHrQuerySchema>;
 export type HrQuery = typeof hrQueries.$inferSelect;
