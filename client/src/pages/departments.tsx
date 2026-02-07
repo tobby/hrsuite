@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,7 @@ type DepartmentFormValues = z.infer<typeof departmentFormSchema>;
 export default function Departments() {
   const { role } = useRole();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const isAdmin = canEditOrgSettings(role);
 
   const [departmentEdits, setDepartmentEdits] = useState<Record<string, Partial<Department>>>({});
@@ -62,6 +64,21 @@ export default function Departments() {
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [deletedDeptIds, setDeletedDeptIds] = useState<Set<string>>(new Set());
+
+  const editForm = useForm<DepartmentFormValues>({
+    resolver: zodResolver(departmentFormSchema),
+    defaultValues: { name: "", description: "", managerId: null },
+  });
+
+  const addForm = useForm<DepartmentFormValues>({
+    resolver: zodResolver(departmentFormSchema),
+    defaultValues: { name: "", description: "", managerId: null },
+  });
+
+  if (!isAdmin) {
+    navigate("/");
+    return null;
+  }
 
   function getDepartment(id: string): Department {
     const base = departments.find(d => d.id === id) || addedDepartments.find(d => d.id === id);
@@ -74,16 +91,6 @@ export default function Departments() {
     ...departments.filter(d => !deletedDeptIds.has(d.id)).map(d => getDepartment(d.id)),
     ...addedDepartments.map(d => getDepartment(d.id)),
   ];
-
-  const editForm = useForm<DepartmentFormValues>({
-    resolver: zodResolver(departmentFormSchema),
-    defaultValues: { name: "", description: "", managerId: null },
-  });
-
-  const addForm = useForm<DepartmentFormValues>({
-    resolver: zodResolver(departmentFormSchema),
-    defaultValues: { name: "", description: "", managerId: null },
-  });
 
   function handleEditOpen(department: Department) {
     setEditingDepartment(department);
