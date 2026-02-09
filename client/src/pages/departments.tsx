@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,14 +37,15 @@ import {
   MoreHorizontal,
   Edit,
   Trash2,
+  Loader2,
 } from "lucide-react";
-import { departments, employees, getEmployeeById } from "@/lib/demo-data";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useRole, canManageEmployees, canEditOrgSettings } from "@/lib/role-context";
 import { useToast } from "@/hooks/use-toast";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
-import type { Department } from "@shared/schema";
+import type { Department, Employee } from "@shared/schema";
 
 const departmentFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -54,16 +56,48 @@ const departmentFormSchema = z.object({
 type DepartmentFormValues = z.infer<typeof departmentFormSchema>;
 
 export default function Departments() {
-  const { role } = useRole();
+  const { role, currentUser } = useRole();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const isAdmin = canEditOrgSettings(role);
 
-  const [departmentEdits, setDepartmentEdits] = useState<Record<string, Partial<Department>>>({});
-  const [addedDepartments, setAddedDepartments] = useState<Department[]>([]);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [deletedDeptIds, setDeletedDeptIds] = useState<Set<string>>(new Set());
+
+  const { data: departments = [], isLoading: isLoadingDepartments } = useQuery<Department[]>({
+    queryKey: ['/api/departments'],
+  });
+
+  const { data: employees = [], isLoading: isLoadingEmployees } = useQuery<Employee[]>({
+    queryKey: ['/api/employees'],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { name: string; description: string; companyId: string; headId?: string | null }) => {
+      await apiRequest("POST", "/api/departments", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/departments'] });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Department> }) => {
+      await apiRequest("PATCH", `/api/departments/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/departments'] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/departments/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/departments'] });
+    },
+  });
 
   const editForm = useForm<DepartmentFormValues>({
     resolver: zodResolver(departmentFormSchema),
@@ -80,18 +114,6 @@ export default function Departments() {
     return null;
   }
 
-  function getDepartment(id: string): Department {
-    const base = departments.find(d => d.id === id) || addedDepartments.find(d => d.id === id);
-    if (!base) throw new Error("Department not found");
-    const edits = departmentEdits[id];
-    return edits ? { ...base, ...edits } : base;
-  }
-
-  const allDepartments = [
-    ...departments.filter(d => !deletedDeptIds.has(d.id)).map(d => getDepartment(d.id)),
-    ...addedDepartments.map(d => getDepartment(d.id)),
-  ];
-
   function handleEditOpen(department: Department) {
     setEditingDepartment(department);
     editForm.reset({
@@ -103,36 +125,57 @@ export default function Departments() {
 
   function handleEditSave(values: DepartmentFormValues) {
     if (!editingDepartment) return;
-    setDepartmentEdits(prev => ({
-      ...prev,
-      [editingDepartment.id]: {
-        name: values.name,
-        description: values.description,
-        headId: values.managerId || null,
+    updateMutation.mutate(
+      {
+        id: editingDepartment.id,
+        data: {
+          name: values.name,
+          description: values.description,
+          headId: values.managerId || null,
+        },
       },
-    }));
-    toast({ title: "Department updated", description: `${values.name} has been updated.` });
-    setEditingDepartment(null);
+      {
+        onSuccess: () => {
+          toast({ title: "Department updated", description: `${values.name} has been updated.` });
+          setEditingDepartment(null);
+        },
+        onError: (error) => {
+          toast({ title: "Error", description: error.message, variant: "destructive" });
+        },
+      }
+    );
   }
 
   function handleAddSave(values: DepartmentFormValues) {
-    const newDept: Department = {
-      id: `dept-new-${Date.now()}`,
-      companyId: "",
-      name: values.name,
-      description: values.description,
-      headId: values.managerId || null,
-    };
-    setAddedDepartments(prev => [...prev, newDept]);
-    toast({ title: "Department created", description: `${values.name} has been created.` });
-    setIsAddDialogOpen(false);
-    addForm.reset({ name: "", description: "", managerId: null });
+    createMutation.mutate(
+      {
+        name: values.name,
+        description: values.description,
+        companyId: currentUser.companyId,
+        headId: values.managerId || null,
+      },
+      {
+        onSuccess: () => {
+          toast({ title: "Department created", description: `${values.name} has been created.` });
+          setIsAddDialogOpen(false);
+          addForm.reset({ name: "", description: "", managerId: null });
+        },
+        onError: (error) => {
+          toast({ title: "Error", description: error.message, variant: "destructive" });
+        },
+      }
+    );
   }
 
   function handleDelete(department: Department) {
-    setDeletedDeptIds(prev => { const next = new Set(Array.from(prev)); next.add(department.id); return next; });
-    setAddedDepartments(prev => prev.filter(d => d.id !== department.id));
-    toast({ title: "Department deleted", description: `${department.name} has been removed.` });
+    deleteMutation.mutate(department.id, {
+      onSuccess: () => {
+        toast({ title: "Department deleted", description: `${department.name} has been removed.` });
+      },
+      onError: (error) => {
+        toast({ title: "Error", description: error.message, variant: "destructive" });
+      },
+    });
   }
 
   function handleAddOpen() {
@@ -141,6 +184,14 @@ export default function Departments() {
   }
 
   const totalEmployees = employees.length;
+
+  if (isLoadingDepartments || isLoadingEmployees) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -162,8 +213,8 @@ export default function Departments() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {allDepartments.map((department) => {
-          const manager = department.headId ? getEmployeeById(department.headId) : null;
+        {departments.map((department) => {
+          const manager = department.headId ? employees.find(e => e.id === department.headId) : null;
           const deptEmployees = employees.filter(e => e.departmentId === department.id);
           const activeCount = deptEmployees.filter(e => e.status === "active").length;
 
@@ -281,7 +332,7 @@ export default function Departments() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {allDepartments.map((dept) => {
+            {departments.map((dept) => {
               const deptEmployees = employees.filter(e => e.departmentId === dept.id);
               const percentage = totalEmployees > 0 ? (deptEmployees.length / totalEmployees) * 100 : 0;
               return (
@@ -357,8 +408,8 @@ export default function Departments() {
               <Button type="button" variant="outline" onClick={() => setEditingDepartment(null)} data-testid="button-cancel-edit">
                 Cancel
               </Button>
-              <Button type="submit" data-testid="button-save-edit">
-                Save Changes
+              <Button type="submit" disabled={updateMutation.isPending} data-testid="button-save-edit">
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
               </Button>
             </DialogFooter>
           </form>
@@ -417,8 +468,8 @@ export default function Departments() {
               <Button type="button" variant="outline" onClick={() => setIsAddDialogOpen(false)} data-testid="button-cancel-add">
                 Cancel
               </Button>
-              <Button type="submit" data-testid="button-save-add">
-                Create Department
+              <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-add">
+                {createMutation.isPending ? "Creating..." : "Create Department"}
               </Button>
             </DialogFooter>
           </form>

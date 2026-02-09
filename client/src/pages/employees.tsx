@@ -42,6 +42,7 @@ import {
   GitBranchPlus,
   Pencil,
   Calendar,
+  Loader2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -50,8 +51,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useRole, canManageEmployees } from "@/lib/role-context";
-import { employees as demoEmployees, departments, getDepartmentById, getEmployeeById } from "@/lib/demo-data";
-import type { Employee } from "@shared/schema";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Employee, Department } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -99,21 +101,31 @@ export default function Employees() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [employeeEdits, setEmployeeEdits] = useState<Record<string, Partial<Employee>>>({});
 
-  const getEmployee = (id: string): Employee | undefined => {
-    const base = getEmployeeById(id);
-    if (!base) return undefined;
-    const edits = employeeEdits[id];
-    if (!edits) return base;
-    return { ...base, ...edits } as Employee;
+  const { data: allEmployees = [], isLoading: isLoadingEmployees } = useQuery<Employee[]>({
+    queryKey: ['/api/employees'],
+  });
+
+  const { data: departments = [], isLoading: isLoadingDepartments } = useQuery<Department[]>({
+    queryKey: ['/api/departments'],
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<EditEmployeeForm> }) => {
+      await apiRequest("PATCH", `/api/employees/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+    },
+  });
+
+  const getDepartmentById = (id: string): Department | undefined => {
+    return departments.find((d) => d.id === id);
   };
 
-  const allEmployees = demoEmployees.map((e) => {
-    const edits = employeeEdits[e.id];
-    if (!edits) return e;
-    return { ...e, ...edits } as Employee;
-  });
+  const getEmployee = (id: string): Employee | undefined => {
+    return allEmployees.find((e) => e.id === id);
+  };
 
   const filteredEmployees = allEmployees.filter((employee) => {
     const matchesSearch =
@@ -137,8 +149,6 @@ export default function Employees() {
     setIsDetailOpen(false);
     setIsEditOpen(true);
   };
-
-  const rootEmployees = allEmployees.filter((e) => e.managerId === null);
 
   function OrgNode({ employee, depth, departmentId }: { employee: Employee; depth: number; departmentId: string }) {
     const dept = employee.departmentId ? getDepartmentById(employee.departmentId) : null;
@@ -193,6 +203,14 @@ export default function Employees() {
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  if (isLoadingEmployees || isLoadingDepartments) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -512,17 +530,29 @@ export default function Employees() {
         open={isEditOpen}
         onOpenChange={setIsEditOpen}
         allEmployees={allEmployees}
+        departments={departments}
         onSave={(id, data) => {
-          setEmployeeEdits((prev) => ({
-            ...prev,
-            [id]: { ...prev[id], ...data },
-          }));
-          toast({
-            title: "Employee updated",
-            description: `${data.firstName} ${data.lastName}'s profile has been updated.`,
-          });
-          setIsEditOpen(false);
+          updateMutation.mutate(
+            { id, data },
+            {
+              onSuccess: () => {
+                toast({
+                  title: "Employee updated",
+                  description: `${data.firstName} ${data.lastName}'s profile has been updated.`,
+                });
+                setIsEditOpen(false);
+              },
+              onError: (error) => {
+                toast({
+                  title: "Error",
+                  description: error.message || "Failed to update employee.",
+                  variant: "destructive",
+                });
+              },
+            }
+          );
         }}
+        isSaving={updateMutation.isPending}
       />
     </div>
   );
@@ -533,13 +563,17 @@ function EditEmployeeDialog({
   open,
   onOpenChange,
   allEmployees,
+  departments,
   onSave,
+  isSaving,
 }: {
   employee: Employee | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   allEmployees: Employee[];
+  departments: Department[];
   onSave: (id: string, data: EditEmployeeForm) => void;
+  isSaving: boolean;
 }) {
   const form = useForm<EditEmployeeForm>({
     resolver: zodResolver(editEmployeeSchema),
@@ -692,8 +726,8 @@ function EditEmployeeDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-edit">
               Cancel
             </Button>
-            <Button type="submit" data-testid="button-save-employee">
-              Save Changes
+            <Button type="submit" disabled={isSaving} data-testid="button-save-employee">
+              {isSaving ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </form>

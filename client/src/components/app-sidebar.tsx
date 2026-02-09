@@ -18,6 +18,7 @@ import {
   HelpCircle,
   ClipboardList,
   PieChart,
+  LogOut,
 } from "lucide-react";
 import {
   Sidebar,
@@ -36,8 +37,9 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { getDepartmentById } from "@/lib/demo-data";
+import { useAuth } from "@/lib/auth-context";
 
 interface NavItem {
   title: string;
@@ -61,7 +63,7 @@ const settingsNavItems: NavItem[] = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { role, currentUser } = useRole();
-  const department = currentUser.departmentId ? getDepartmentById(currentUser.departmentId) : null;
+  const { logout } = useAuth();
   const [leaveExpanded, setLeaveExpanded] = useState(location.startsWith("/leave"));
   const [appraisalsExpanded, setAppraisalsExpanded] = useState(location.startsWith("/appraisals"));
   const [recruitmentExpanded, setRecruitmentExpanded] = useState(location.startsWith("/recruitment"));
@@ -432,17 +434,27 @@ export function AppSidebar() {
 
       <SidebarFooter className="p-4">
         <div className="flex flex-col gap-2 rounded-md p-3 bg-sidebar-accent/50">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium" data-testid="text-sidebar-user">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium truncate" data-testid="text-sidebar-user">
               {currentUser.firstName} {currentUser.lastName}
             </span>
             <Badge variant="secondary" className={`text-xs ${roleLabels[role].color}`} data-testid="badge-sidebar-role">
               {roleLabels[role].label}
             </Badge>
           </div>
-          <span className="text-xs text-muted-foreground" data-testid="text-sidebar-department">
-            {department?.name}
-          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground truncate" data-testid="text-sidebar-position">
+              {currentUser.position}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={logout}
+              data-testid="button-logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>

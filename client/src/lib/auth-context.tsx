@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, getQueryFn } from "./queryClient";
 import { useLocation } from "wouter";
 
-export type UserRole = "employee" | "manager" | "admin";
+export type UserRole = "employee" | "manager" | "admin" | "contract";
 
 export interface AuthEmployee {
   id: string;

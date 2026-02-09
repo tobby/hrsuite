@@ -1,32 +1,24 @@
-import { createContext, useContext, useState, ReactNode } from "react";
-import { employees } from "./demo-data";
-import type { Employee } from "@shared/schema";
+import { createContext, useContext, ReactNode } from "react";
+import { useAuth, AuthEmployee } from "./auth-context";
 
 export type UserRole = "employee" | "manager" | "admin" | "contract";
 
 interface RoleContextType {
   role: UserRole;
-  setRole: (role: UserRole) => void;
-  currentUser: Employee;
+  currentUser: AuthEmployee;
 }
-
-// Demo users for each role
-export const demoUsers: Record<UserRole, Employee> = {
-  employee: employees.find(e => e.id === "emp-3")!, // Emily Rodriguez - Software Engineer
-  manager: employees.find(e => e.id === "emp-1")!,  // Sarah Chen - VP of Engineering
-  admin: employees.find(e => e.id === "emp-4")!,    // David Kim - HR Director
-  contract: employees.find(e => e.id === "emp-3")!, // Reuses employee demo user for contract role
-};
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
 
 export function RoleProvider({ children }: { children: ReactNode }) {
-  const [role, setRole] = useState<UserRole>("employee");
+  const { employee, role } = useAuth();
 
-  const currentUser = demoUsers[role];
+  if (!employee) {
+    return null;
+  }
 
   return (
-    <RoleContext.Provider value={{ role, setRole, currentUser }}>
+    <RoleContext.Provider value={{ role: role as UserRole, currentUser: employee }}>
       {children}
     </RoleContext.Provider>
   );
@@ -40,7 +32,6 @@ export function useRole() {
   return context;
 }
 
-// Helper to check permissions
 export function canApproveLeave(role: UserRole): boolean {
   return role === "manager" || role === "admin";
 }
