@@ -111,6 +111,7 @@ const editEmployeeSchema = z.object({
   hireDate: z.string().nullable(),
   status: z.enum(["invited", "active", "inactive", "on_leave"]),
   employeeId: z.string().nullable(),
+  role: z.enum(["employee", "manager", "admin", "contract"]),
 });
 
 type EditEmployeeForm = z.infer<typeof editEmployeeSchema>;
@@ -804,6 +805,7 @@ function EditEmployeeDialog({
           hireDate: employee.hireDate ?? null,
           status: employee.status as "invited" | "active" | "inactive" | "on_leave",
           employeeId: employee.employeeId,
+          role: employee.role as "employee" | "manager" | "admin" | "contract",
         }
       : undefined,
   });
@@ -948,22 +950,41 @@ function EditEmployeeDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label>Status</Label>
-            <Select
-              value={form.watch("status")}
-              onValueChange={(val) => form.setValue("status", val as "invited" | "active" | "inactive" | "on_leave")}
-            >
-              <SelectTrigger data-testid="select-edit-status">
-                <SelectValue placeholder="Select status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="invited" data-testid="option-edit-status-invited">Invited</SelectItem>
-                <SelectItem value="active" data-testid="option-edit-status-active">Active</SelectItem>
-                <SelectItem value="inactive" data-testid="option-edit-status-inactive">Inactive</SelectItem>
-                <SelectItem value="on_leave" data-testid="option-edit-status-on-leave">On Leave</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select
+                value={form.watch("status")}
+                onValueChange={(val) => form.setValue("status", val as "invited" | "active" | "inactive" | "on_leave")}
+              >
+                <SelectTrigger data-testid="select-edit-status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="invited" data-testid="option-edit-status-invited">Invited</SelectItem>
+                  <SelectItem value="active" data-testid="option-edit-status-active">Active</SelectItem>
+                  <SelectItem value="inactive" data-testid="option-edit-status-inactive">Inactive</SelectItem>
+                  <SelectItem value="on_leave" data-testid="option-edit-status-on-leave">On Leave</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={form.watch("role")}
+                onValueChange={(val) => form.setValue("role", val as "employee" | "manager" | "admin" | "contract")}
+              >
+                <SelectTrigger data-testid="select-edit-role">
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee" data-testid="option-edit-role-employee">Employee</SelectItem>
+                  <SelectItem value="manager" data-testid="option-edit-role-manager">Manager</SelectItem>
+                  <SelectItem value="admin" data-testid="option-edit-role-admin">Admin</SelectItem>
+                  <SelectItem value="contract" data-testid="option-edit-role-contract">Contract</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-edit">
