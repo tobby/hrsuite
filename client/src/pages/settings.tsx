@@ -25,15 +25,17 @@ import {
   Save,
 } from "lucide-react";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Department } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
 
 const profileFormSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
-  phone: z.string().min(1, "Phone is required"),
+  phone: z.string().default(""),
 });
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
@@ -54,11 +56,29 @@ export default function Settings() {
     },
   });
 
+  const profileMutation = useMutation({
+    mutationFn: async (data: ProfileFormValues) => {
+      await apiRequest("PATCH", "/api/profile", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been updated successfully.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update profile.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: ProfileFormValues) => {
-    toast({
-      title: "Profile Updated",
-      description: "Your profile has been updated successfully.",
-    });
+    profileMutation.mutate(data);
   };
 
   return (
@@ -179,9 +199,13 @@ export default function Settings() {
                   </div>
 
                   <div className="flex justify-end">
-                    <Button type="submit" data-testid="button-save-profile">
-                      <Save className="mr-2 h-4 w-4" />
-                      Save Changes
+                    <Button type="submit" disabled={profileMutation.isPending} data-testid="button-save-profile">
+                      {profileMutation.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Save className="mr-2 h-4 w-4" />
+                      )}
+                      {profileMutation.isPending ? "Saving..." : "Save Changes"}
                     </Button>
                   </div>
                 </form>
