@@ -61,7 +61,7 @@ const settingsNavItems: NavItem[] = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { role, currentUser } = useRole();
-  const department = getDepartmentById(currentUser.departmentId);
+  const department = currentUser.departmentId ? getDepartmentById(currentUser.departmentId) : null;
   const [leaveExpanded, setLeaveExpanded] = useState(location.startsWith("/leave"));
   const [appraisalsExpanded, setAppraisalsExpanded] = useState(location.startsWith("/appraisals"));
   const [recruitmentExpanded, setRecruitmentExpanded] = useState(location.startsWith("/recruitment"));
