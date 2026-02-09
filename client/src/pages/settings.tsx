@@ -177,7 +177,7 @@ export default function Settings() {
                         <FormItem>
                           <FormLabel>Email</FormLabel>
                           <FormControl>
-                            <Input type="email" {...field} data-testid="input-email" />
+                            <Input type="email" {...field} disabled className="disabled:opacity-70 disabled:cursor-not-allowed" data-testid="input-email" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

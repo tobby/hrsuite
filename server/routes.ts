@@ -331,19 +331,11 @@ export async function registerRoutes(
   app.patch("/api/profile", requireAuth, async (req: Request, res: Response) => {
     try {
       const employeeId = (req.session as any)?.employeeId;
-      const { firstName, lastName, email, phone } = req.body;
+      const { firstName, lastName, phone } = req.body;
       const updateData: Record<string, string> = {};
       if (firstName !== undefined) updateData.firstName = firstName;
       if (lastName !== undefined) updateData.lastName = lastName;
-      if (email !== undefined) updateData.email = email;
       if (phone !== undefined) updateData.phone = phone;
-
-      if (email) {
-        const existing = await storage.getEmployeeByEmail(email);
-        if (existing && existing.id !== employeeId) {
-          return res.status(400).json({ message: "An employee with this email already exists" });
-        }
-      }
 
       const employee = await storage.updateEmployee(employeeId, updateData);
       if (!employee) return res.status(404).json({ message: "Employee not found" });
