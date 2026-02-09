@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -8,7 +8,12 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { RoleSwitcher } from "@/components/role-switcher";
 import { RoleProvider } from "@/lib/role-context";
+import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
+import Login from "@/pages/login";
+import Setup from "@/pages/setup";
+import Invite from "@/pages/invite";
 import Dashboard from "@/pages/dashboard";
 import Employees from "@/pages/employees";
 import Departments from "@/pages/departments";
@@ -78,15 +83,7 @@ function PrivateRouter() {
   );
 }
 
-function AppContent() {
-  const [location] = useLocation();
-  
-  const isPublicRoute = location.startsWith("/careers") || location.startsWith("/jobs/");
-
-  if (isPublicRoute) {
-    return <PublicRouter />;
-  }
-
+function AuthenticatedLayout() {
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -115,11 +112,58 @@ function AppContent() {
   );
 }
 
+function AppContent() {
+  const [location] = useLocation();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  const isPublicRoute = location.startsWith("/careers") || location.startsWith("/jobs/");
+  if (isPublicRoute) {
+    return <PublicRouter />;
+  }
+
+  const isAuthRoute = location === "/login" || location === "/setup" || location.startsWith("/invite/");
+  if (isAuthRoute) {
+    if (isLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    if (isAuthenticated) {
+      return <Redirect to="/" />;
+    }
+    return (
+      <Switch>
+        <Route path="/login" component={Login} />
+        <Route path="/setup" component={Setup} />
+        <Route path="/invite/:token" component={Invite} />
+      </Switch>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+
+  return <AuthenticatedLayout />;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <AppContent />
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

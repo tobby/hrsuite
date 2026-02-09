@@ -97,7 +97,7 @@ export default function Departments() {
     editForm.reset({
       name: department.name,
       description: department.description,
-      managerId: department.managerId || null,
+      managerId: department.headId || null,
     });
   }
 
@@ -108,7 +108,7 @@ export default function Departments() {
       [editingDepartment.id]: {
         name: values.name,
         description: values.description,
-        managerId: values.managerId || null,
+        headId: values.managerId || null,
       },
     }));
     toast({ title: "Department updated", description: `${values.name} has been updated.` });
@@ -118,9 +118,10 @@ export default function Departments() {
   function handleAddSave(values: DepartmentFormValues) {
     const newDept: Department = {
       id: `dept-new-${Date.now()}`,
+      companyId: "",
       name: values.name,
       description: values.description,
-      managerId: values.managerId || null,
+      headId: values.managerId || null,
     };
     setAddedDepartments(prev => [...prev, newDept]);
     toast({ title: "Department created", description: `${values.name} has been created.` });
@@ -162,7 +163,7 @@ export default function Departments() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {allDepartments.map((department) => {
-          const manager = department.managerId ? getEmployeeById(department.managerId) : null;
+          const manager = department.headId ? getEmployeeById(department.headId) : null;
           const deptEmployees = employees.filter(e => e.departmentId === department.id);
           const activeCount = deptEmployees.filter(e => e.status === "active").length;
 

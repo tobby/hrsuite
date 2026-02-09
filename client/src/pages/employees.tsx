@@ -81,9 +81,9 @@ const editEmployeeSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
-  phone: z.string().min(1, "Phone is required"),
+  phone: z.string().nullable(),
   position: z.string().min(1, "Position is required"),
-  departmentId: z.string().min(1, "Department is required"),
+  departmentId: z.string().nullable(),
   managerId: z.string().nullable(),
   status: z.enum(["active", "inactive", "on_leave"]),
 });
@@ -141,9 +141,9 @@ export default function Employees() {
   const rootEmployees = allEmployees.filter((e) => e.managerId === null);
 
   function OrgNode({ employee, depth, departmentId }: { employee: Employee; depth: number; departmentId: string }) {
-    const dept = getDepartmentById(employee.departmentId);
+    const dept = employee.departmentId ? getDepartmentById(employee.departmentId) : null;
     const reports = allEmployees.filter((e) => e.managerId === employee.id && e.departmentId === departmentId);
-    const deptColor = deptColors[employee.departmentId] || "bg-muted text-muted-foreground";
+    const deptColor = (employee.departmentId && deptColors[employee.departmentId]) || "bg-muted text-muted-foreground";
 
     return (
       <div className="flex flex-col items-center" data-testid={`org-node-${employee.id}`}>
@@ -293,7 +293,7 @@ export default function Employees() {
                       </TableRow>
                     ) : (
                       filteredEmployees.map((employee) => {
-                        const department = getDepartmentById(employee.departmentId);
+                        const department = employee.departmentId ? getDepartmentById(employee.departmentId) : null;
                         return (
                           <TableRow
                             key={employee.id}
@@ -326,7 +326,7 @@ export default function Employees() {
                               </Badge>
                             </TableCell>
                             <TableCell data-testid={`text-employee-hire-${employee.id}`}>
-                              {new Date(employee.hireDate).toLocaleDateString()}
+                              {employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : "—"}
                             </TableCell>
                             <TableCell>
                               <DropdownMenu>
@@ -453,7 +453,7 @@ export default function Employees() {
                       <Label className="text-xs text-muted-foreground">Department</Label>
                       <div className="flex items-center gap-2 text-sm" data-testid="text-detail-department">
                         <Building2 className="h-4 w-4 text-muted-foreground" />
-                        {getDepartmentById(emp.departmentId)?.name}
+                        {emp.departmentId ? getDepartmentById(emp.departmentId)?.name : "—"}
                       </div>
                     </div>
                     <div className="space-y-1">
@@ -470,7 +470,7 @@ export default function Employees() {
                       <Label className="text-xs text-muted-foreground">Hire Date</Label>
                       <div className="flex items-center gap-2 text-sm" data-testid="text-detail-hire-date">
                         <Calendar className="h-4 w-4 text-muted-foreground" />
-                        {new Date(emp.hireDate).toLocaleDateString()}
+                        {emp.hireDate ? new Date(emp.hireDate).toLocaleDateString() : "—"}
                       </div>
                     </div>
                     <div className="space-y-1">
@@ -638,7 +638,7 @@ function EditEmployeeDialog({
           <div className="space-y-2">
             <Label>Department</Label>
             <Select
-              value={form.watch("departmentId")}
+              value={form.watch("departmentId") ?? undefined}
               onValueChange={(val) => form.setValue("departmentId", val)}
             >
               <SelectTrigger data-testid="select-edit-department">
