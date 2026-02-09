@@ -4,7 +4,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -32,8 +31,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Plus,
-  Users,
-  UserCircle,
   MoreHorizontal,
   Edit,
   Trash2,
@@ -230,151 +227,73 @@ export default function Departments() {
           </CardContent>
         </Card>
       ) : (
-      <>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {departments.map((department) => {
-          const manager = department.headId ? employees.find(e => e.id === department.headId) : null;
-          const deptEmployees = employees.filter(e => e.departmentId === department.id);
-          const activeCount = deptEmployees.filter(e => e.status === "active").length;
-
-          return (
-            <Card
-              key={department.id}
-              className="hover-elevate"
-              data-testid={`card-department-${department.id}`}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10 text-primary">
-                      <Users className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg" data-testid={`text-department-name-${department.id}`}>
-                        {department.name}
-                      </CardTitle>
-                      <CardDescription className="text-xs" data-testid={`text-department-count-${department.id}`}>
-                        {deptEmployees.length} employees
-                      </CardDescription>
-                    </div>
-                  </div>
-                  {isAdmin && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" data-testid={`button-department-menu-${department.id}`}>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => handleEditOpen(department)}
-                          data-testid={`button-edit-department-${department.id}`}
-                        >
-                          <Edit className="mr-2 h-4 w-4" />
-                          Edit Department
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => handleDelete(department)}
-                          data-testid={`button-delete-department-${department.id}`}
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground" data-testid={`text-department-description-${department.id}`}>
-                  {department.description}
-                </p>
-
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <span className="text-muted-foreground">Active Members</span>
-                  <Badge variant="secondary" data-testid={`badge-department-active-${department.id}`}>
-                    {activeCount} / {deptEmployees.length}
-                  </Badge>
-                </div>
-
-                {manager && (
-                  <div className="flex items-center gap-3 pt-2 border-t" data-testid={`section-department-head-${department.id}`}>
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                        {manager.firstName[0]}{manager.lastName[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="text-sm font-medium" data-testid={`text-department-head-name-${department.id}`}>
-                        {manager.firstName} {manager.lastName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Department Head
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-2">
-                  <p className="text-xs text-muted-foreground mb-2">Team Members</p>
-                  <div className="flex -space-x-2">
-                    {deptEmployees.slice(0, 5).map((emp) => (
-                      <Avatar
-                        key={emp.id}
-                        className="h-8 w-8 border-2 border-card"
-                        data-testid={`avatar-team-member-${emp.id}`}
-                      >
-                        <AvatarFallback className="bg-muted text-xs">
-                          {emp.firstName[0]}{emp.lastName[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                    ))}
-                    {deptEmployees.length > 5 && (
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-card bg-muted text-xs font-medium">
-                        +{deptEmployees.length - 5}
+        <Card data-testid="card-department-overview">
+          <CardHeader>
+            <CardTitle className="text-lg">Department Overview</CardTitle>
+            <CardDescription>Employee distribution across departments</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {departments.map((dept) => {
+                const deptEmployees = employees.filter(e => e.departmentId === dept.id);
+                const percentage = totalEmployees > 0 ? (deptEmployees.length / totalEmployees) * 100 : 0;
+                const manager = dept.headId ? employees.find(e => e.id === dept.headId) : null;
+                return (
+                  <div key={dept.id} className="space-y-2" data-testid={`stat-department-${dept.id}`}>
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-medium" data-testid={`text-department-name-${dept.id}`}>{dept.name}</span>
+                        {manager && (
+                          <span className="text-muted-foreground text-xs truncate" data-testid={`text-department-head-${dept.id}`}>
+                            {manager.firstName} {manager.lastName}
+                          </span>
+                        )}
                       </div>
-                    )}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <Badge variant="secondary" data-testid={`badge-department-count-${dept.id}`}>
+                          {deptEmployees.length} employees ({percentage.toFixed(0)}%)
+                        </Badge>
+                        {isAdmin && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" data-testid={`button-department-menu-${dept.id}`}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => handleEditOpen(dept)}
+                                data-testid={`button-edit-department-${dept.id}`}
+                              >
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit Department
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => handleDelete(dept)}
+                                data-testid={`button-delete-department-${dept.id}`}
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-muted">
+                      <div
+                        className="h-2 rounded-full bg-primary transition-all"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      <Card data-testid="card-department-stats">
-        <CardHeader>
-          <CardTitle className="text-lg">Department Overview</CardTitle>
-          <CardDescription>Employee distribution across departments</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {departments.map((dept) => {
-              const deptEmployees = employees.filter(e => e.departmentId === dept.id);
-              const percentage = totalEmployees > 0 ? (deptEmployees.length / totalEmployees) * 100 : 0;
-              return (
-                <div key={dept.id} className="space-y-2" data-testid={`stat-department-${dept.id}`}>
-                  <div className="flex items-center justify-between gap-2 text-sm">
-                    <span className="font-medium">{dept.name}</span>
-                    <span className="text-muted-foreground">
-                      {deptEmployees.length} employees ({percentage.toFixed(0)}%)
-                    </span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-muted">
-                    <div
-                      className="h-2 rounded-full bg-primary transition-all"
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-      </>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <Dialog open={!!editingDepartment} onOpenChange={(open) => { if (!open) setEditingDepartment(null); }}>
