@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -228,11 +228,7 @@ export default function Departments() {
         </Card>
       ) : (
         <Card data-testid="card-department-overview">
-          <CardHeader>
-            <CardTitle className="text-lg">Department Overview</CardTitle>
-            <CardDescription>Employee distribution across departments</CardDescription>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <div className="space-y-4">
               {departments.map((dept) => {
                 const deptEmployees = employees.filter(e => e.departmentId === dept.id);
