@@ -38,6 +38,7 @@ import {
   Edit,
   Trash2,
   Loader2,
+  Inbox,
 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useRole, canManageEmployees, canEditOrgSettings } from "@/lib/role-context";
@@ -212,6 +213,24 @@ export default function Departments() {
         )}
       </div>
 
+      {departments.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Inbox className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-1" data-testid="text-departments-empty-title">No departments yet</h3>
+            <p className="text-sm text-muted-foreground mb-4" data-testid="text-departments-empty-description">
+              Create your first department to organize your team
+            </p>
+            {isAdmin && (
+              <Button onClick={handleAddOpen} data-testid="button-add-department-empty">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Department
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+      <>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {departments.map((department) => {
           const manager = department.headId ? employees.find(e => e.id === department.headId) : null;
@@ -355,6 +374,8 @@ export default function Departments() {
           </div>
         </CardContent>
       </Card>
+      </>
+      )}
 
       <Dialog open={!!editingDepartment} onOpenChange={(open) => { if (!open) setEditingDepartment(null); }}>
         <DialogContent data-testid="dialog-edit-department">
