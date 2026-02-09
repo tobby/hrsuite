@@ -43,6 +43,9 @@ import {
   Pencil,
   Calendar,
   Loader2,
+  Copy,
+  Check,
+  Link,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -119,6 +122,10 @@ export default function Employees() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteEmployeeName, setInviteEmployeeName] = useState("");
+  const [isInviteLinkOpen, setIsInviteLinkOpen] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const { data: allEmployees = [], isLoading: isLoadingEmployees } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
@@ -130,7 +137,8 @@ export default function Employees() {
 
   const createMutation = useMutation({
     mutationFn: async (data: AddEmployeeForm) => {
-      await apiRequest("POST", "/api/employees", data);
+      const res = await apiRequest("POST", "/api/employees", data);
+      return res.json() as Promise<{ employee: Employee; inviteLink: string }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
@@ -590,12 +598,19 @@ export default function Employees() {
         departments={departments}
         onSave={(data) => {
           createMutation.mutate(data, {
-            onSuccess: () => {
+            onSuccess: (result) => {
               toast({
                 title: "Employee added",
                 description: `${data.firstName} ${data.lastName} has been added.`,
               });
               setIsAddOpen(false);
+              if (result?.inviteLink) {
+                const fullUrl = `${window.location.origin}${result.inviteLink}`;
+                setInviteLink(fullUrl);
+                setInviteEmployeeName(`${data.firstName} ${data.lastName}`);
+                setCopiedLink(false);
+                setIsInviteLinkOpen(true);
+              }
             },
             onError: (error) => {
               toast({
@@ -608,6 +623,56 @@ export default function Employees() {
         }}
         isSaving={createMutation.isPending}
       />
+
+      <Dialog open={isInviteLinkOpen} onOpenChange={setIsInviteLinkOpen}>
+        <DialogContent className="max-w-md" data-testid="dialog-invite-link">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2" data-testid="text-invite-dialog-title">
+              <Link className="h-5 w-5 text-primary" />
+              Invite Link Created
+            </DialogTitle>
+            <DialogDescription>
+              Share this registration link with <span className="font-medium">{inviteEmployeeName}</span> so they can set up their account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center gap-2">
+              <Input
+                readOnly
+                value={inviteLink || ""}
+                className="flex-1 font-mono text-sm"
+                data-testid="input-invite-link"
+              />
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => {
+                  if (inviteLink) {
+                    navigator.clipboard.writeText(inviteLink);
+                    setCopiedLink(true);
+                    setTimeout(() => setCopiedLink(false), 2000);
+                    toast({
+                      title: "Copied",
+                      description: "Invite link copied to clipboard.",
+                    });
+                  }
+                }}
+                data-testid="button-copy-invite-link"
+              >
+                {copiedLink ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This link will expire after the employee completes their registration.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setIsInviteLinkOpen(false)} data-testid="button-close-invite-link">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
