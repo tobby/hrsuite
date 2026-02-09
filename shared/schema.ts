@@ -1,54 +1,83 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, date, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, date, timestamp, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Re-export auth models (users and sessions tables)
 export * from "./models/auth";
 
-// Departments Table
-export const departments = pgTable("departments", {
+// ==================== COMPANIES ====================
+
+export const companies = pgTable("companies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  description: text("description").notNull(),
-  managerId: varchar("manager_id"),
+  domain: text("domain"),
+  logoUrl: text("logo_url"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true });
+export const insertCompanySchema = createInsertSchema(companies).omit({ id: true, createdAt: true }).extend({
+  name: z.string().min(1, "Company name is required"),
+});
+export type InsertCompany = z.infer<typeof insertCompanySchema>;
+export type Company = typeof companies.$inferSelect;
+
+// ==================== DEPARTMENTS ====================
+
+export const departments = pgTable("departments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  headId: varchar("head_id"),
+});
+
+export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true }).extend({
+  name: z.string().min(1, "Department name is required"),
+  description: z.string().min(1, "Description is required"),
+});
 export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
 export type Department = typeof departments.$inferSelect;
 
-// Employees Table
+// ==================== EMPLOYEES (also serves as auth/users) ====================
+
 export const employees = pgTable("employees", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
   email: text("email").notNull().unique(),
-  phone: text("phone").notNull(),
-  departmentId: varchar("department_id").notNull(),
+  phone: text("phone"),
+  departmentId: varchar("department_id"),
   position: text("position").notNull(),
   managerId: varchar("manager_id"),
-  hireDate: date("hire_date").notNull(),
+  hireDate: date("hire_date"),
   profileImageUrl: text("profile_image_url"),
-  status: text("status").notNull().default("active"),
+  status: text("status").notNull().default("invited"),
+  role: text("role").notNull().default("employee"),
+  passwordHash: text("password_hash"),
+  inviteToken: varchar("invite_token").unique(),
+  inviteExpiresAt: timestamp("invite_expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertEmployeeSchema = createInsertSchema(employees).omit({ id: true }).extend({
+export const insertEmployeeSchema = createInsertSchema(employees).omit({
+  id: true, passwordHash: true, inviteToken: true, inviteExpiresAt: true, createdAt: true,
+}).extend({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
-  phone: z.string().min(1, "Phone is required"),
-  departmentId: z.string().min(1, "Department is required"),
   position: z.string().min(1, "Position is required"),
-  hireDate: z.string().min(1, "Hire date is required"),
-  status: z.enum(["active", "inactive", "on_leave"]),
+  role: z.enum(["employee", "manager", "admin"]),
+  status: z.enum(["invited", "active", "inactive", "on_leave"]).optional(),
 });
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;
 export type Employee = typeof employees.$inferSelect;
 
-// Leave Types Table
+// ==================== LEAVE MANAGEMENT ====================
+
 export const leaveTypes = pgTable("leave_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   name: text("name").notNull(),
   description: text("description").notNull(),
   defaultDays: integer("default_days").notNull(),
@@ -59,9 +88,9 @@ export const insertLeaveTypeSchema = createInsertSchema(leaveTypes).omit({ id: t
 export type InsertLeaveType = z.infer<typeof insertLeaveTypeSchema>;
 export type LeaveType = typeof leaveTypes.$inferSelect;
 
-// Leave Balances Table
 export const leaveBalances = pgTable("leave_balances", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   employeeId: varchar("employee_id").notNull(),
   leaveTypeId: varchar("leave_type_id").notNull(),
   totalDays: integer("total_days").notNull(),
@@ -72,9 +101,9 @@ export const leaveBalances = pgTable("leave_balances", {
 
 export type LeaveBalance = typeof leaveBalances.$inferSelect;
 
-// Leave Requests Table
 export const leaveRequests = pgTable("leave_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   employeeId: varchar("employee_id").notNull(),
   leaveTypeId: varchar("leave_type_id").notNull(),
   startDate: date("start_date").notNull(),
@@ -87,13 +116,8 @@ export const leaveRequests = pgTable("leave_requests", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({ 
-  id: true, 
-  status: true, 
-  approverId: true, 
-  approverComment: true, 
-  createdAt: true,
-  totalDays: true,
+export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
+  id: true, status: true, approverId: true, approverComment: true, createdAt: true, totalDays: true,
 }).extend({
   leaveTypeId: z.string().min(1, "Leave type is required"),
   startDate: z.string().min(1, "Start date is required"),
@@ -103,9 +127,11 @@ export const insertLeaveRequestSchema = createInsertSchema(leaveRequests).omit({
 export type InsertLeaveRequest = z.infer<typeof insertLeaveRequestSchema>;
 export type LeaveRequest = typeof leaveRequests.$inferSelect;
 
-// Appraisal Templates Table
+// ==================== PERFORMANCE APPRAISALS ====================
+
 export const appraisalTemplates = pgTable("appraisal_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   name: text("name").notNull(),
   description: text("description"),
   isDefault: integer("is_default").notNull().default(0),
@@ -114,27 +140,26 @@ export const appraisalTemplates = pgTable("appraisal_templates", {
 
 export type AppraisalTemplate = typeof appraisalTemplates.$inferSelect;
 
-// Template Questions Table
 export const templateQuestions = pgTable("template_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   templateId: varchar("template_id").notNull(),
-  competencyId: varchar("competency_id"), // nullable for custom questions
+  competencyId: varchar("competency_id"),
   questionText: text("question_text").notNull(),
-  questionType: text("question_type").notNull(), // "rating" or "text"
+  questionType: text("question_type").notNull(),
   order: integer("order").notNull().default(0),
 });
 
 export type TemplateQuestion = typeof templateQuestions.$inferSelect;
 
-// Appraisal Cycles Table
 export const appraisalCycles = pgTable("appraisal_cycles", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   name: text("name").notNull(),
-  type: text("type").notNull(), // "180" or "360"
+  type: text("type").notNull(),
   templateId: varchar("template_id"),
   startDate: date("start_date").notNull(),
   endDate: date("end_date").notNull(),
-  status: text("status").notNull().default("draft"), // "draft", "active", "completed", "cancelled"
+  status: text("status").notNull().default("draft"),
   selfWeight: integer("self_weight").notNull().default(10),
   peerWeight: integer("peer_weight").notNull().default(30),
   managerWeight: integer("manager_weight").notNull().default(60),
@@ -144,7 +169,6 @@ export const insertAppraisalCycleSchema = createInsertSchema(appraisalCycles).om
 export type InsertAppraisalCycle = z.infer<typeof insertAppraisalCycleSchema>;
 export type AppraisalCycle = typeof appraisalCycles.$inferSelect;
 
-// Appraisals Table
 export const appraisals = pgTable("appraisals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   cycleId: varchar("cycle_id").notNull(),
@@ -156,38 +180,34 @@ export const appraisals = pgTable("appraisals", {
 
 export type Appraisal = typeof appraisals.$inferSelect;
 
-// Appraisal Feedback Table (review assignments)
 export const appraisalFeedback = pgTable("appraisal_feedback", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   appraisalId: varchar("appraisal_id").notNull(),
   reviewerId: varchar("reviewer_id").notNull(),
-  reviewerType: text("reviewer_type").notNull(), // "self", "manager", "peer", "subordinate"
+  reviewerType: text("reviewer_type").notNull(),
   overallComment: text("overall_comment"),
   submittedAt: timestamp("submitted_at"),
-  status: text("status").notNull().default("pending"), // "pending", "draft", "submitted"
+  status: text("status").notNull().default("pending"),
 });
 
-export const insertAppraisalFeedbackSchema = createInsertSchema(appraisalFeedback).omit({ 
-  id: true, 
-  submittedAt: true 
+export const insertAppraisalFeedbackSchema = createInsertSchema(appraisalFeedback).omit({
+  id: true, submittedAt: true,
 }).extend({
   overallComment: z.string().min(1, "Overall comment is required"),
 });
 export type InsertAppraisalFeedback = z.infer<typeof insertAppraisalFeedbackSchema>;
 export type AppraisalFeedback = typeof appraisalFeedback.$inferSelect;
 
-// Feedback Ratings Table (individual question ratings)
 export const feedbackRatings = pgTable("feedback_ratings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   feedbackId: varchar("feedback_id").notNull(),
   questionId: varchar("question_id").notNull(),
-  rating: integer("rating"), // 1-5 for rating questions
-  textResponse: text("text_response"), // for text questions
+  rating: integer("rating"),
+  textResponse: text("text_response"),
 });
 
 export type FeedbackRating = typeof feedbackRatings.$inferSelect;
 
-// Cycle Participants Table (who is being reviewed in a cycle)
 export const cycleParticipants = pgTable("cycle_participants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   cycleId: varchar("cycle_id").notNull(),
@@ -196,19 +216,18 @@ export const cycleParticipants = pgTable("cycle_participants", {
 
 export type CycleParticipant = typeof cycleParticipants.$inferSelect;
 
-// Peer Assignments Table (who reviews whom for peer feedback)
 export const peerAssignments = pgTable("peer_assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   cycleId: varchar("cycle_id").notNull(),
-  revieweeId: varchar("reviewee_id").notNull(), // person being reviewed
-  reviewerId: varchar("reviewer_id").notNull(), // peer doing the review
+  revieweeId: varchar("reviewee_id").notNull(),
+  reviewerId: varchar("reviewer_id").notNull(),
 });
 
 export type PeerAssignment = typeof peerAssignments.$inferSelect;
 
-// Competencies Table
 export const competencies = pgTable("competencies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   name: text("name").notNull(),
   description: text("description").notNull(),
   category: text("category").notNull(),
@@ -216,9 +235,11 @@ export const competencies = pgTable("competencies", {
 
 export type Competency = typeof competencies.$inferSelect;
 
-// Company Holidays Table
+// ==================== COMPANY HOLIDAYS ====================
+
 export const companyHolidays = pgTable("company_holidays", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   name: text("name").notNull(),
   date: date("date").notNull(),
   year: integer("year").notNull(),
@@ -228,18 +249,18 @@ export const insertCompanyHolidaySchema = createInsertSchema(companyHolidays).om
 export type InsertCompanyHoliday = z.infer<typeof insertCompanyHolidaySchema>;
 export type CompanyHoliday = typeof companyHolidays.$inferSelect;
 
-// ==================== RECRUITMENT/ATS TYPES ====================
+// ==================== RECRUITMENT/ATS ====================
 
-// Job Postings Table
 export const jobPostings = pgTable("job_postings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   title: text("title").notNull(),
   description: text("description").notNull(),
   departmentId: varchar("department_id").notNull(),
   location: text("location").notNull(),
-  employmentType: text("employment_type").notNull(), // "full-time", "contract", "intern"
+  employmentType: text("employment_type").notNull(),
   experienceYears: integer("experience_years").notNull().default(0),
-  status: text("status").notNull().default("open"), // "open", "closed", "draft"
+  status: text("status").notNull().default("open"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -255,9 +276,9 @@ export const insertJobPostingSchema = createInsertSchema(jobPostings).omit({ id:
 export type InsertJobPosting = z.infer<typeof insertJobPostingSchema>;
 export type JobPosting = typeof jobPostings.$inferSelect;
 
-// Candidates Table
 export const candidates = pgTable("candidates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   jobId: varchar("job_id").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
@@ -265,9 +286,9 @@ export const candidates = pgTable("candidates", {
   phone: text("phone"),
   location: text("location"),
   linkedinUrl: text("linkedin_url"),
-  gender: text("gender"), // "male", "female", "other", "prefer_not_to_say"
+  gender: text("gender"),
   resumeFileName: text("resume_file_name"),
-  stage: text("stage").notNull().default("applied"), // "applied", "screening", "interview", "offer", "hired", "rejected"
+  stage: text("stage").notNull().default("applied"),
   appliedAt: timestamp("applied_at").defaultNow(),
 });
 
@@ -285,79 +306,74 @@ export const insertCandidateSchema = createInsertSchema(candidates).omit({ id: t
 export type InsertCandidate = z.infer<typeof insertCandidateSchema>;
 export type Candidate = typeof candidates.$inferSelect;
 
-// Candidate Activities (Timeline)
 export const candidateActivities = pgTable("candidate_activities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   candidateId: varchar("candidate_id").notNull(),
-  type: text("type").notNull(), // "stage_change", "note_added", "email_sent", "email_received", "interview_scheduled", "assessment_added"
+  type: text("type").notNull(),
   description: text("description").notNull(),
-  metadata: text("metadata"), // JSON string for additional data
+  metadata: text("metadata"),
   createdAt: timestamp("created_at").defaultNow(),
-  createdBy: varchar("created_by"), // employee id
+  createdBy: varchar("created_by"),
 });
 
 export type CandidateActivity = typeof candidateActivities.$inferSelect;
 
-// Candidate Notes
 export const candidateNotes = pgTable("candidate_notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   candidateId: varchar("candidate_id").notNull(),
   content: text("content").notNull(),
-  category: text("category").notNull().default("general"), // "general", "feedback", "concern", "positive"
+  category: text("category").notNull().default("general"),
   createdAt: timestamp("created_at").defaultNow(),
   createdBy: varchar("created_by").notNull(),
 });
 
 export type CandidateNote = typeof candidateNotes.$inferSelect;
 
-// Candidate Assessments
 export const candidateAssessments = pgTable("candidate_assessments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   candidateId: varchar("candidate_id").notNull(),
   assessorId: varchar("assessor_id").notNull(),
-  category: text("category").notNull(), // "technical", "communication", "culture_fit", "experience"
-  score: integer("score").notNull(), // 1-5
+  category: text("category").notNull(),
+  score: integer("score").notNull(),
   comments: text("comments"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export type CandidateAssessment = typeof candidateAssessments.$inferSelect;
 
-// Candidate Interviews
 export const candidateInterviews = pgTable("candidate_interviews", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   candidateId: varchar("candidate_id").notNull(),
   interviewerId: varchar("interviewer_id").notNull(),
   scheduledAt: timestamp("scheduled_at").notNull(),
-  duration: integer("duration").notNull().default(60), // minutes
-  type: text("type").notNull(), // "phone", "video", "onsite"
-  status: text("status").notNull().default("scheduled"), // "scheduled", "completed", "cancelled"
+  duration: integer("duration").notNull().default(60),
+  type: text("type").notNull(),
+  status: text("status").notNull().default("scheduled"),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export type CandidateInterview = typeof candidateInterviews.$inferSelect;
 
-// Candidate Communications (Emails)
 export const candidateCommunications = pgTable("candidate_communications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   candidateId: varchar("candidate_id").notNull(),
-  direction: text("direction").notNull(), // "sent", "received"
+  direction: text("direction").notNull(),
   subject: text("subject").notNull(),
   body: text("body").notNull(),
   sentAt: timestamp("sent_at").defaultNow(),
-  sentBy: varchar("sent_by"), // employee id if sent
+  sentBy: varchar("sent_by"),
 });
 
 export type CandidateCommunication = typeof candidateCommunications.$inferSelect;
 
-// Email Templates
 export const emailTemplates = pgTable("email_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   name: text("name").notNull(),
   subject: text("subject").notNull(),
   body: text("body").notNull(),
-  category: text("category").notNull(), // "application_received", "interview_scheduled", "offer_extended", "rejection", "general"
+  category: text("category").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -370,32 +386,36 @@ export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit
 export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
 export type EmailTemplate = typeof emailTemplates.$inferSelect;
 
-// Recruitment Settings
 export const recruitmentSettings = pgTable("recruitment_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  key: text("key").notNull().unique(),
+  companyId: varchar("company_id").notNull(),
+  key: text("key").notNull(),
   value: text("value").notNull(),
 });
 
 export type RecruitmentSetting = typeof recruitmentSettings.$inferSelect;
 
-// HR Queries / Grievances
+// ==================== HR QUERIES / DISCIPLINARY ====================
+
 export const hrQueries = pgTable("hr_queries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
   subject: text("subject").notNull(),
   description: text("description").notNull(),
-  category: text("category").notNull(), // "attendance", "conduct", "performance", "policy_violation", "other"
-  priority: text("priority").notNull().default("medium"), // "low", "medium", "high", "urgent"
-  status: text("status").notNull().default("open"), // "open", "awaiting_response", "responded", "resolved", "closed"
-  employeeId: varchar("employee_id").notNull(), // employee the query is issued against
-  issuedBy: varchar("issued_by").notNull(), // admin or manager who issued the query
+  category: text("category").notNull(),
+  priority: text("priority").notNull().default("medium"),
+  status: text("status").notNull().default("open"),
+  employeeId: varchar("employee_id").notNull(),
+  issuedBy: varchar("issued_by").notNull(),
   assignedTo: varchar("assigned_to"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   resolvedAt: timestamp("resolved_at"),
 });
 
-export const insertHrQuerySchema = createInsertSchema(hrQueries).omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true, status: true, assignedTo: true }).extend({
+export const insertHrQuerySchema = createInsertSchema(hrQueries).omit({
+  id: true, createdAt: true, updatedAt: true, resolvedAt: true, status: true, assignedTo: true,
+}).extend({
   subject: z.string().min(1, "Subject is required"),
   description: z.string().min(10, "Description must be at least 10 characters"),
   category: z.enum(["attendance", "conduct", "performance", "policy_violation", "other"]),
@@ -406,26 +426,60 @@ export const insertHrQuerySchema = createInsertSchema(hrQueries).omit({ id: true
 export type InsertHrQuery = z.infer<typeof insertHrQuerySchema>;
 export type HrQuery = typeof hrQueries.$inferSelect;
 
-// HR Query Comments
 export const hrQueryComments = pgTable("hr_query_comments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   queryId: varchar("query_id").notNull(),
   content: text("content").notNull(),
   authorId: varchar("author_id").notNull(),
-  isInternal: text("is_internal").notNull().default("false"), // "true" or "false" - internal notes visible only to admin
+  isInternal: text("is_internal").notNull().default("false"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export type HrQueryComment = typeof hrQueryComments.$inferSelect;
 
-// HR Query Timeline Events
 export const hrQueryTimeline = pgTable("hr_query_timeline", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   queryId: varchar("query_id").notNull(),
-  action: text("action").notNull(), // "created", "status_changed", "assigned", "commented", "resolved", "closed"
+  action: text("action").notNull(),
   details: text("details"),
   actorId: varchar("actor_id").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export type HrQueryTimeline = typeof hrQueryTimeline.$inferSelect;
+
+// ==================== TASK MANAGEMENT ====================
+
+export const taskTemplates = pgTable("task_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  departmentId: varchar("department_id"),
+  isDefault: boolean("is_default").notNull().default(false),
+  tasks: text("tasks").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertTaskTemplateSchema = createInsertSchema(taskTemplates).omit({ id: true, createdAt: true }).extend({
+  name: z.string().min(1, "Template name is required"),
+  tasks: z.string().min(1, "Tasks are required"),
+});
+export type InsertTaskTemplate = z.infer<typeof insertTaskTemplateSchema>;
+export type TaskTemplate = typeof taskTemplates.$inferSelect;
+
+export const taskAssignments = pgTable("task_assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  templateId: varchar("template_id").notNull(),
+  templateName: text("template_name").notNull(),
+  assignedById: varchar("assigned_by_id").notNull(),
+  status: text("status").notNull().default("in_progress"),
+  tasks: text("tasks").notNull(),
+  startDate: timestamp("start_date").notNull(),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type TaskAssignment = typeof taskAssignments.$inferSelect;
