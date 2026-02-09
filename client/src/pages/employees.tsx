@@ -60,12 +60,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 const statusStyles: Record<string, string> = {
+  invited: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
   active: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
   inactive: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
   on_leave: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
 };
 
 const statusLabels: Record<string, string> = {
+  invited: "Invited",
   active: "Active",
   inactive: "Inactive",
   on_leave: "On Leave",
@@ -87,6 +89,7 @@ const addEmployeeSchema = z.object({
   role: z.enum(["employee", "manager", "admin", "contract"]),
   departmentId: z.string().nullable(),
   managerId: z.string().nullable(),
+  hireDate: z.string().nullable(),
   status: z.enum(["active", "inactive", "on_leave"]).default("active"),
 });
 
@@ -100,7 +103,8 @@ const editEmployeeSchema = z.object({
   position: z.string().min(1, "Position is required"),
   departmentId: z.string().nullable(),
   managerId: z.string().nullable(),
-  status: z.enum(["active", "inactive", "on_leave"]),
+  hireDate: z.string().nullable(),
+  status: z.enum(["invited", "active", "inactive", "on_leave"]),
 });
 
 type EditEmployeeForm = z.infer<typeof editEmployeeSchema>;
@@ -305,6 +309,7 @@ export default function Employees() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all" data-testid="option-status-all">All Status</SelectItem>
+                      <SelectItem value="invited" data-testid="option-status-invited">Invited</SelectItem>
                       <SelectItem value="active" data-testid="option-status-active">Active</SelectItem>
                       <SelectItem value="inactive" data-testid="option-status-inactive">Inactive</SelectItem>
                       <SelectItem value="on_leave" data-testid="option-status-on-leave">On Leave</SelectItem>
@@ -635,20 +640,23 @@ function EditEmployeeDialog({
           position: employee.position,
           departmentId: employee.departmentId,
           managerId: employee.managerId,
-          status: employee.status as "active" | "inactive" | "on_leave",
+          hireDate: employee.hireDate ?? null,
+          status: employee.status as "invited" | "active" | "inactive" | "on_leave",
         }
       : undefined,
   });
 
   const onSubmit = (data: EditEmployeeForm) => {
     if (employee) {
-      onSave(employee.id, data);
+      onSave(employee.id, { ...data, hireDate: data.hireDate || null });
     }
   };
 
   if (!employee) return null;
 
-  const managerOptions = allEmployees.filter((e) => e.id !== employee.id);
+  const managerOptions = allEmployees.filter(
+    (e) => e.id !== employee.id && (e.role === "manager" || e.role === "admin")
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -719,15 +727,25 @@ function EditEmployeeDialog({
             )}
           </div>
           <div className="space-y-2">
+            <Label htmlFor="edit-hireDate">Hire Date</Label>
+            <Input
+              id="edit-hireDate"
+              type="date"
+              {...form.register("hireDate")}
+              data-testid="input-edit-hire-date"
+            />
+          </div>
+          <div className="space-y-2">
             <Label>Department</Label>
             <Select
-              value={form.watch("departmentId") ?? undefined}
-              onValueChange={(val) => form.setValue("departmentId", val)}
+              value={form.watch("departmentId") ?? "none"}
+              onValueChange={(val) => form.setValue("departmentId", val === "none" ? null : val)}
             >
               <SelectTrigger data-testid="select-edit-department">
                 <SelectValue placeholder="Select department" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">None</SelectItem>
                 {departments.map((dept) => (
                   <SelectItem key={dept.id} value={dept.id} data-testid={`option-edit-dept-${dept.id}`}>
                     {dept.name}
@@ -759,12 +777,13 @@ function EditEmployeeDialog({
             <Label>Status</Label>
             <Select
               value={form.watch("status")}
-              onValueChange={(val) => form.setValue("status", val as "active" | "inactive" | "on_leave")}
+              onValueChange={(val) => form.setValue("status", val as "invited" | "active" | "inactive" | "on_leave")}
             >
               <SelectTrigger data-testid="select-edit-status">
                 <SelectValue placeholder="Select status" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="invited" data-testid="option-edit-status-invited">Invited</SelectItem>
                 <SelectItem value="active" data-testid="option-edit-status-active">Active</SelectItem>
                 <SelectItem value="inactive" data-testid="option-edit-status-inactive">Inactive</SelectItem>
                 <SelectItem value="on_leave" data-testid="option-edit-status-on-leave">On Leave</SelectItem>
@@ -817,12 +836,13 @@ function AddEmployeeDialog({
       role: "employee",
       departmentId: null,
       managerId: null,
+      hireDate: null,
       status: "active",
     },
   });
 
   const onSubmit = (data: AddEmployeeForm) => {
-    onSave(data);
+    onSave({ ...data, hireDate: data.hireDate || null });
   };
 
   const handleOpenChange = (val: boolean) => {
@@ -890,6 +910,15 @@ function AddEmployeeDialog({
             {form.formState.errors.position && (
               <p className="text-sm text-destructive">{form.formState.errors.position.message}</p>
             )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="add-hireDate">Hire Date</Label>
+            <Input
+              id="add-hireDate"
+              type="date"
+              {...form.register("hireDate")}
+              data-testid="input-add-hire-date"
+            />
           </div>
           <div className="space-y-2">
             <Label>Role</Label>

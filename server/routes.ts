@@ -330,12 +330,13 @@ export async function registerRoutes(
 
   app.patch("/api/employees/:id", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
     try {
-      const { passwordHash, inviteToken, inviteExpiresAt, companyId, ...updateData } = req.body;
+      const { passwordHash, inviteToken, inviteExpiresAt, companyId, id, createdAt, ...updateData } = req.body;
       const employee = await storage.updateEmployee(req.params.id, updateData);
       if (!employee) return res.status(404).json({ message: "Employee not found" });
       const { passwordHash: ph, inviteToken: it, inviteExpiresAt: ie, ...safeEmployee } = employee;
       return res.json(safeEmployee);
     } catch (error) {
+      console.error("Error updating employee:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   });
