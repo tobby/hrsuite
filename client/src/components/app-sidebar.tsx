@@ -78,7 +78,7 @@ export function AppSidebar() {
   const isLeaveActive = location.startsWith("/leave");
   const isAppraisalsActive = location.startsWith("/appraisals");
   const isRecruitmentActive = location.startsWith("/recruitment");
-  const isOnboardingActive = location.startsWith("/onboarding");
+  const isOnboardingActive = location.startsWith("/onboarding") || location.startsWith("/my-tasks");
   const showLeaveSubItems = canEditOrgSettings(role);
   const showAppraisalsSubItems = canEditOrgSettings(role);
   const showRecruitment = canEditOrgSettings(role);
@@ -383,9 +383,9 @@ export function AppSidebar() {
                     asChild
                     isActive={isOnboardingActive}
                   >
-                    <Link href="/onboarding" data-testid="nav-onboarding">
+                    <Link href="/my-tasks" data-testid="nav-my-tasks">
                       <ClipboardList className="h-4 w-4" />
-                      <span>My Onboarding</span>
+                      <span>My Tasks</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

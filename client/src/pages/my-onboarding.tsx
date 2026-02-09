@@ -30,17 +30,17 @@ export default function MyOnboarding() {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <ClipboardList className="h-6 w-6" />
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-my-onboarding-title">
-              My Onboarding
+            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-my-tasks-title">
+              My Tasks
             </h1>
           </div>
-          <p className="text-muted-foreground">Your onboarding checklist and progress</p>
+          <p className="text-muted-foreground">Your assigned tasks and progress</p>
         </div>
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16">
             <CheckCircle2 className="h-16 w-16 text-muted-foreground/30 mb-4" />
-            <p className="text-muted-foreground font-medium">No onboarding tasks assigned</p>
-            <p className="text-muted-foreground text-sm mt-1">You don't have any pending onboarding checklists</p>
+            <p className="text-muted-foreground font-medium">No tasks assigned</p>
+            <p className="text-muted-foreground text-sm mt-1">You don't have any pending tasks</p>
           </CardContent>
         </Card>
       </div>
@@ -63,12 +63,12 @@ export default function MyOnboarding() {
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
-          <ClipboardList className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-my-onboarding-title">
-            My Onboarding
+          <ClipboardList className="h-6 w-6" />
+          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-my-tasks-title">
+            My Tasks
           </h1>
         </div>
-        <p className="text-muted-foreground">Your onboarding checklist and progress</p>
+        <p className="text-muted-foreground">Your assigned tasks and progress</p>
       </div>
 
       {progress.percentage === 100 && (

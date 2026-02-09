@@ -70,7 +70,7 @@ function PrivateRouter() {
       <Route path="/queries" component={Queries} />
       <Route path="/onboarding/templates" component={OnboardingTemplates} />
       <Route path="/onboarding/tracker" component={OnboardingTracker} />
-      <Route path="/onboarding" component={MyOnboarding} />
+      <Route path="/my-tasks" component={MyOnboarding} />
       <Route path="/reports" component={Reports} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />

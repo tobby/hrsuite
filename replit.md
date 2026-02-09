@@ -12,11 +12,11 @@ HRFlow is a frontend-only HR management platform built for demonstration purpose
 - 2026-02-09: Onboarding Workflows Module
   - Onboarding Templates page (`/onboarding/templates`) - admin creates/manages reusable checklists with categorized tasks
   - Onboarding Tracker page (`/onboarding/tracker`) - admin assigns checklists to new hires, tracks progress with expandable details
-  - My Onboarding page (`/onboarding`) - employee sees assigned tasks grouped by category with completion toggles
+  - My Tasks page (`/my-tasks`) - employee sees assigned tasks grouped by category with completion toggles
   - Task categories: IT Setup, HR Paperwork, Training, Team Introduction, Compliance, General
   - 3 demo templates (Standard, Engineering, Sales) with 2 demo assignments
   - Zustand store for onboarding state management
-  - Sidebar: Admin sees Onboarding collapsible with Tracker + Templates; Employee sees "My Onboarding"
+  - Sidebar: Admin sees Onboarding collapsible with Tracker + Templates; Employee sees "My Tasks"
 - 2026-02-09: Reports & Analytics Module
   - Reports page (`/reports`) with tabbed cross-module dashboard (admin-only)
   - Tabs: Workforce, Leave, Recruitment, Queries, Onboarding
@@ -125,7 +125,7 @@ client/
 │   │   ├── query-detail.tsx  # Query detail with comments/timeline (All roles)
 │   │   ├── onboarding-templates.tsx # Onboarding templates (Admin)
 │   │   ├── onboarding-tracker.tsx   # Onboarding tracker (Admin)
-│   │   ├── my-onboarding.tsx  # Employee onboarding view
+│   │   ├── my-onboarding.tsx  # Employee tasks view
 │   │   ├── reports.tsx        # Reports & analytics (Admin)
 │   │   ├── careers.tsx       # Public job listings
 │   │   ├── job-application.tsx  # Public job application form
@@ -164,7 +164,7 @@ server/
 - `/recruitment/settings` - Email templates and legal settings (Admin-only)
 - `/queries` - HR queries list with filters and search (All roles, role-based visibility)
 - `/queries/:id` - Query detail with comments, timeline, and admin controls (All roles)
-- `/onboarding` - My Onboarding (employee view of assigned tasks)
+- `/my-tasks` - My Tasks (employee view of assigned tasks)
 - `/onboarding/templates` - Onboarding templates management (Admin-only)
 - `/onboarding/tracker` - Onboarding tracker with assignments (Admin-only)
 - `/reports` - Reports & Analytics dashboard (Admin-only)
