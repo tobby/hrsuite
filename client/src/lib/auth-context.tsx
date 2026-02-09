@@ -7,6 +7,7 @@ export type UserRole = "employee" | "manager" | "admin" | "contract";
 
 export interface AuthEmployee {
   id: string;
+  employeeId: string | null;
   companyId: string;
   firstName: string;
   lastName: string;

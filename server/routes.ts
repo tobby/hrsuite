@@ -350,6 +350,12 @@ export async function registerRoutes(
   app.patch("/api/employees/:id", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
     try {
       const { passwordHash, inviteToken, inviteExpiresAt, companyId, id, createdAt, ...updateData } = req.body;
+      if (updateData.employeeId) {
+        const existing = await storage.getEmployeeByEmployeeId(updateData.employeeId);
+        if (existing && existing.id !== req.params.id) {
+          return res.status(400).json({ message: "An employee with this ID already exists" });
+        }
+      }
       const employee = await storage.updateEmployee(req.params.id, updateData);
       if (!employee) return res.status(404).json({ message: "Employee not found" });
       const { passwordHash: ph, inviteToken: it, inviteExpiresAt: ie, ...safeEmployee } = employee;

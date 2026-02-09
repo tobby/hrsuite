@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, like, desc } from "drizzle-orm";
 import { db } from "./db";
 import {
   companies, type Company, type InsertCompany,
@@ -24,10 +24,12 @@ export interface IStorage {
   createEmployee(data: InsertEmployee): Promise<Employee>;
   getEmployee(id: string): Promise<Employee | undefined>;
   getEmployeeByEmail(email: string): Promise<Employee | undefined>;
+  getEmployeeByEmployeeId(employeeId: string): Promise<Employee | undefined>;
   getEmployeeByInviteToken(token: string): Promise<Employee | undefined>;
   getEmployeesByCompany(companyId: string): Promise<Employee[]>;
   updateEmployee(id: string, data: Partial<Employee>): Promise<Employee | undefined>;
   deleteEmployee(id: string): Promise<boolean>;
+  generateEmployeeId(companyId: string): Promise<string>;
   generateInviteToken(employeeId: string): Promise<string>;
 }
 
@@ -77,8 +79,26 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== EMPLOYEES ====================
 
+  async generateEmployeeId(companyId: string): Promise<string> {
+    const existing = await db.select({ employeeId: employees.employeeId })
+      .from(employees)
+      .where(and(eq(employees.companyId, companyId), like(employees.employeeId, 'DOJ-%')))
+      .orderBy(desc(employees.employeeId));
+
+    let maxNum = 0;
+    for (const row of existing) {
+      if (row.employeeId) {
+        const num = parseInt(row.employeeId.replace('DOJ-', ''), 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    }
+    const next = maxNum + 1;
+    return `DOJ-${String(next).padStart(3, '0')}`;
+  }
+
   async createEmployee(data: InsertEmployee): Promise<Employee> {
-    const [employee] = await db.insert(employees).values(data).returning();
+    const employeeId = await this.generateEmployeeId(data.companyId);
+    const [employee] = await db.insert(employees).values({ ...data, employeeId }).returning();
     return employee;
   }
 
@@ -89,6 +109,11 @@ export class DatabaseStorage implements IStorage {
 
   async getEmployeeByEmail(email: string): Promise<Employee | undefined> {
     const [employee] = await db.select().from(employees).where(eq(employees.email, email));
+    return employee;
+  }
+
+  async getEmployeeByEmployeeId(employeeId: string): Promise<Employee | undefined> {
+    const [employee] = await db.select().from(employees).where(eq(employees.employeeId, employeeId));
     return employee;
   }
 

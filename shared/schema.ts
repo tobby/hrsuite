@@ -42,6 +42,7 @@ export type Department = typeof departments.$inferSelect;
 
 export const employees = pgTable("employees", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").unique(),
   companyId: varchar("company_id").notNull(),
   firstName: text("first_name").notNull(),
   lastName: text("last_name").notNull(),
@@ -61,7 +62,7 @@ export const employees = pgTable("employees", {
 });
 
 export const insertEmployeeSchema = createInsertSchema(employees).omit({
-  id: true, passwordHash: true, inviteToken: true, inviteExpiresAt: true, createdAt: true,
+  id: true, employeeId: true, passwordHash: true, inviteToken: true, inviteExpiresAt: true, createdAt: true,
 }).extend({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),

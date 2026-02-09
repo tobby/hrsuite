@@ -139,6 +139,13 @@ export default function Settings() {
                 </div>
               </div>
 
+              {currentUser.employeeId && (
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm text-muted-foreground">Employee ID:</Label>
+                  <span className="font-mono text-sm font-medium" data-testid="text-my-employee-id">{currentUser.employeeId}</span>
+                </div>
+              )}
+
               <Separator />
 
               <Form {...form}>

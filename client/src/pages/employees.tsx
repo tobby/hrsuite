@@ -47,6 +47,7 @@ import {
   Check,
   Link,
   Trash2,
+  Hash,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -109,6 +110,7 @@ const editEmployeeSchema = z.object({
   managerId: z.string().nullable(),
   hireDate: z.string().nullable(),
   status: z.enum(["invited", "active", "inactive", "on_leave"]),
+  employeeId: z.string().nullable(),
 });
 
 type EditEmployeeForm = z.infer<typeof editEmployeeSchema>;
@@ -347,6 +349,7 @@ export default function Employees() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Employee ID</TableHead>
                       <TableHead>Employee</TableHead>
                       <TableHead>Position</TableHead>
                       <TableHead>Department</TableHead>
@@ -358,7 +361,7 @@ export default function Employees() {
                   <TableBody>
                     {filteredEmployees.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={6} className="h-24 text-center">
+                        <TableCell colSpan={7} className="h-24 text-center">
                           <p className="text-muted-foreground" data-testid="text-no-employees">No employees found</p>
                         </TableCell>
                       </TableRow>
@@ -372,6 +375,9 @@ export default function Employees() {
                             onClick={() => openEmployeeDetail(employee)}
                             data-testid={`row-employee-${employee.id}`}
                           >
+                            <TableCell data-testid={`text-employee-id-${employee.id}`}>
+                              <span className="font-mono text-sm">{employee.employeeId || "—"}</span>
+                            </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <Avatar className="h-9 w-9">
@@ -514,6 +520,13 @@ export default function Employees() {
                 </DialogHeader>
                 <div className="space-y-4 pt-4">
                   <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Employee ID</Label>
+                      <div className="flex items-center gap-2 text-sm font-mono" data-testid="text-detail-employee-id">
+                        <Hash className="h-4 w-4 text-muted-foreground" />
+                        {emp.employeeId || "—"}
+                      </div>
+                    </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">Email</Label>
                       <div className="flex items-center gap-2 text-sm" data-testid="text-detail-email">
@@ -790,6 +803,7 @@ function EditEmployeeDialog({
           managerId: employee.managerId,
           hireDate: employee.hireDate ?? null,
           status: employee.status as "invited" | "active" | "inactive" | "on_leave",
+          employeeId: employee.employeeId,
         }
       : undefined,
   });
@@ -816,6 +830,19 @@ function EditEmployeeDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="edit-employeeId">Employee ID</Label>
+            <Input
+              id="edit-employeeId"
+              {...form.register("employeeId")}
+              placeholder="DOJ-001"
+              className="font-mono"
+              data-testid="input-edit-employee-id"
+            />
+            {form.formState.errors.employeeId && (
+              <p className="text-sm text-destructive">{form.formState.errors.employeeId.message}</p>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="edit-firstName">First Name</Label>
