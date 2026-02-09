@@ -86,8 +86,8 @@ function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Onboarding Template</DialogTitle>
-          <DialogDescription>Define a reusable onboarding checklist with tasks</DialogDescription>
+          <DialogTitle>Create Task Template</DialogTitle>
+          <DialogDescription>Define a reusable task checklist</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
@@ -97,7 +97,7 @@ function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
                 id="template-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Engineering Onboarding"
+                placeholder="e.g., Engineering Setup"
                 data-testid="input-template-name"
               />
             </div>
@@ -122,7 +122,7 @@ function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
               id="template-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe this onboarding template..."
+              placeholder="Describe this task template..."
               data-testid="input-template-description"
             />
           </div>
@@ -289,12 +289,12 @@ export default function OnboardingTemplates() {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <ClipboardList className="h-6 w-6" />
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-onboarding-templates-title">
-              Onboarding Templates
+            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-task-templates-title">
+              Task Templates
             </h1>
           </div>
           <p className="text-muted-foreground">
-            Create and manage reusable onboarding checklists for new hires
+            Create and manage reusable task checklists
           </p>
         </div>
         <CreateTemplateDialog onCreated={() => setRefresh((r) => r + 1)} />
@@ -310,7 +310,7 @@ export default function OnboardingTemplates() {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="h-12 w-12 text-muted-foreground/40 mb-4" />
-            <p className="text-muted-foreground text-sm">No onboarding templates yet</p>
+            <p className="text-muted-foreground text-sm">No task templates yet</p>
             <p className="text-muted-foreground text-xs mt-1">Create your first template to get started</p>
           </CardContent>
         </Card>

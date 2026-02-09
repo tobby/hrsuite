@@ -229,7 +229,7 @@ export default function Reports() {
           <TabsTrigger value="leave" data-testid="tab-leave">Leave</TabsTrigger>
           <TabsTrigger value="recruitment" data-testid="tab-recruitment">Recruitment</TabsTrigger>
           <TabsTrigger value="queries" data-testid="tab-queries">Queries</TabsTrigger>
-          <TabsTrigger value="onboarding" data-testid="tab-onboarding">Onboarding</TabsTrigger>
+          <TabsTrigger value="onboarding" data-testid="tab-tasks">Tasks</TabsTrigger>
         </TabsList>
 
         <TabsContent value="workforce" className="space-y-4 mt-4">
@@ -588,7 +588,7 @@ export default function Reports() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold">{activeOnboardings}</p>
-                    <p className="text-xs text-muted-foreground">Active Onboardings</p>
+                    <p className="text-xs text-muted-foreground">Active Assignments</p>
                   </div>
                 </div>
               </CardContent>
@@ -622,8 +622,8 @@ export default function Reports() {
 
           <Card data-testid="card-onboarding-assignments">
             <CardHeader>
-              <CardTitle className="text-base">Onboarding Assignments</CardTitle>
-              <CardDescription>Progress for each new hire</CardDescription>
+              <CardTitle className="text-base">Task Assignments</CardTitle>
+              <CardDescription>Progress for each assignment</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">

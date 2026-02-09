@@ -35,15 +35,15 @@ function AssignOnboardingDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button data-testid="button-assign-onboarding">
+        <Button data-testid="button-assign-tasks">
           <Plus className="h-4 w-4 mr-2" />
-          Assign Onboarding
+          Assign Tasks
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Assign Onboarding Checklist</DialogTitle>
-          <DialogDescription>Select an employee and an onboarding template</DialogDescription>
+          <DialogTitle>Assign Task Checklist</DialogTitle>
+          <DialogDescription>Select an employee and a task template</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
@@ -62,7 +62,7 @@ function AssignOnboardingDialog() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Onboarding Template</Label>
+            <Label>Task Template</Label>
             <Select value={templateId} onValueChange={setTemplateId}>
               <SelectTrigger data-testid="select-onboarding-template">
                 <SelectValue placeholder="Select template..." />
@@ -231,12 +231,12 @@ export default function OnboardingTracker() {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <Users className="h-6 w-6" />
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-onboarding-tracker-title">
-              Onboarding Tracker
+            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-task-tracker-title">
+              Task Tracker
             </h1>
           </div>
           <p className="text-muted-foreground">
-            Track and manage onboarding progress for new hires
+            Track and manage task progress for assignments
           </p>
         </div>
         <AssignOnboardingDialog />
@@ -251,7 +251,7 @@ export default function OnboardingTracker() {
               </div>
               <div>
                 <p className="text-2xl font-bold">{activeAssignments.length}</p>
-                <p className="text-xs text-muted-foreground">Active Onboardings</p>
+                <p className="text-xs text-muted-foreground">Active Assignments</p>
               </div>
             </div>
           </CardContent>
@@ -298,13 +298,13 @@ export default function OnboardingTracker() {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Active Onboardings</h2>
+        <h2 className="text-lg font-semibold">Active Assignments</h2>
         {activeAssignments.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Users className="h-12 w-12 text-muted-foreground/40 mb-4" />
-              <p className="text-muted-foreground text-sm">No active onboardings</p>
-              <p className="text-muted-foreground text-xs mt-1">Assign an onboarding checklist to get started</p>
+              <p className="text-muted-foreground text-sm">No active assignments</p>
+              <p className="text-muted-foreground text-xs mt-1">Assign a task checklist to get started</p>
             </CardContent>
           </Card>
         ) : (
@@ -318,7 +318,7 @@ export default function OnboardingTracker() {
 
       {completedAssignments.length > 0 && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Completed Onboardings</h2>
+          <h2 className="text-lg font-semibold">Completed Assignments</h2>
           <div className="space-y-3">
             {completedAssignments.map((a) => (
               <AssignmentCard key={a.id} assignment={a} />

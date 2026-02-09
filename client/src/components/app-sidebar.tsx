@@ -338,10 +338,10 @@ export function AppSidebar() {
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
                         isActive={isOnboardingActive}
-                        data-testid="nav-onboarding-management"
+                        data-testid="nav-task-management"
                       >
                         <ClipboardList className="h-4 w-4" />
-                        <span>Onboarding</span>
+                        <span>Task Management</span>
                         {onboardingExpanded ? (
                           <ChevronDown className="ml-auto h-4 w-4" />
                         ) : (

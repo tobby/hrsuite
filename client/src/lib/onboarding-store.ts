@@ -58,7 +58,7 @@ const demoTemplates: OnboardingTemplate[] = [
   {
     id: "tmpl-1",
     name: "Standard Onboarding",
-    description: "Default onboarding checklist for all new hires",
+    description: "Default checklist for all new hires",
     departmentId: null,
     isDefault: true,
     createdAt: new Date("2025-06-01"),
