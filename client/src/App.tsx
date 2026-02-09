@@ -28,6 +28,10 @@ import CandidateDetail from "@/pages/candidate-detail";
 import RecruitmentSettings from "@/pages/recruitment-settings";
 import Queries from "@/pages/queries";
 import QueryDetail from "@/pages/query-detail";
+import OnboardingTemplates from "@/pages/onboarding-templates";
+import OnboardingTracker from "@/pages/onboarding-tracker";
+import MyOnboarding from "@/pages/my-onboarding";
+import Reports from "@/pages/reports";
 import Careers from "@/pages/careers";
 import JobDetails from "@/pages/job-details";
 import JobApplication from "@/pages/job-application";
@@ -64,6 +68,10 @@ function PrivateRouter() {
       <Route path="/recruitment/settings" component={RecruitmentSettings} />
       <Route path="/queries/:id" component={QueryDetail} />
       <Route path="/queries" component={Queries} />
+      <Route path="/onboarding/templates" component={OnboardingTemplates} />
+      <Route path="/onboarding/tracker" component={OnboardingTracker} />
+      <Route path="/onboarding" component={MyOnboarding} />
+      <Route path="/reports" component={Reports} />
       <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>

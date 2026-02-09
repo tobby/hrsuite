@@ -16,6 +16,8 @@ import {
   Briefcase,
   UserPlus,
   HelpCircle,
+  ClipboardList,
+  PieChart,
 } from "lucide-react";
 import {
   Sidebar,
@@ -52,6 +54,7 @@ const mainNavItems: NavItem[] = [
 ];
 
 const settingsNavItems: NavItem[] = [
+  { title: "Reports", url: "/reports", icon: PieChart, testId: "nav-reports", roles: ["admin"] },
   { title: "Settings", url: "/settings", icon: Settings, testId: "nav-settings", roles: ["employee", "manager", "admin"] },
 ];
 
@@ -62,6 +65,7 @@ export function AppSidebar() {
   const [leaveExpanded, setLeaveExpanded] = useState(location.startsWith("/leave"));
   const [appraisalsExpanded, setAppraisalsExpanded] = useState(location.startsWith("/appraisals"));
   const [recruitmentExpanded, setRecruitmentExpanded] = useState(location.startsWith("/recruitment"));
+  const [onboardingExpanded, setOnboardingExpanded] = useState(location.startsWith("/onboarding"));
 
   const isActive = (url: string) => {
     if (url === "/") return location === "/";
@@ -69,13 +73,16 @@ export function AppSidebar() {
   };
 
   const isQueriesActive = location.startsWith("/queries");
+  const isReportsActive = location === "/reports";
 
   const isLeaveActive = location.startsWith("/leave");
   const isAppraisalsActive = location.startsWith("/appraisals");
   const isRecruitmentActive = location.startsWith("/recruitment");
+  const isOnboardingActive = location.startsWith("/onboarding");
   const showLeaveSubItems = canEditOrgSettings(role);
   const showAppraisalsSubItems = canEditOrgSettings(role);
   const showRecruitment = canEditOrgSettings(role);
+  const showOnboardingSubItems = canEditOrgSettings(role);
 
   const filterByRole = (items: NavItem[]) => items.filter(item => item.roles.includes(role));
 
@@ -323,6 +330,65 @@ export function AppSidebar() {
                     </CollapsibleContent>
                   </SidebarMenuItem>
                 </Collapsible>
+              )}
+
+              {showOnboardingSubItems ? (
+                <Collapsible open={onboardingExpanded} onOpenChange={setOnboardingExpanded}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        isActive={isOnboardingActive}
+                        data-testid="nav-onboarding-management"
+                      >
+                        <ClipboardList className="h-4 w-4" />
+                        <span>Onboarding</span>
+                        {onboardingExpanded ? (
+                          <ChevronDown className="ml-auto h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="ml-auto h-4 w-4" />
+                        )}
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/onboarding/tracker"}
+                          >
+                            <Link href="/onboarding/tracker" data-testid="nav-onboarding-tracker">
+                              <Users className="h-3 w-3" />
+                              <span>Tracker</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/onboarding/templates"}
+                          >
+                            <Link href="/onboarding/templates" data-testid="nav-onboarding-templates">
+                              <FileText className="h-3 w-3" />
+                              <span>Templates</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ) : (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isOnboardingActive}
+                  >
+                    <Link href="/onboarding" data-testid="nav-onboarding">
+                      <ClipboardList className="h-4 w-4" />
+                      <span>My Onboarding</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               )}
 
               <SidebarMenuItem>
