@@ -46,6 +46,7 @@ import {
   Copy,
   Check,
   Link,
+  Trash2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -126,6 +127,8 @@ export default function Employees() {
   const [inviteEmployeeName, setInviteEmployeeName] = useState("");
   const [isInviteLinkOpen, setIsInviteLinkOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
 
   const { data: allEmployees = [], isLoading: isLoadingEmployees } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
@@ -148,6 +151,15 @@ export default function Employees() {
   const updateMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<EditEmployeeForm> }) => {
       await apiRequest("PATCH", `/api/employees/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/employees/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
@@ -183,6 +195,11 @@ export default function Employees() {
     setSelectedEmployee(employee);
     setIsDetailOpen(false);
     setIsEditOpen(true);
+  };
+
+  const openDeleteDialog = (employee: Employee) => {
+    setEmployeeToDelete(employee);
+    setIsDeleteOpen(true);
   };
 
   function OrgNode({ employee, depth, departmentId }: { employee: Employee; depth: number; departmentId: string }) {
@@ -413,6 +430,16 @@ export default function Employees() {
                                     <Mail className="mr-2 h-4 w-4" />
                                     Send Email
                                   </DropdownMenuItem>
+                                  {role === "admin" && (
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={(e) => { e.stopPropagation(); openDeleteDialog(employee); }}
+                                      data-testid={`menu-delete-employee-${employee.id}`}
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </TableCell>
@@ -669,6 +696,62 @@ export default function Employees() {
           <DialogFooter>
             <Button onClick={() => setIsInviteLinkOpen(false)} data-testid="button-close-invite-link">
               Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteOpen} onOpenChange={(open) => { setIsDeleteOpen(open); if (!open) setEmployeeToDelete(null); }}>
+        <DialogContent className="max-w-sm" data-testid="dialog-delete-employee">
+          <DialogHeader>
+            <DialogTitle data-testid="text-delete-dialog-title">Delete Employee</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete{" "}
+              <span className="font-medium">
+                {employeeToDelete ? `${employeeToDelete.firstName} ${employeeToDelete.lastName}` : ""}
+              </span>
+              ? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteOpen(false)}
+              data-testid="button-cancel-delete"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (employeeToDelete) {
+                  deleteMutation.mutate(employeeToDelete.id, {
+                    onSuccess: () => {
+                      toast({
+                        title: "Employee deleted",
+                        description: `${employeeToDelete.firstName} ${employeeToDelete.lastName} has been removed.`,
+                      });
+                      setIsDeleteOpen(false);
+                      setEmployeeToDelete(null);
+                      if (selectedEmployee?.id === employeeToDelete.id) {
+                        setIsDetailOpen(false);
+                        setSelectedEmployee(null);
+                      }
+                    },
+                    onError: (error) => {
+                      toast({
+                        title: "Error",
+                        description: error.message || "Failed to delete employee.",
+                        variant: "destructive",
+                      });
+                    },
+                  });
+                }
+              }}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
