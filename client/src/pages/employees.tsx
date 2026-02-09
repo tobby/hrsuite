@@ -79,6 +79,19 @@ const deptColors: Record<string, string> = {
   "dept-5": "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
 };
 
+const addEmployeeSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Invalid email address"),
+  position: z.string().min(1, "Position is required"),
+  role: z.enum(["employee", "manager", "admin", "contract"]),
+  departmentId: z.string().nullable(),
+  managerId: z.string().nullable(),
+  status: z.enum(["active", "inactive", "on_leave"]).default("active"),
+});
+
+type AddEmployeeForm = z.infer<typeof addEmployeeSchema>;
+
 const editEmployeeSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
@@ -101,6 +114,7 @@ export default function Employees() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(false);
 
   const { data: allEmployees = [], isLoading: isLoadingEmployees } = useQuery<Employee[]>({
     queryKey: ['/api/employees'],
@@ -108,6 +122,15 @@ export default function Employees() {
 
   const { data: departments = [], isLoading: isLoadingDepartments } = useQuery<Department[]>({
     queryKey: ['/api/departments'],
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: AddEmployeeForm) => {
+      await apiRequest("POST", "/api/employees", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+    },
   });
 
   const updateMutation = useMutation({
@@ -227,7 +250,7 @@ export default function Employees() {
           </p>
         </div>
         {canManageEmployees(role) && (
-          <Button data-testid="button-add-employee">
+          <Button onClick={() => setIsAddOpen(true)} data-testid="button-add-employee">
             <Plus className="mr-2 h-4 w-4" />
             Add Employee
           </Button>
@@ -554,6 +577,32 @@ export default function Employees() {
         }}
         isSaving={updateMutation.isPending}
       />
+
+      <AddEmployeeDialog
+        open={isAddOpen}
+        onOpenChange={setIsAddOpen}
+        allEmployees={allEmployees}
+        departments={departments}
+        onSave={(data) => {
+          createMutation.mutate(data, {
+            onSuccess: () => {
+              toast({
+                title: "Employee added",
+                description: `${data.firstName} ${data.lastName} has been added.`,
+              });
+              setIsAddOpen(false);
+            },
+            onError: (error) => {
+              toast({
+                title: "Error",
+                description: error.message || "Failed to add employee.",
+                variant: "destructive",
+              });
+            },
+          });
+        }}
+        isSaving={createMutation.isPending}
+      />
     </div>
   );
 }
@@ -728,6 +777,198 @@ function EditEmployeeDialog({
             </Button>
             <Button type="submit" disabled={isSaving} data-testid="button-save-employee">
               {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+const roleLabels: Record<string, string> = {
+  employee: "Employee",
+  manager: "Manager",
+  admin: "Admin",
+  contract: "Contract",
+};
+
+function AddEmployeeDialog({
+  open,
+  onOpenChange,
+  allEmployees,
+  departments,
+  onSave,
+  isSaving,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  allEmployees: Employee[];
+  departments: Department[];
+  onSave: (data: AddEmployeeForm) => void;
+  isSaving: boolean;
+}) {
+  const form = useForm<AddEmployeeForm>({
+    resolver: zodResolver(addEmployeeSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      position: "",
+      role: "employee",
+      departmentId: null,
+      managerId: null,
+      status: "active",
+    },
+  });
+
+  const onSubmit = (data: AddEmployeeForm) => {
+    onSave(data);
+  };
+
+  const handleOpenChange = (val: boolean) => {
+    if (!val) form.reset();
+    onOpenChange(val);
+  };
+
+  const managerOptions = allEmployees.filter(
+    (e) => e.role === "manager" || e.role === "admin"
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-lg" data-testid="dialog-add-employee">
+        <DialogHeader>
+          <DialogTitle data-testid="text-add-dialog-title">Add Employee</DialogTitle>
+          <DialogDescription>
+            Fill in the details below to add a new employee.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="add-firstName">First Name</Label>
+              <Input
+                id="add-firstName"
+                {...form.register("firstName")}
+                data-testid="input-add-first-name"
+              />
+              {form.formState.errors.firstName && (
+                <p className="text-sm text-destructive">{form.formState.errors.firstName.message}</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="add-lastName">Last Name</Label>
+              <Input
+                id="add-lastName"
+                {...form.register("lastName")}
+                data-testid="input-add-last-name"
+              />
+              {form.formState.errors.lastName && (
+                <p className="text-sm text-destructive">{form.formState.errors.lastName.message}</p>
+              )}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="add-email">Email</Label>
+            <Input
+              id="add-email"
+              type="email"
+              {...form.register("email")}
+              data-testid="input-add-email"
+            />
+            {form.formState.errors.email && (
+              <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="add-position">Position</Label>
+            <Input
+              id="add-position"
+              {...form.register("position")}
+              data-testid="input-add-position"
+            />
+            {form.formState.errors.position && (
+              <p className="text-sm text-destructive">{form.formState.errors.position.message}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Role</Label>
+            <Select
+              value={form.watch("role")}
+              onValueChange={(val) => form.setValue("role", val as AddEmployeeForm["role"])}
+            >
+              <SelectTrigger data-testid="select-add-role">
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                {(["employee", "manager", "admin", "contract"] as const).map((r) => (
+                  <SelectItem key={r} value={r} data-testid={`option-add-role-${r}`}>
+                    {roleLabels[r]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Department</Label>
+            <Select
+              value={form.watch("departmentId") ?? "none"}
+              onValueChange={(val) => form.setValue("departmentId", val === "none" ? null : val)}
+            >
+              <SelectTrigger data-testid="select-add-department">
+                <SelectValue placeholder="Select department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {departments.map((dept) => (
+                  <SelectItem key={dept.id} value={dept.id} data-testid={`option-add-dept-${dept.id}`}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Manager</Label>
+            <Select
+              value={form.watch("managerId") || "none"}
+              onValueChange={(val) => form.setValue("managerId", val === "none" ? null : val)}
+            >
+              <SelectTrigger data-testid="select-add-manager">
+                <SelectValue placeholder="Select manager" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {managerOptions.map((emp) => (
+                  <SelectItem key={emp.id} value={emp.id} data-testid={`option-add-manager-${emp.id}`}>
+                    {emp.firstName} {emp.lastName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <Select
+              value={form.watch("status")}
+              onValueChange={(val) => form.setValue("status", val as AddEmployeeForm["status"])}
+            >
+              <SelectTrigger data-testid="select-add-status">
+                <SelectValue placeholder="Select status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active" data-testid="option-add-status-active">Active</SelectItem>
+                <SelectItem value="inactive" data-testid="option-add-status-inactive">Inactive</SelectItem>
+                <SelectItem value="on_leave" data-testid="option-add-status-on-leave">On Leave</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} data-testid="button-cancel-add">
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSaving} data-testid="button-save-new-employee">
+              {isSaving ? "Adding..." : "Add Employee"}
             </Button>
           </DialogFooter>
         </form>
