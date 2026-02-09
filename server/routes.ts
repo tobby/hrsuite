@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCompanySchema, insertDepartmentSchema, insertEmployeeSchema } from "@shared/schema";
+import { insertCompanySchema, insertDepartmentSchema, insertEmployeeSchema, insertLeaveTypeSchema, insertLeaveRequestSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
 export async function registerRoutes(
@@ -386,6 +386,240 @@ export async function registerRoutes(
 
       const inviteToken = await storage.generateInviteToken(employee.id);
       return res.json({ inviteLink: `/invite/${inviteToken}` });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== LEAVE TYPE ROUTES ====================
+
+  app.get("/api/leave-types", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const types = await storage.getLeaveTypesByCompany(companyId);
+      return res.json(types);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/leave-types", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const parsed = insertLeaveTypeSchema.safeParse({ ...req.body, companyId });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+      }
+      const leaveType = await storage.createLeaveType(parsed.data);
+      return res.status(201).json(leaveType);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/leave-types/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const leaveType = await storage.updateLeaveType(req.params.id, req.body);
+      if (!leaveType) return res.status(404).json({ message: "Leave type not found" });
+      return res.json(leaveType);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/leave-types/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const deleted = await storage.deleteLeaveType(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Leave type not found" });
+      return res.json({ message: "Leave type deleted" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== LEAVE BALANCE ROUTES ====================
+
+  app.get("/api/leave-balances", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      const balances = await storage.getLeaveBalancesByEmployee(employeeId, year);
+      return res.json(balances);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/leave-balances/all", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      const balances = await storage.getLeaveBalancesByCompany(companyId, year);
+      return res.json(balances);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/leave-balances/initialize", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const { employeeId, year } = req.body;
+      if (!employeeId || !year) {
+        return res.status(400).json({ message: "employeeId and year are required" });
+      }
+      await storage.initializeBalancesForEmployee(companyId, employeeId, year);
+      return res.json({ message: "Balances initialized successfully" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/leave-balances/initialize-all", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const { year } = req.body;
+      if (!year) {
+        return res.status(400).json({ message: "year is required" });
+      }
+      const employees = await storage.getEmployeesByCompany(companyId);
+      const activeEmployees = employees.filter(e => e.status === "active");
+      for (const emp of activeEmployees) {
+        await storage.initializeBalancesForEmployee(companyId, emp.id, year);
+      }
+      return res.json({ message: `Balances initialized for ${activeEmployees.length} employees` });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== LEAVE REQUEST ROUTES ====================
+
+  app.get("/api/leave-requests", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const requests = await storage.getLeaveRequestsByEmployee(employeeId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/leave-requests/all", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const requests = await storage.getLeaveRequestsByCompany(companyId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/leave-requests/pending", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const requests = await storage.getPendingLeaveRequestsByCompany(companyId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/leave-requests", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const employeeId = (req.session as any).employeeId;
+      const parsed = insertLeaveRequestSchema.safeParse({ ...req.body, companyId, employeeId });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+      }
+      const startDate = new Date(parsed.data.startDate);
+      const endDate = new Date(parsed.data.endDate);
+      const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const request = await storage.createLeaveRequest({
+        ...parsed.data,
+        companyId,
+        employeeId,
+        totalDays,
+      });
+      return res.status(201).json(request);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/leave-requests/:id/approve", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const approverId = (req.session as any).employeeId;
+      const request = await storage.getLeaveRequest(req.params.id);
+      if (!request) return res.status(404).json({ message: "Leave request not found" });
+      if (request.status !== "pending") {
+        return res.status(400).json({ message: "Only pending requests can be approved" });
+      }
+
+      const updated = await storage.updateLeaveRequest(req.params.id, {
+        status: "approved",
+        approverId,
+      });
+
+      const startDate = new Date(request.startDate);
+      const year = startDate.getFullYear();
+      const balances = await storage.getLeaveBalancesByEmployee(request.employeeId, year);
+      const balance = balances.find(b => b.leaveTypeId === request.leaveTypeId);
+      if (balance) {
+        await storage.upsertLeaveBalance({
+          companyId: balance.companyId,
+          employeeId: balance.employeeId,
+          leaveTypeId: balance.leaveTypeId,
+          totalDays: balance.totalDays,
+          usedDays: balance.usedDays + request.totalDays,
+          remainingDays: balance.remainingDays - request.totalDays,
+          year: balance.year,
+        });
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/leave-requests/:id/reject", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const approverId = (req.session as any).employeeId;
+      const request = await storage.getLeaveRequest(req.params.id);
+      if (!request) return res.status(404).json({ message: "Leave request not found" });
+      if (request.status !== "pending") {
+        return res.status(400).json({ message: "Only pending requests can be rejected" });
+      }
+
+      const updated = await storage.updateLeaveRequest(req.params.id, {
+        status: "rejected",
+        approverId,
+        approverComment: req.body.approverComment || null,
+      });
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/leave-requests/:id/cancel", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const request = await storage.getLeaveRequest(req.params.id);
+      if (!request) return res.status(404).json({ message: "Leave request not found" });
+      if (request.employeeId !== employeeId) {
+        return res.status(403).json({ message: "You can only cancel your own requests" });
+      }
+      if (request.status !== "pending") {
+        return res.status(400).json({ message: "Only pending requests can be cancelled" });
+      }
+
+      const updated = await storage.updateLeaveRequest(req.params.id, {
+        status: "cancelled",
+      });
+      return res.json(updated);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }

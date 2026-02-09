@@ -18,7 +18,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useRole, canApproveLeave, canAccessLeave } from "@/lib/role-context";
-import type { Employee, Department } from "@shared/schema";
+import type { Employee, Department, LeaveRequest, LeaveBalance, LeaveType } from "@shared/schema";
 
 export default function Dashboard() {
   const { role, currentUser } = useRole();
@@ -31,10 +31,36 @@ export default function Dashboard() {
     queryKey: ['/api/departments'],
   });
 
+  const currentYear = new Date().getFullYear();
+
+  const { data: leaveRequests = [] } = useQuery<LeaveRequest[]>({
+    queryKey: ['/api/leave-requests'],
+    enabled: canAccessLeave(role),
+  });
+
+  const { data: pendingRequests = [] } = useQuery<LeaveRequest[]>({
+    queryKey: ['/api/leave-requests/pending'],
+    enabled: canApproveLeave(role),
+  });
+
+  const { data: leaveBalances = [] } = useQuery<LeaveBalance[]>({
+    queryKey: ['/api/leave-balances', `?year=${currentYear}`],
+    enabled: canAccessLeave(role),
+  });
+
+  const { data: leaveTypes = [] } = useQuery<LeaveType[]>({
+    queryKey: ['/api/leave-types'],
+    enabled: canAccessLeave(role),
+  });
+
   const isLoading = isLoadingEmployees || isLoadingDepartments;
 
   const activeEmployees = employees.filter(e => e.status === "active").length;
   const teamMembers = employees.filter(e => e.managerId === currentUser.id);
+
+  const myPendingCount = leaveRequests.filter(r => r.status === "pending").length;
+  const totalDaysUsed = leaveBalances.reduce((sum, b) => sum + b.usedDays, 0);
+  const pendingApprovalCount = pendingRequests.length;
 
   const getGreeting = () => {
     switch (role) {
@@ -86,7 +112,7 @@ export default function Dashboard() {
                 <Clock className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">0</div>
+                <div className="text-2xl font-bold">{myPendingCount}</div>
                 <p className="text-xs text-muted-foreground">Awaiting approval</p>
               </CardContent>
             </Card>
@@ -97,7 +123,7 @@ export default function Dashboard() {
                 <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">0</div>
+                <div className="text-2xl font-bold">{totalDaysUsed}</div>
                 <p className="text-xs text-muted-foreground">This year</p>
               </CardContent>
             </Card>
@@ -130,7 +156,7 @@ export default function Dashboard() {
               <CalendarCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">0</div>
+              <div className="text-2xl font-bold">{pendingApprovalCount}</div>
               <p className="text-xs text-muted-foreground">
                 {role === "manager" ? "Team requests" : "Requests awaiting approval"}
               </p>
@@ -231,7 +257,7 @@ export default function Dashboard() {
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <div>
                 <CardTitle className="text-lg">My Leave Balance</CardTitle>
-                <CardDescription>Your available leave for 2026</CardDescription>
+                <CardDescription>Your available leave for {currentYear}</CardDescription>
               </div>
               <Link href="/leave">
                 <Button variant="ghost" size="sm" data-testid="button-view-all-leave">
@@ -241,11 +267,30 @@ export default function Dashboard() {
               </Link>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                <p className="text-sm font-medium text-muted-foreground">No leave balances yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Leave types and balances will appear here once configured.</p>
-              </div>
+              {leaveBalances.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">No leave balances yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Leave types and balances will appear here once configured.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {leaveBalances.map((balance) => {
+                    const lt = leaveTypes.find(t => t.id === balance.leaveTypeId);
+                    return (
+                      <div key={balance.id} className="flex items-center justify-between" data-testid={`balance-row-${balance.id}`}>
+                        <div className="flex items-center gap-2">
+                          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: lt?.color || "#3b82f6" }} />
+                          <span className="text-sm font-medium">{lt?.name || "Leave"}</span>
+                        </div>
+                        <span className="text-sm text-muted-foreground">
+                          {balance.remainingDays} / {balance.totalDays} days
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -257,11 +302,37 @@ export default function Dashboard() {
               <CardDescription>Your latest leave applications</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                <p className="text-sm font-medium text-muted-foreground">No leave requests yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Your leave requests will appear here.</p>
-              </div>
+              {leaveRequests.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">No leave requests yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Your leave requests will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {leaveRequests.slice(0, 5).map((req) => {
+                    const lt = leaveTypes.find(t => t.id === req.leaveTypeId);
+                    return (
+                      <div key={req.id} className="flex items-center justify-between" data-testid={`recent-request-${req.id}`}>
+                        <div>
+                          <p className="text-sm font-medium">{lt?.name || "Leave"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          req.status === "approved" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                          req.status === "rejected" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                          req.status === "cancelled" ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" :
+                          "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                        }`}>
+                          {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -283,11 +354,35 @@ export default function Dashboard() {
               </Link>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col items-center justify-center py-8 text-center">
-                <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                <p className="text-sm font-medium text-muted-foreground">No pending approvals</p>
-                <p className="text-xs text-muted-foreground mt-1">Leave requests needing your review will appear here.</p>
-              </div>
+              {pendingRequests.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">No pending approvals</p>
+                  <p className="text-xs text-muted-foreground mt-1">Leave requests needing your review will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {pendingRequests.slice(0, 5).map((req) => {
+                    const emp = employees.find(e => e.id === req.employeeId);
+                    const lt = leaveTypes.find(t => t.id === req.leaveTypeId);
+                    return (
+                      <div key={req.id} className="flex items-center justify-between" data-testid={`pending-approval-${req.id}`}>
+                        <div>
+                          <p className="text-sm font-medium">{emp ? `${emp.firstName} ${emp.lastName}` : "Employee"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {lt?.name || "Leave"} &middot; {req.totalDays} day{req.totalDays !== 1 ? "s" : ""}
+                          </p>
+                        </div>
+                        <Link href="/leave">
+                          <Button variant="outline" size="sm" data-testid={`button-review-${req.id}`}>
+                            Review
+                          </Button>
+                        </Link>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

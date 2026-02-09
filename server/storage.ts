@@ -4,6 +4,9 @@ import {
   companies, type Company, type InsertCompany,
   departments, type Department, type InsertDepartment,
   employees, type Employee, type InsertEmployee,
+  leaveTypes, type LeaveType, type InsertLeaveType,
+  leaveBalances, type LeaveBalance,
+  leaveRequests, type LeaveRequest, type InsertLeaveRequest,
 } from "@shared/schema";
 import { randomUUID, randomBytes } from "crypto";
 
@@ -31,6 +34,27 @@ export interface IStorage {
   deleteEmployee(id: string): Promise<boolean>;
   generateEmployeeId(companyId: string): Promise<string>;
   generateInviteToken(employeeId: string): Promise<string>;
+
+  // Leave Types
+  createLeaveType(data: InsertLeaveType): Promise<LeaveType>;
+  getLeaveTypesByCompany(companyId: string): Promise<LeaveType[]>;
+  getLeaveType(id: string): Promise<LeaveType | undefined>;
+  updateLeaveType(id: string, data: Partial<InsertLeaveType>): Promise<LeaveType | undefined>;
+  deleteLeaveType(id: string): Promise<boolean>;
+
+  // Leave Balances
+  getLeaveBalancesByEmployee(employeeId: string, year: number): Promise<LeaveBalance[]>;
+  getLeaveBalancesByCompany(companyId: string, year: number): Promise<LeaveBalance[]>;
+  upsertLeaveBalance(data: { companyId: string; employeeId: string; leaveTypeId: string; totalDays: number; usedDays: number; remainingDays: number; year: number }): Promise<LeaveBalance>;
+  initializeBalancesForEmployee(companyId: string, employeeId: string, year: number): Promise<void>;
+
+  // Leave Requests
+  createLeaveRequest(data: InsertLeaveRequest & { companyId: string; employeeId: string; totalDays: number }): Promise<LeaveRequest>;
+  getLeaveRequestsByEmployee(employeeId: string): Promise<LeaveRequest[]>;
+  getLeaveRequestsByCompany(companyId: string): Promise<LeaveRequest[]>;
+  getPendingLeaveRequestsByCompany(companyId: string): Promise<LeaveRequest[]>;
+  getLeaveRequest(id: string): Promise<LeaveRequest | undefined>;
+  updateLeaveRequest(id: string, data: Partial<LeaveRequest>): Promise<LeaveRequest | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -147,6 +171,115 @@ export class DatabaseStorage implements IStorage {
     }).where(eq(employees.id, employeeId));
 
     return token;
+  }
+
+  // ==================== LEAVE TYPES ====================
+
+  async createLeaveType(data: InsertLeaveType): Promise<LeaveType> {
+    const [leaveType] = await db.insert(leaveTypes).values(data).returning();
+    return leaveType;
+  }
+
+  async getLeaveTypesByCompany(companyId: string): Promise<LeaveType[]> {
+    return db.select().from(leaveTypes).where(eq(leaveTypes.companyId, companyId));
+  }
+
+  async getLeaveType(id: string): Promise<LeaveType | undefined> {
+    const [leaveType] = await db.select().from(leaveTypes).where(eq(leaveTypes.id, id));
+    return leaveType;
+  }
+
+  async updateLeaveType(id: string, data: Partial<InsertLeaveType>): Promise<LeaveType | undefined> {
+    const [leaveType] = await db.update(leaveTypes).set(data).where(eq(leaveTypes.id, id)).returning();
+    return leaveType;
+  }
+
+  async deleteLeaveType(id: string): Promise<boolean> {
+    const result = await db.delete(leaveTypes).where(eq(leaveTypes.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== LEAVE BALANCES ====================
+
+  async getLeaveBalancesByEmployee(employeeId: string, year: number): Promise<LeaveBalance[]> {
+    return db.select().from(leaveBalances).where(
+      and(eq(leaveBalances.employeeId, employeeId), eq(leaveBalances.year, year))
+    );
+  }
+
+  async getLeaveBalancesByCompany(companyId: string, year: number): Promise<LeaveBalance[]> {
+    return db.select().from(leaveBalances).where(
+      and(eq(leaveBalances.companyId, companyId), eq(leaveBalances.year, year))
+    );
+  }
+
+  async upsertLeaveBalance(data: { companyId: string; employeeId: string; leaveTypeId: string; totalDays: number; usedDays: number; remainingDays: number; year: number }): Promise<LeaveBalance> {
+    const [existing] = await db.select().from(leaveBalances).where(
+      and(
+        eq(leaveBalances.companyId, data.companyId),
+        eq(leaveBalances.employeeId, data.employeeId),
+        eq(leaveBalances.leaveTypeId, data.leaveTypeId),
+        eq(leaveBalances.year, data.year)
+      )
+    );
+
+    if (existing) {
+      const [updated] = await db.update(leaveBalances).set({
+        totalDays: data.totalDays,
+        usedDays: data.usedDays,
+        remainingDays: data.remainingDays,
+      }).where(eq(leaveBalances.id, existing.id)).returning();
+      return updated;
+    }
+
+    const [created] = await db.insert(leaveBalances).values(data).returning();
+    return created;
+  }
+
+  async initializeBalancesForEmployee(companyId: string, employeeId: string, year: number): Promise<void> {
+    const types = await this.getLeaveTypesByCompany(companyId);
+    for (const lt of types) {
+      await this.upsertLeaveBalance({
+        companyId,
+        employeeId,
+        leaveTypeId: lt.id,
+        totalDays: lt.defaultDays,
+        usedDays: 0,
+        remainingDays: lt.defaultDays,
+        year,
+      });
+    }
+  }
+
+  // ==================== LEAVE REQUESTS ====================
+
+  async createLeaveRequest(data: InsertLeaveRequest & { companyId: string; employeeId: string; totalDays: number }): Promise<LeaveRequest> {
+    const [request] = await db.insert(leaveRequests).values(data).returning();
+    return request;
+  }
+
+  async getLeaveRequestsByEmployee(employeeId: string): Promise<LeaveRequest[]> {
+    return db.select().from(leaveRequests).where(eq(leaveRequests.employeeId, employeeId)).orderBy(desc(leaveRequests.createdAt));
+  }
+
+  async getLeaveRequestsByCompany(companyId: string): Promise<LeaveRequest[]> {
+    return db.select().from(leaveRequests).where(eq(leaveRequests.companyId, companyId)).orderBy(desc(leaveRequests.createdAt));
+  }
+
+  async getPendingLeaveRequestsByCompany(companyId: string): Promise<LeaveRequest[]> {
+    return db.select().from(leaveRequests).where(
+      and(eq(leaveRequests.companyId, companyId), eq(leaveRequests.status, "pending"))
+    ).orderBy(desc(leaveRequests.createdAt));
+  }
+
+  async getLeaveRequest(id: string): Promise<LeaveRequest | undefined> {
+    const [request] = await db.select().from(leaveRequests).where(eq(leaveRequests.id, id));
+    return request;
+  }
+
+  async updateLeaveRequest(id: string, data: Partial<LeaveRequest>): Promise<LeaveRequest | undefined> {
+    const [request] = await db.update(leaveRequests).set(data).where(eq(leaveRequests.id, id)).returning();
+    return request;
   }
 }
 
