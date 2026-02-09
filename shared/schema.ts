@@ -27,13 +27,13 @@ export const departments = pgTable("departments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").notNull(),
   name: text("name").notNull(),
-  description: text("description").notNull(),
+  description: text("description").default(""),
   headId: varchar("head_id"),
 });
 
 export const insertDepartmentSchema = createInsertSchema(departments).omit({ id: true }).extend({
   name: z.string().min(1, "Department name is required"),
-  description: z.string().min(1, "Description is required"),
+  description: z.string().optional().default(""),
 });
 export type InsertDepartment = z.infer<typeof insertDepartmentSchema>;
 export type Department = typeof departments.$inferSelect;

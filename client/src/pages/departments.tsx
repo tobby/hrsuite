@@ -47,7 +47,7 @@ import type { Department, Employee } from "@shared/schema";
 
 const departmentFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  description: z.string().min(1, "Description is required"),
+  description: z.string().optional().default(""),
   managerId: z.string().nullable(),
 });
 
@@ -117,7 +117,7 @@ export default function Departments() {
     setEditingDepartment(department);
     editForm.reset({
       name: department.name,
-      description: department.description,
+      description: department.description || "",
       managerId: department.headId || null,
     });
   }
