@@ -123,7 +123,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getEmployeesByCompany(companyId: string): Promise<Employee[]> {
-    return db.select().from(employees).where(eq(employees.companyId, companyId)).orderBy(employees.createdAt);
+    return db.select().from(employees).where(eq(employees.companyId, companyId)).orderBy(desc(employees.createdAt));
   }
 
   async updateEmployee(id: string, data: Partial<Employee>): Promise<Employee | undefined> {
