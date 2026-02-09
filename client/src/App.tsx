@@ -7,7 +7,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { RoleSwitcher } from "@/components/role-switcher";
-import { RoleProvider } from "@/lib/role-context";
+import { RoleProvider, useRole } from "@/lib/role-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { Loader2 } from "lucide-react";
 import NotFound from "@/pages/not-found";
@@ -52,15 +52,23 @@ function PublicRouter() {
   );
 }
 
+function ContractGuard({ component: Component }: { component: React.ComponentType }) {
+  const { role } = useRole();
+  if (role === "contract") {
+    return <Redirect to="/" />;
+  }
+  return <Component />;
+}
+
 function PrivateRouter() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/employees" component={Employees} />
       <Route path="/departments" component={Departments} />
-      <Route path="/leave" component={Leave} />
-      <Route path="/leave/analytics" component={LeaveAnalytics} />
-      <Route path="/leave/settings" component={LeaveSettings} />
+      <Route path="/leave">{() => <ContractGuard component={Leave} />}</Route>
+      <Route path="/leave/analytics">{() => <ContractGuard component={LeaveAnalytics} />}</Route>
+      <Route path="/leave/settings">{() => <ContractGuard component={LeaveSettings} />}</Route>
       <Route path="/appraisals" component={Appraisals} />
       <Route path="/appraisals/review/:id" component={AppraisalReview} />
       <Route path="/appraisals/results/:id" component={AppraisalResults} />

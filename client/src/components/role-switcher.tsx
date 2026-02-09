@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { User, Shield, Crown, ChevronDown } from "lucide-react";
+import { User, Shield, Crown, ChevronDown, FileCheck } from "lucide-react";
 
 const roleConfig: Record<UserRole, { label: string; icon: typeof User; color: string }> = {
   employee: { 
@@ -27,6 +27,11 @@ const roleConfig: Record<UserRole, { label: string; icon: typeof User; color: st
     label: "Admin", 
     icon: Crown, 
     color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" 
+  },
+  contract: {
+    label: "Contract",
+    icon: FileCheck,
+    color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
   },
 };
 

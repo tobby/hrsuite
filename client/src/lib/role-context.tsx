@@ -2,7 +2,7 @@ import { createContext, useContext, useState, ReactNode } from "react";
 import { employees } from "./demo-data";
 import type { Employee } from "@shared/schema";
 
-export type UserRole = "employee" | "manager" | "admin";
+export type UserRole = "employee" | "manager" | "admin" | "contract";
 
 interface RoleContextType {
   role: UserRole;
@@ -15,6 +15,7 @@ export const demoUsers: Record<UserRole, Employee> = {
   employee: employees.find(e => e.id === "emp-3")!, // Emily Rodriguez - Software Engineer
   manager: employees.find(e => e.id === "emp-1")!,  // Sarah Chen - VP of Engineering
   admin: employees.find(e => e.id === "emp-4")!,    // David Kim - HR Director
+  contract: employees.find(e => e.id === "emp-3")!, // Reuses employee demo user for contract role
 };
 
 const RoleContext = createContext<RoleContextType | undefined>(undefined);
@@ -58,4 +59,8 @@ export function canViewAllRequests(role: UserRole): boolean {
 
 export function canEditOrgSettings(role: UserRole): boolean {
   return role === "admin";
+}
+
+export function canAccessLeave(role: UserRole): boolean {
+  return role !== "contract";
 }

@@ -67,7 +67,7 @@ export const insertEmployeeSchema = createInsertSchema(employees).omit({
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
   position: z.string().min(1, "Position is required"),
-  role: z.enum(["employee", "manager", "admin"]),
+  role: z.enum(["employee", "manager", "admin", "contract"]),
   status: z.enum(["invited", "active", "inactive", "on_leave"]).optional(),
 });
 export type InsertEmployee = z.infer<typeof insertEmployeeSchema>;

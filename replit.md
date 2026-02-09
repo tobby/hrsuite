@@ -1,215 +1,45 @@
 # HRFlow - HR Management Platform
 
 ## Overview
-HRFlow is a frontend-only HR management platform built for demonstration purposes. It provides four core modules: Leave Management, Performance Appraisals, Employee Management, and Recruitment/ATS. The platform uses static demo data instead of API calls, as per user requirements.
-
-## Current State
-- **Status**: Complete MVP with all core modules functional
-- **Last Updated**: February 07, 2026
-- **Tech Stack**: React + TypeScript, Vite, Tailwind CSS, shadcn/ui, Zustand for state management
-
-## Recent Changes
-- 2026-02-09: Task Management Module (renamed from Onboarding)
-  - Task Templates page (`/onboarding/templates`) - admin creates/manages reusable task checklists
-  - Task Tracker page (`/onboarding/tracker`) - admin assigns checklists, tracks progress with expandable details
-  - My Tasks page (`/my-tasks`) - employee sees assigned tasks grouped by category with completion toggles
-  - Task categories: IT Setup, HR Paperwork, Training, Team Introduction, Compliance, General
-  - 3 demo templates (Standard, Engineering, Sales) with 2 demo assignments
-  - Zustand store for task/onboarding state management
-  - Sidebar: Admin sees "Task Management" collapsible with Tracker + Templates; Employee sees "My Tasks"
-- 2026-02-09: Reports & Analytics Module
-  - Reports page (`/reports`) with tabbed cross-module dashboard (admin-only)
-  - Tabs: Workforce, Leave, Recruitment, Queries, Tasks
-  - Workforce tab: department distribution pie chart, employee status breakdown
-  - Leave tab: leave days by type bar chart, leave by department chart, status counts
-  - Recruitment tab: pipeline funnel bar chart, job/candidate counts
-  - Queries tab: status/category pie and bar charts
-  - Tasks tab: progress overview, per-assignment progress bars
-  - Department filter for workforce metrics
-  - Uses recharts for all charts
-  - Reports listed under "System" sidebar group (admin-only)
-- 2026-02-07: HR Disciplinary Query System (reworked)
-  - Queries are formal disciplinary notices issued BY admin/manager AGAINST an employee
-  - Queries page (`/queries`) with Issue Query dialog (admin/manager only), employee selector, filters, and search
-  - Query Detail page (`/queries/:id`) with description, response form (for target employee), comments/responses thread, timeline, and admin/manager controls
-  - Categories: Attendance, Conduct, Performance, Policy Violation, Other
-  - Priority levels: Low, Medium, High, Urgent
-  - Status workflow: Open, Awaiting Response, Responded, Resolved, Closed
-  - Role-based visibility: Employee sees queries issued against them, Manager sees queries they issued or against team, Admin sees all
-  - Target employee can submit a formal response which auto-updates status to "Responded"
-  - Admin/Manager controls: status updates, assignee management, follow-up comments
-  - Admin-only: internal notes (visible only to HR)
-  - Zustand store for state management with 6 demo disciplinary queries
-  - Queries listed under "People Operations" sidebar group (renamed from "HR Management")
-  - Sidebar navigation visible to all roles
-- 2026-02-05: Employees & Departments tabs rework
-  - Employees and Departments pages now visible to ALL roles (employee, manager, admin)
-  - Employees page has Directory/Organogram tab views
-  - Directory view: table with search, department filter, status filter - all roles see all employees
-  - Organogram view: tree visualization grouped by department with color-coded headers, CSS connecting lines
-  - Admin-only: Add Employee button, Edit Employee dialog with full form (name, email, phone, position, department, manager, status)
-  - Employee edits persist in React state within session via employeeEdits pattern
-  - Departments page: admin-only access with route guard (redirects non-admin to dashboard)
-  - Admin edit department dialog with name, description, department head dropdown
-  - Admin delete department with session persistence
-  - Sidebar updated to show Employees to all roles, Departments to admin only
-- 2026-02-01: Comprehensive Recruitment/ATS Module implemented
-  - Jobs page (`/recruitment/jobs`) with card/table view toggle, CRUD operations, and shareable application links
-  - Public Careers page (`/careers`) with job listings, filters by department and type
-  - Job Application form (`/jobs/:id/apply`) with privacy disclaimer, multi-step flow, and success confirmation
-  - Candidate Pipeline page (`/recruitment/candidates`) with Kanban board (drag-drop) and table view across 6 stages
-  - Candidate Detail page (`/recruitment/candidates/:id`) with 5 tabs: Overview, Assessments, Interviews, Communications, Notes
-  - Recruitment Settings page (`/recruitment/settings`) for email templates with variables, privacy disclaimer, and terms editing
-  - Zustand recruitment store for state management with demo data (4 jobs, 9 candidates, 4 email templates)
-  - Role-based access control: Recruitment pages are Admin-only with route guards
-- 2026-02-01: Peer Reviewer Assignment for 360° Cycles
-  - Admins can now assign peer reviewers for each participant in 360° cycles
-  - "Assign Peers" button appears next to each selected participant in the Manage Participants dialog
-  - Peer reviewers are limited to other cycle participants (excluding the reviewee and their manager)
-  - Peer assignments persist via Zustand store and are automatically cleaned up when participants are removed
-- 2026-02-01: Appraisal Cycles and Results redesign
-  - 180° reviews now hide weight configuration (manager-only scoring, 100% manager weight)
-  - New Cycle Progress page (`/appraisals/cycles/:id`) for admins to track participant review status
-  - Progress page shows overall stats, review completion progress bar, and expandable participant details
-  - Results page redesigned with unified header (employee info + score integrated)
-  - Results now use tabs for "Competency Ratings" and "Written Feedback" sections
-  - Competency ratings grouped by category with category averages
-- 2026-02-01: Comprehensive Performance Appraisals system implemented
-  - My Appraisals page with Pending/Completed/Received tabs
-  - Review Form with star ratings (1-5), text questions, and overall comments
-  - Results page with weighted scores, competency averages, and anonymous peer feedback
-  - Templates page (Admin-only) for creating review templates with rating/text questions
-  - Cycles page (Admin-only) for managing cycles with weight configuration and participant selection
-  - In-memory state management via Zustand for Save Draft/Submit functionality
-  - Peer feedback anonymous to employees, visible with names to admins only
-- 2026-02-01: Leave Management restructured with nested sidebar navigation
-  - Added `/leave/analytics` page with charts (leave usage by type, department distribution, monthly trends)
-  - Added `/leave/settings` page (Admin-only) for leave types, company holidays, and employee balances
-  - Sidebar now shows collapsible "Leave Management" with sub-items for Admin users (Requests, Analytics, Settings)
-  - Non-admin users see single "Leave Management" link
-- 2026-01-28: Initial MVP completed with all core modules
-  - Dashboard with statistics and widgets
-  - Employee and Department management
-  - Leave management with request/approval workflow
-  - Performance appraisals with 180°/360° review support
-  - Settings with profile management
-
-## Project Architecture
-
-### Key Directories
-```
-client/
-├── src/
-│   ├── components/           # Reusable UI components
-│   │   ├── ui/              # shadcn/ui base components
-│   │   ├── app-sidebar.tsx  # Main navigation sidebar
-│   │   └── theme-toggle.tsx # Dark/light mode toggle
-│   ├── pages/               # Route pages
-│   │   ├── dashboard.tsx    # Main dashboard
-│   │   ├── employees.tsx    # Employee management
-│   │   ├── departments.tsx  # Department management
-│   │   ├── leave.tsx        # Leave request/approval
-│   │   ├── leave-analytics.tsx  # Leave analytics (Admin-only)
-│   │   ├── leave-settings.tsx   # Leave settings (Admin-only)
-│   │   ├── appraisals.tsx   # My Appraisals dashboard
-│   │   ├── appraisal-review.tsx  # Review form with ratings
-│   │   ├── appraisal-results.tsx # Results with weighted scores
-│   │   ├── appraisal-templates.tsx # Template management (Admin)
-│   │   ├── appraisal-cycles.tsx  # Cycle management (Admin)
-│   │   ├── cycle-progress.tsx    # Cycle progress tracking (Admin)
-│   │   ├── recruitment-jobs.tsx  # Job postings management (Admin)
-│   │   ├── recruitment-candidates.tsx  # Candidate pipeline (Admin)
-│   │   ├── candidate-detail.tsx  # Candidate details with 5 tabs (Admin)
-│   │   ├── recruitment-settings.tsx  # Email templates & settings (Admin)
-│   │   ├── queries.tsx       # HR queries list (All roles)
-│   │   ├── query-detail.tsx  # Query detail with comments/timeline (All roles)
-│   │   ├── onboarding-templates.tsx # Task templates (Admin)
-│   │   ├── onboarding-tracker.tsx   # Task tracker (Admin)
-│   │   ├── my-onboarding.tsx  # Employee tasks view
-│   │   ├── reports.tsx        # Reports & analytics (Admin)
-│   │   ├── careers.tsx       # Public job listings
-│   │   ├── job-application.tsx  # Public job application form
-│   │   └── settings.tsx     # User settings
-│   ├── lib/
-│   │   ├── demo-data.ts     # Static demo data
-│   │   ├── appraisal-store.ts # Zustand store for appraisal state
-│   │   ├── recruitment-store.ts # Zustand store for recruitment/ATS state
-│   │   ├── query-store.ts   # Zustand store for HR queries state
-│   │   ├── role-context.tsx # Role-based access control
-│   │   └── queryClient.ts   # TanStack Query setup
-│   └── App.tsx              # Root component with routing
-shared/
-└── schema.ts                # Drizzle ORM schema definitions
-server/
-├── routes.ts                # API routes (minimal for this demo)
-└── storage.ts               # Storage interface
-```
-
-### Routes
-- `/` - Dashboard
-- `/employees` - Employee management
-- `/departments` - Department management
-- `/leave` - Leave management (requests, calendar, balances)
-- `/leave/analytics` - Leave analytics with charts (Admin-only)
-- `/leave/settings` - Leave types, holidays, and balances configuration (Admin-only)
-- `/appraisals` - My Appraisals dashboard
-- `/appraisals/review/:id` - Fill/view a review form
-- `/appraisals/results/:id` - View appraisal results with tabbed ratings/feedback
-- `/appraisals/templates` - Manage review templates (Admin-only)
-- `/appraisals/cycles` - Manage review cycles (Admin-only)
-- `/appraisals/cycles/:id` - View cycle progress and participant status (Admin-only)
-- `/recruitment/jobs` - Job postings management (Admin-only)
-- `/recruitment/candidates` - Candidate pipeline with Kanban/Table view (Admin-only)
-- `/recruitment/candidates/:id` - Candidate details with 5 tabs (Admin-only)
-- `/recruitment/settings` - Email templates and legal settings (Admin-only)
-- `/queries` - HR queries list with filters and search (All roles, role-based visibility)
-- `/queries/:id` - Query detail with comments, timeline, and admin controls (All roles)
-- `/my-tasks` - My Tasks (employee view of assigned tasks)
-- `/onboarding/templates` - Task templates management (Admin-only)
-- `/onboarding/tracker` - Task tracker with assignments (Admin-only)
-- `/reports` - Reports & Analytics dashboard (Admin-only)
-- `/careers` - Public careers page with job listings (standalone, no sidebar)
-- `/jobs/:id` - Public job details page (standalone, no sidebar)
-- `/jobs/:id/apply` - Public job application form (standalone, no sidebar)
-- `/settings` - User settings
-
-## Data Model
-
-### Core Entities
-- **Employees**: Staff members with roles, departments, and managers
-- **Departments**: Organizational units with managers
-- **Leave Types**: Categories of leave (Annual, Sick, Personal, etc.)
-- **Leave Balances**: Employee leave allocations per year
-- **Leave Requests**: Time-off requests with approval workflow
-- **Appraisal Cycles**: Performance review periods (180° or 360°)
-- **Appraisals**: Individual employee reviews within a cycle
-- **Feedback**: Review submissions from various reviewer types
-
-### Demo User
-The current demo user is **Marcus Johnson** (emp-2), a Senior Software Engineer in the Engineering department. This is used throughout the demo to simulate a logged-in user experience.
-
-## Development Notes
-
-### Design System
-- Primary color: Blue (#3b82f6)
-- Uses shadcn/ui components exclusively
-- Follows the project's universal design guidelines
-- Dark mode support via theme toggle
-
-### Form Handling
-All forms use:
-- react-hook-form for form state management
-- zodResolver for validation
-- Drizzle-zod insert schemas for type safety
-
-### Testing
-All interactive elements have `data-testid` attributes for Playwright testing:
-- Pattern for interactive elements: `{action}-{target}` (e.g., `button-submit`)
-- Pattern for display elements: `{type}-{content}` (e.g., `text-username`)
-- Pattern for dynamic elements: `{type}-{description}-{id}` (e.g., `card-product-123`)
+HRFlow is a frontend-only HR management platform designed for demonstration purposes, showcasing four core modules: Leave Management, Performance Appraisals, Employee Management, and Recruitment/ATS. It utilizes static demo data instead of live API calls. The platform's vision is to provide a comprehensive HR solution with a user-friendly interface, offering robust tools for managing human resources efficiently.
 
 ## User Preferences
 - Frontend-only implementation preferred
 - No API/backend complexity
 - Demo data for all modules
 - Professional HR platform aesthetic
+
+## System Architecture
+
+### UI/UX Decisions
+The platform features a professional HR platform aesthetic with dark mode support via a theme toggle. It uses a primary color of Blue (#3b82f6) and exclusively employs shadcn/ui components, adhering to universal design guidelines.
+
+### Technical Implementations
+The project is built with React + TypeScript, Vite, and Tailwind CSS. Zustand is used for state management across various modules, including appraisals, recruitment, HR queries, and task management. Form handling is standardized with `react-hook-form` for state management and `zodResolver` for validation, leveraging Drizzle-zod insert schemas for type safety. Role-based access control is implemented throughout the application, governing visibility and access to modules and features based on user roles (employee, manager, admin, contract).
+
+### Feature Specifications
+- **Leave Management**: Includes requests, analytics, and administrative settings for leave types, company holidays, and employee balances. Contract workers have no access to this module.
+- **Performance Appraisals**: Supports 180° and 360° review cycles, template management, and progress tracking. Features include review forms with star ratings and text questions, and results pages with weighted scores and anonymous peer feedback.
+- **Employee Management**: Provides employee directory, organogram views, and administrative tools for adding and editing employee details and managing departments.
+- **Recruitment/ATS**: Comprehensive module with job postings, a public careers page, a multi-step job application form, a candidate pipeline with Kanban and table views, and candidate detail pages. Also includes recruitment settings for email templates.
+- **Task Management**: Features task templates, a task tracker for administrators to assign and monitor checklists, and a "My Tasks" view for employees to manage their assigned tasks.
+- **HR Disciplinary Query System**: Allows admins/managers to issue disciplinary queries, with a detailed view for employees to respond, and a robust workflow for status updates, comments, and internal notes.
+- **Reports & Analytics**: An admin-only module providing tabbed dashboards for workforce, leave, recruitment, queries, and tasks, featuring various charts and filtering capabilities using recharts.
+
+### System Design Choices
+The application architecture is organized into `components`, `pages`, and `lib` directories. `lib` contains demo data, Zustand stores, and role-based access control logic. The routing structure is comprehensive, covering all modules and sub-features. A multi-tenant architecture with `companyId` scoping is implemented for all queries. Authentication is session-based, using the employees table for users, with login/logout/me API routes and bcryptjs for password hashing. A company setup flow and invite-based employee onboarding are also part of the system.
+
+## External Dependencies
+- **React**: Frontend library
+- **TypeScript**: Superset of JavaScript for type safety
+- **Vite**: Build tool
+- **Tailwind CSS**: Utility-first CSS framework
+- **shadcn/ui**: UI component library
+- **Zustand**: State management library
+- **react-hook-form**: Form state management
+- **zodResolver**: Validation for react-hook-form
+- **Drizzle-zod**: Schema validation
+- **recharts**: Charting library for reports
+- **TanStack Query**: Data fetching and caching
+- **bcryptjs**: Password hashing (for authentication)
+- **connect-pg-simple**: PostgreSQL session store (for authentication)

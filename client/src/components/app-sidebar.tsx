@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useRole, UserRole, canEditOrgSettings } from "@/lib/role-context";
+import { useRole, UserRole, canEditOrgSettings, canAccessLeave } from "@/lib/role-context";
 import {
   LayoutDashboard,
   Users,
@@ -48,14 +48,14 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard, testId: "nav-dashboard", roles: ["employee", "manager", "admin"] },
-  { title: "Employees", url: "/employees", icon: Users, testId: "nav-employees", roles: ["employee", "manager", "admin"] },
+  { title: "Dashboard", url: "/", icon: LayoutDashboard, testId: "nav-dashboard", roles: ["employee", "manager", "admin", "contract"] },
+  { title: "Employees", url: "/employees", icon: Users, testId: "nav-employees", roles: ["employee", "manager", "admin", "contract"] },
   { title: "Departments", url: "/departments", icon: Building2, testId: "nav-departments", roles: ["admin"] },
 ];
 
 const settingsNavItems: NavItem[] = [
   { title: "Reports", url: "/reports", icon: PieChart, testId: "nav-reports", roles: ["admin"] },
-  { title: "Settings", url: "/settings", icon: Settings, testId: "nav-settings", roles: ["employee", "manager", "admin"] },
+  { title: "Settings", url: "/settings", icon: Settings, testId: "nav-settings", roles: ["employee", "manager", "admin", "contract"] },
 ];
 
 export function AppSidebar() {
@@ -79,6 +79,7 @@ export function AppSidebar() {
   const isAppraisalsActive = location.startsWith("/appraisals");
   const isRecruitmentActive = location.startsWith("/recruitment");
   const isOnboardingActive = location.startsWith("/onboarding") || location.startsWith("/my-tasks");
+  const showLeave = canAccessLeave(role);
   const showLeaveSubItems = canEditOrgSettings(role);
   const showAppraisalsSubItems = canEditOrgSettings(role);
   const showRecruitment = canEditOrgSettings(role);
@@ -90,6 +91,7 @@ export function AppSidebar() {
     employee: { label: "Employee", color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
     manager: { label: "Manager", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400" },
     admin: { label: "Admin", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" },
+    contract: { label: "Contract", color: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" },
   };
 
   return (
@@ -134,7 +136,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>People Operations</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {showLeaveSubItems ? (
+              {showLeave && (showLeaveSubItems ? (
                 <Collapsible open={leaveExpanded} onOpenChange={setLeaveExpanded}>
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
@@ -202,7 +204,7 @@ export function AppSidebar() {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              )}
+              ))}
 
               {showAppraisalsSubItems ? (
                 <Collapsible open={appraisalsExpanded} onOpenChange={setAppraisalsExpanded}>
