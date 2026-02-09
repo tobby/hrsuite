@@ -60,6 +60,7 @@ export default function Departments() {
   const isAdmin = canEditOrgSettings(role);
 
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
+  const [deletingDepartment, setDeletingDepartment] = useState<Department | null>(null);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const { data: departments = [], isLoading: isLoadingDepartments } = useQuery<Department[]>({
@@ -165,10 +166,12 @@ export default function Departments() {
     );
   }
 
-  function handleDelete(department: Department) {
-    deleteMutation.mutate(department.id, {
+  function handleDeleteConfirm() {
+    if (!deletingDepartment) return;
+    deleteMutation.mutate(deletingDepartment.id, {
       onSuccess: () => {
-        toast({ title: "Department deleted", description: `${department.name} has been removed.` });
+        toast({ title: "Department deleted", description: `${deletingDepartment.name} has been removed.` });
+        setDeletingDepartment(null);
       },
       onError: (error) => {
         toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -267,7 +270,7 @@ export default function Departments() {
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-destructive"
-                                onClick={() => handleDelete(dept)}
+                                onClick={() => setDeletingDepartment(dept)}
                                 data-testid={`button-delete-department-${dept.id}`}
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
@@ -409,6 +412,25 @@ export default function Departments() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deletingDepartment} onOpenChange={(open) => { if (!open) setDeletingDepartment(null); }}>
+        <DialogContent data-testid="dialog-delete-department">
+          <DialogHeader>
+            <DialogTitle>Delete Department</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <span className="font-medium">{deletingDepartment?.name}</span>? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeletingDepartment(null)} data-testid="button-cancel-delete">
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm} disabled={deleteMutation.isPending} data-testid="button-confirm-delete">
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
