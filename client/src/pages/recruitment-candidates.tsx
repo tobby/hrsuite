@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, Redirect } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import type { Employee } from "@shared/schema";
 import { useRecruitmentStore, CandidateStage } from "@/lib/recruitment-store";
-import { employees } from "@/lib/demo-data";
 import { useToast } from "@/hooks/use-toast";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { LayoutGrid, List, Search, MoreHorizontal, Eye, ChevronRight, ChevronLeft, GripVertical } from "lucide-react";
+import { LayoutGrid, List, Search, MoreHorizontal, Eye, ChevronRight, ChevronLeft, GripVertical, Inbox } from "lucide-react";
 
 const PIPELINE_STAGES: { key: CandidateStage; label: string; color: string }[] = [
   { key: "applied", label: "Applied", color: "bg-gray-100 dark:bg-gray-800" },
@@ -27,6 +28,7 @@ export default function RecruitmentCandidates() {
   const { role } = useRole();
   const { toast } = useToast();
   const { candidates, jobs, updateCandidateStage } = useRecruitmentStore();
+  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
 
   if (!canEditOrgSettings(role)) {
     return <Redirect to="/" />;
@@ -161,7 +163,13 @@ export default function RecruitmentCandidates() {
         </Select>
       </div>
 
-      {viewMode === "kanban" ? (
+      {candidates.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Inbox className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-medium text-muted-foreground">No candidates yet</h3>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md">Candidates will appear here once they apply to your job postings.</p>
+        </div>
+      ) : viewMode === "kanban" ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {PIPELINE_STAGES.map((stage) => {
             const stageCandidates = getCandidatesByStage(stage.key);

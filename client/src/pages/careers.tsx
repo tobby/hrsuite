@@ -1,18 +1,20 @@
 import { useState } from "react";
 import { Link, useSearch } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import type { Department } from "@shared/schema";
 import { useRecruitmentStore } from "@/lib/recruitment-store";
-import { departments } from "@/lib/demo-data";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Briefcase, MapPin, Clock, Search, Building2 } from "lucide-react";
+import { Briefcase, MapPin, Clock, Search, Building2, Inbox } from "lucide-react";
 
 export default function Careers() {
   const searchParams = useSearch();
   const highlightedJobId = new URLSearchParams(searchParams).get("job");
   const { jobs } = useRecruitmentStore();
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
   const [searchTerm, setSearchTerm] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -100,17 +102,15 @@ export default function Careers() {
 
         <div className="space-y-4">
           {filteredJobs.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">No positions found</h3>
-                <p className="text-muted-foreground">
-                  {searchTerm || departmentFilter !== "all" || typeFilter !== "all"
-                    ? "Try adjusting your filters."
-                    : "Check back later for new opportunities."}
-                </p>
-              </CardContent>
-            </Card>
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Inbox className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <h3 className="text-lg font-medium text-muted-foreground">No open positions yet</h3>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md">
+                {searchTerm || departmentFilter !== "all" || typeFilter !== "all"
+                  ? "Try adjusting your filters."
+                  : "Check back later for new opportunities."}
+              </p>
+            </div>
           ) : (
             filteredJobs.map((job) => (
               <Card

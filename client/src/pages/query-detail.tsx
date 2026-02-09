@@ -12,7 +12,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/lib/role-context";
 import { useQueryStore, type CommentAttachment } from "@/lib/query-store";
-import { employees } from "@/lib/demo-data";
+import { useQuery } from "@tanstack/react-query";
+import type { Employee } from "@shared/schema";
 import {
   ArrowLeft,
   Clock,
@@ -104,16 +105,17 @@ const timelineIcons: Record<string, typeof AlertCircle> = {
   closed: XCircle,
 };
 
-function getEmployee(id: string) {
-  return employees.find(e => e.id === id);
-}
-
 export default function QueryDetail() {
   const [, params] = useRoute("/queries/:id");
   const [, navigate] = useLocation();
   const { role, currentUser } = useRole();
   const { toast } = useToast();
   const { getQueryById, getCommentsForQuery, getTimelineForQuery, addComment, addResponse, updateQueryStatus, assignQuery } = useQueryStore();
+  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
+
+  function getEmployee(id: string) {
+    return employees.find(e => e.id === id);
+  }
 
   const [commentText, setCommentText] = useState("");
   const [responseText, setResponseText] = useState("");

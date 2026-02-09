@@ -12,10 +12,10 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/lib/role-context";
 import { useQueryStore, type CommentAttachment } from "@/lib/query-store";
-import { employees } from "@/lib/demo-data";
+import { useQuery } from "@tanstack/react-query";
+import type { Employee, HrQuery } from "@shared/schema";
 import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning, Paperclip, FileText, Image, File, X } from "lucide-react";
 import { format } from "date-fns";
-import type { HrQuery } from "@shared/schema";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -83,14 +83,15 @@ const statusColors: Record<string, string> = {
   closed: "text-muted-foreground",
 };
 
-function getEmployee(id: string) {
-  return employees.find(e => e.id === id);
-}
-
 export default function Queries() {
   const { role, currentUser } = useRole();
   const { toast } = useToast();
   const { queries, addQuery } = useQueryStore();
+  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
+
+  function getEmployee(id: string) {
+    return employees.find(e => e.id === id);
+  }
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -187,6 +188,7 @@ export default function Queries() {
       priority: newPriority,
       employeeId: newEmployeeId,
       issuedBy: currentUser.id,
+      companyId: currentUser.companyId,
     }, queryFiles.length > 0 ? queryFiles : undefined);
     toast({ title: "Query issued", description: "The disciplinary query has been issued successfully." });
     setIsIssueOpen(false);
@@ -324,7 +326,7 @@ export default function Queries() {
             </CardContent>
           </Card>
         ) : (
-          filteredQueries.map(query => <QueryCard key={query.id} query={query} role={role} currentUserId={currentUser.id} />)
+          filteredQueries.map(query => <QueryCard key={query.id} query={query} role={role} currentUserId={currentUser.id} employees={employees} />)
         )}
       </div>
 
@@ -446,7 +448,8 @@ export default function Queries() {
   );
 }
 
-function QueryCard({ query, role, currentUserId }: { query: HrQuery; role: string; currentUserId: string }) {
+function QueryCard({ query, role, currentUserId, employees }: { query: HrQuery; role: string; currentUserId: string; employees: Employee[] }) {
+  const getEmployee = (id: string) => employees.find(e => e.id === id);
   const emp = getEmployee(query.employeeId);
   const issuer = getEmployee(query.issuedBy);
   const StatusIcon = statusIcons[query.status] || AlertCircle;

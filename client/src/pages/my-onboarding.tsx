@@ -4,7 +4,8 @@ import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useRole } from "@/lib/role-context";
 import { useOnboardingStore, categoryLabels, type OnboardingTask } from "@/lib/onboarding-store";
-import { employees } from "@/lib/demo-data";
+import { useQuery } from "@tanstack/react-query";
+import type { Employee } from "@shared/schema";
 import { ClipboardList, CheckCircle2, Clock, AlertTriangle, PartyPopper } from "lucide-react";
 
 function TaskCategoryBadge({ category }: { category: OnboardingTask["category"] }) {
@@ -21,6 +22,7 @@ function TaskCategoryBadge({ category }: { category: OnboardingTask["category"] 
 
 export default function MyOnboarding() {
   const { currentUser } = useRole();
+  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
   const { getAssignmentForEmployee, getAssignmentProgress, toggleTask } = useOnboardingStore();
   const assignment = getAssignmentForEmployee(currentUser.id);
 

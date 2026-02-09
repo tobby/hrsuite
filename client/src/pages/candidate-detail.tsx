@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useParams, Link, Redirect } from "wouter";
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
+import type { Employee } from "@shared/schema";
 import { useRecruitmentStore, CandidateStage } from "@/lib/recruitment-store";
-import { employees } from "@/lib/demo-data";
 import { useToast } from "@/hooks/use-toast";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +19,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Label } from "@/components/ui/label";
 import { 
   ArrowLeft, Mail, Phone, MapPin, Linkedin, FileText, Star, Calendar, 
-  MessageSquare, StickyNote, Clock, Send, Plus, User, ChevronRight
+  MessageSquare, StickyNote, Clock, Send, Plus, User, ChevronRight, Inbox
 } from "lucide-react";
 
 const PIPELINE_STAGES: { key: CandidateStage; label: string }[] = [
@@ -37,6 +38,7 @@ export default function CandidateDetail() {
   const { role } = useRole();
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
 
   if (!canEditOrgSettings(role)) {
     return <Redirect to="/" />;
@@ -191,18 +193,17 @@ export default function CandidateDetail() {
   if (!candidate) {
     return (
       <div className="p-6">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <User className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Candidate Not Found</h3>
-            <Link href="/recruitment/candidates">
-              <Button variant="outline">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Candidates
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Inbox className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-medium text-muted-foreground">Candidate not found</h3>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md">This candidate may have been removed or does not exist.</p>
+          <Link href="/recruitment/candidates">
+            <Button variant="outline" className="mt-4">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Candidates
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -610,7 +611,7 @@ export default function CandidateDetail() {
                   <SelectValue placeholder="Select interviewer" />
                 </SelectTrigger>
                 <SelectContent>
-                  {employees.slice(0, 7).map((emp) => (
+                  {employees.map((emp) => (
                     <SelectItem key={emp.id} value={emp.id}>
                       {emp.firstName} {emp.lastName}
                     </SelectItem>

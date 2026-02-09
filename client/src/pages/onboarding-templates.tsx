@@ -11,7 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useLocation } from "wouter";
 import { useOnboardingStore, categoryLabels, type OnboardingTask, type OnboardingTemplate } from "@/lib/onboarding-store";
-import { departments } from "@/lib/demo-data";
+import { useQuery } from "@tanstack/react-query";
+import type { Department } from "@shared/schema";
 import { Plus, FileText, Trash2, GripVertical, ClipboardList, Building2 } from "lucide-react";
 
 function TaskCategoryBadge({ category }: { category: OnboardingTask["category"] }) {
@@ -28,6 +29,7 @@ function TaskCategoryBadge({ category }: { category: OnboardingTask["category"] 
 
 function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
   const { addTemplate } = useOnboardingStore();
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -203,6 +205,7 @@ function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
 
 function TemplateCard({ template }: { template: OnboardingTemplate }) {
   const { deleteTemplate } = useOnboardingStore();
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
   const dept = template.departmentId ? departments.find((d) => d.id === template.departmentId) : null;
 
   const tasksByCategory = template.tasks.reduce((acc, task) => {

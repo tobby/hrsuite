@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import type { AppraisalFeedback, FeedbackRating, PeerAssignment } from "@shared/schema";
-import { appraisalFeedback as initialFeedback, feedbackRatings as initialRatings, peerAssignments as initialPeerAssignments } from "./demo-data";
 
 interface AppraisalState {
   feedback: AppraisalFeedback[];
@@ -17,16 +16,15 @@ interface AppraisalState {
   getPendingReviewsForUser: (userId: string) => AppraisalFeedback[];
   getCompletedReviewsByUser: (userId: string) => AppraisalFeedback[];
   
-  // Peer assignment methods
   getPeerAssignmentsForReviewee: (cycleId: string, revieweeId: string) => PeerAssignment[];
   setPeerAssignments: (cycleId: string, revieweeId: string, reviewerIds: string[]) => void;
   clearPeerAssignmentsForReviewee: (cycleId: string, revieweeId: string) => void;
 }
 
 export const useAppraisalStore = create<AppraisalState>()((set, get) => ({
-  feedback: [...initialFeedback],
-  ratings: [...initialRatings],
-  peerAssignments: [...initialPeerAssignments],
+  feedback: [],
+  ratings: [],
+  peerAssignments: [],
 
   updateFeedbackStatus: (feedbackId, status, submittedAt = null) => {
     set((state) => ({
@@ -138,12 +136,10 @@ export const useAppraisalStore = create<AppraisalState>()((set, get) => ({
   
   setPeerAssignments: (cycleId, revieweeId, reviewerIds) => {
     set((state) => {
-      // Remove existing assignments for this reviewee in this cycle
       const filtered = state.peerAssignments.filter(
         (pa) => !(pa.cycleId === cycleId && pa.revieweeId === revieweeId)
       );
       
-      // Add new assignments
       const newAssignments = reviewerIds.map((reviewerId, index) => ({
         id: `pa-new-${Date.now()}-${index}`,
         cycleId,

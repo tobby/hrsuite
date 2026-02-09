@@ -25,7 +25,8 @@ import {
   Save,
 } from "lucide-react";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
-import { getDepartmentById } from "@/lib/demo-data";
+import { useQuery } from "@tanstack/react-query";
+import type { Department } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
 
 const profileFormSchema = z.object({
@@ -39,7 +40,8 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 export default function Settings() {
   const { role, currentUser } = useRole();
-  const department = getDepartmentById(currentUser.departmentId);
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
+  const department = departments.find(d => d.id === currentUser.departmentId);
   const { toast } = useToast();
 
   const form = useForm<ProfileFormValues>({
@@ -48,7 +50,7 @@ export default function Settings() {
       firstName: currentUser.firstName,
       lastName: currentUser.lastName,
       email: currentUser.email,
-      phone: currentUser.phone,
+      phone: currentUser.phone || "",
     },
   });
 
@@ -207,7 +209,7 @@ export default function Settings() {
                 <div className="space-y-2">
                   <Label className="text-muted-foreground">Hire Date</Label>
                   <p className="font-medium" data-testid="text-hire-date">
-                    {new Date(currentUser.hireDate).toLocaleDateString()}
+                    {currentUser.hireDate ? new Date(currentUser.hireDate).toLocaleDateString() : "Not set"}
                   </p>
                 </div>
                 <div className="space-y-2">

@@ -11,12 +11,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useLocation } from "wouter";
 import { useOnboardingStore, categoryLabels, type OnboardingAssignment, type OnboardingTask } from "@/lib/onboarding-store";
-import { employees } from "@/lib/demo-data";
+import { useQuery } from "@tanstack/react-query";
+import type { Employee } from "@shared/schema";
 import { Plus, Users, CheckCircle2, Clock, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 
 function AssignOnboardingDialog() {
   const { templates, assignments, assignOnboarding } = useOnboardingStore();
   const { currentUser } = useRole();
+  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
   const [open, setOpen] = useState(false);
   const [employeeId, setEmployeeId] = useState("");
   const [templateId, setTemplateId] = useState("");
@@ -102,6 +104,7 @@ function TaskCategoryBadge({ category }: { category: OnboardingTask["category"] 
 
 function AssignmentCard({ assignment }: { assignment: OnboardingAssignment }) {
   const { getAssignmentProgress, toggleTask } = useOnboardingStore();
+  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
   const [expanded, setExpanded] = useState(false);
   const emp = employees.find((e) => e.id === assignment.employeeId);
   const assignedByEmp = employees.find((e) => e.id === assignment.assignedBy);

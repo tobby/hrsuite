@@ -3,8 +3,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Redirect } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import type { Department } from "@shared/schema";
 import { useRecruitmentStore } from "@/lib/recruitment-store";
-import { departments } from "@/lib/demo-data";
 import { useToast } from "@/hooks/use-toast";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +18,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Briefcase, Plus, LayoutGrid, List, MapPin, Clock, Users, Copy, MoreHorizontal, Pencil, Trash2, ExternalLink } from "lucide-react";
+import { Briefcase, Plus, LayoutGrid, List, MapPin, Clock, Users, Copy, MoreHorizontal, Pencil, Trash2, ExternalLink, Inbox } from "lucide-react";
 
 const jobFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -35,6 +36,7 @@ export default function RecruitmentJobs() {
   const { role } = useRole();
   const { toast } = useToast();
   const { jobs, addJob, updateJob, deleteJob, getCandidatesByJob } = useRecruitmentStore();
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
 
   if (!canEditOrgSettings(role)) {
     return <Redirect to="/" />;
@@ -111,7 +113,7 @@ export default function RecruitmentJobs() {
       updateJob(editingJob, data);
       toast({ title: "Job Updated", description: "The job posting has been updated." });
     } else {
-      addJob(data);
+      addJob({ ...data, companyId: "" });
       toast({ title: "Job Created", description: "The job posting has been created." });
     }
     setIsDialogOpen(false);
@@ -166,7 +168,13 @@ export default function RecruitmentJobs() {
         </div>
       </div>
 
-      {viewMode === "card" ? (
+      {jobs.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Inbox className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-medium text-muted-foreground">No job postings yet</h3>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md">Create your first job posting to start attracting candidates.</p>
+        </div>
+      ) : viewMode === "card" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {jobs.map((job) => {
             const candidateCount = getCandidatesByJob(job.id).length;

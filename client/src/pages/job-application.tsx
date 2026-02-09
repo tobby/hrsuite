@@ -3,8 +3,9 @@ import { useParams, Link } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useQuery } from "@tanstack/react-query";
+import type { Department } from "@shared/schema";
 import { useRecruitmentStore } from "@/lib/recruitment-store";
-import { departments } from "@/lib/demo-data";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Briefcase, MapPin, Clock, Building2, CheckCircle2, ArrowLeft, Upload } from "lucide-react";
+import { Briefcase, MapPin, Clock, Building2, CheckCircle2, ArrowLeft, Upload, Inbox } from "lucide-react";
 
 const applicationSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
@@ -33,6 +34,7 @@ export default function JobApplication() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const { getJobById, addCandidate, getSetting } = useRecruitmentStore();
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
   const [step, setStep] = useState<"disclaimer" | "form" | "success">("disclaimer");
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
 
@@ -77,6 +79,7 @@ export default function JobApplication() {
     if (!job) return;
 
     addCandidate({
+      companyId: "",
       jobId: job.id,
       firstName: data.firstName,
       lastName: data.lastName,
@@ -100,21 +103,17 @@ export default function JobApplication() {
   if (!job) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="max-w-md w-full mx-4">
-          <CardContent className="py-12 text-center">
-            <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Job Not Found</h3>
-            <p className="text-muted-foreground mb-4">
-              This job posting may have been removed or is no longer available.
-            </p>
-            <Link href="/careers">
-              <Button variant="outline">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                View All Jobs
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Inbox className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-medium text-muted-foreground">Job not found</h3>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md">This job posting may have been removed or is no longer available.</p>
+          <Link href="/careers">
+            <Button variant="outline" className="mt-4">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              View All Jobs
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }

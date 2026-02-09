@@ -1,14 +1,16 @@
 import { useParams, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import type { Department } from "@shared/schema";
 import { useRecruitmentStore } from "@/lib/recruitment-store";
-import { departments } from "@/lib/demo-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Briefcase, MapPin, Clock, Building2, ArrowLeft } from "lucide-react";
+import { Briefcase, MapPin, Clock, Building2, ArrowLeft, Inbox } from "lucide-react";
 
 export default function JobDetails() {
   const { id } = useParams<{ id: string }>();
   const { getJobById, getSetting } = useRecruitmentStore();
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
 
   const job = getJobById(id || "");
   const companyName = getSetting("company_name") || "Our Company";
@@ -27,21 +29,17 @@ export default function JobDetails() {
   if (!job) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="max-w-md w-full mx-4">
-          <CardContent className="py-12 text-center">
-            <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Job Not Found</h3>
-            <p className="text-muted-foreground mb-4">
-              This job posting may have been removed or is no longer available.
-            </p>
-            <Link href="/careers">
-              <Button variant="outline" data-testid="button-back-to-careers">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                View All Jobs
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Inbox className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-medium text-muted-foreground">Job not found</h3>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md">This job posting may have been removed or is no longer available.</p>
+          <Link href="/careers">
+            <Button variant="outline" className="mt-4" data-testid="button-back-to-careers">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              View All Jobs
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -49,21 +47,17 @@ export default function JobDetails() {
   if (job.status !== "open") {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="max-w-md w-full mx-4">
-          <CardContent className="py-12 text-center">
-            <Briefcase className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-2">Position Closed</h3>
-            <p className="text-muted-foreground mb-4">
-              This position is no longer accepting applications.
-            </p>
-            <Link href="/careers">
-              <Button variant="outline" data-testid="button-back-to-careers">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                View Open Positions
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <Inbox className="h-12 w-12 text-muted-foreground/50 mb-4" />
+          <h3 className="text-lg font-medium text-muted-foreground">Position closed</h3>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md">This position is no longer accepting applications.</p>
+          <Link href="/careers">
+            <Button variant="outline" className="mt-4" data-testid="button-back-to-careers">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              View Open Positions
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }
