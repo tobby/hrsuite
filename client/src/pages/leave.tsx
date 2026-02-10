@@ -336,12 +336,12 @@ export default function Leave() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : leaveBalances && leaveBalances.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="flex gap-4 overflow-x-auto pb-2">
                 {leaveBalances.map((balance) => {
                   const lt = leaveTypes?.find((t) => t.id === balance.leaveTypeId);
                   const color = lt?.color || "#6b7280";
                   return (
-                    <Card key={balance.id} data-testid={`card-balance-${balance.id}`}>
+                    <Card key={balance.id} className="min-w-[200px] flex-shrink-0" data-testid={`card-balance-${balance.id}`}>
                       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium">
                           {lt?.name || "Unknown"}
