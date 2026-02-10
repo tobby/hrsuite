@@ -239,7 +239,7 @@ export default function LeaveSettings() {
     .filter((row) => row.balances.length > 0);
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-6 min-w-0 overflow-hidden">
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <Settings className="h-6 w-6 text-primary" />
@@ -332,7 +332,7 @@ export default function LeaveSettings() {
           </CardContent>
         </Card>
 
-        <Card data-testid="card-manage-balances">
+        <Card data-testid="card-manage-balances" className="overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
             <CardTitle className="text-lg">Employee Leave Balances</CardTitle>
             <div className="flex items-center gap-2 flex-wrap">
