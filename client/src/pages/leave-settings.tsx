@@ -85,6 +85,16 @@ export default function LeaveSettings() {
   const [editingLeaveType, setEditingLeaveType] = useState<LeaveType | null>(null);
   const [deletingLeaveType, setDeletingLeaveType] = useState<LeaveType | null>(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [editingBalance, setEditingBalance] = useState<{
+    employeeId: string;
+    employeeName: string;
+    leaveTypeId: string;
+    leaveTypeName: string;
+    totalDays: number;
+    usedDays: number;
+  } | null>(null);
+  const [balanceTotal, setBalanceTotal] = useState(0);
+  const [balanceUsed, setBalanceUsed] = useState(0);
 
   if (!canEditOrgSettings(role)) {
     navigate("/leave");
@@ -152,6 +162,20 @@ export default function LeaveSettings() {
       queryClient.invalidateQueries({ queryKey: ["/api/leave-balances/all"] });
       setDeletingLeaveType(null);
       toast({ title: "Leave type deleted", description: "The leave type has been removed." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateBalanceMutation = useMutation({
+    mutationFn: async (data: { employeeId: string; leaveTypeId: string; totalDays: number; usedDays: number; year: number }) => {
+      await apiRequest("PATCH", "/api/leave-balances/update", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/leave-balances/all"] });
+      setEditingBalance(null);
+      toast({ title: "Balance updated", description: "The employee's leave balance has been updated." });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -391,15 +415,32 @@ export default function LeaveSettings() {
                           const bal = balances.find((b) => b.leaveTypeId === lt.id);
                           return (
                             <TableCell key={lt.id} data-testid={`text-balance-${employee.id}-${lt.id}`}>
-                              {bal ? (
-                                <span>
-                                  <span className="text-muted-foreground">{bal.usedDays}</span>
-                                  {" / "}
-                                  <span>{bal.totalDays}</span>
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
+                              <button
+                                className="hover-elevate rounded-md px-2 py-1 text-left cursor-pointer"
+                                data-testid={`button-edit-balance-${employee.id}-${lt.id}`}
+                                onClick={() => {
+                                  setEditingBalance({
+                                    employeeId: employee.id,
+                                    employeeName: `${employee.firstName} ${employee.lastName}`,
+                                    leaveTypeId: lt.id,
+                                    leaveTypeName: lt.name,
+                                    totalDays: bal?.totalDays || 0,
+                                    usedDays: bal?.usedDays || 0,
+                                  });
+                                  setBalanceTotal(bal?.totalDays || 0);
+                                  setBalanceUsed(bal?.usedDays || 0);
+                                }}
+                              >
+                                {bal ? (
+                                  <span>
+                                    <span className="text-muted-foreground">{bal.usedDays}</span>
+                                    {" / "}
+                                    <span>{bal.totalDays}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </button>
                             </TableCell>
                           );
                         })}
@@ -613,6 +654,78 @@ export default function LeaveSettings() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!editingBalance} onOpenChange={(open) => { if (!open) setEditingBalance(null); }}>
+        <DialogContent data-testid="dialog-edit-balance">
+          <DialogHeader>
+            <DialogTitle>Edit Leave Balance</DialogTitle>
+            <DialogDescription>
+              Adjust {editingBalance?.leaveTypeName} balance for {editingBalance?.employeeName} ({selectedYear})
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="balance-total">Total Days</Label>
+              <Input
+                id="balance-total"
+                type="number"
+                min={0}
+                value={balanceTotal}
+                onChange={(e) => setBalanceTotal(Number(e.target.value))}
+                data-testid="input-balance-total"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="balance-used">Used Days</Label>
+              <Input
+                id="balance-used"
+                type="number"
+                min={0}
+                value={balanceUsed}
+                onChange={(e) => setBalanceUsed(Number(e.target.value))}
+                data-testid="input-balance-used"
+              />
+            </div>
+            <div className="rounded-md bg-muted p-3">
+              <p className="text-sm text-muted-foreground">
+                Remaining: <span className="font-semibold text-foreground">{Math.max(0, balanceTotal - balanceUsed)}</span> days
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setEditingBalance(null)}
+              data-testid="button-cancel-edit-balance"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (editingBalance) {
+                  if (balanceUsed > balanceTotal) {
+                    toast({ title: "Validation error", description: "Used days cannot exceed total days.", variant: "destructive" });
+                    return;
+                  }
+                  updateBalanceMutation.mutate({
+                    employeeId: editingBalance.employeeId,
+                    leaveTypeId: editingBalance.leaveTypeId,
+                    totalDays: balanceTotal,
+                    usedDays: balanceUsed,
+                    year: selectedYear,
+                  });
+                }
+              }}
+              disabled={updateBalanceMutation.isPending || balanceUsed > balanceTotal}
+              data-testid="button-save-edit-balance"
+            >
+              {updateBalanceMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

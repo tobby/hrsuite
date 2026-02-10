@@ -522,6 +522,32 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/leave-balances/update", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const { employeeId, leaveTypeId, totalDays, usedDays, year } = req.body;
+      if (!employeeId || !leaveTypeId || totalDays === undefined || usedDays === undefined || !year) {
+        return res.status(400).json({ message: "employeeId, leaveTypeId, totalDays, usedDays, and year are required" });
+      }
+      if (totalDays < 0 || usedDays < 0) {
+        return res.status(400).json({ message: "Days cannot be negative" });
+      }
+      const remainingDays = Math.max(0, totalDays - usedDays);
+      const updated = await storage.upsertLeaveBalance({
+        companyId,
+        employeeId,
+        leaveTypeId,
+        totalDays,
+        usedDays,
+        remainingDays,
+        year,
+      });
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // ==================== LEAVE REQUEST ROUTES ====================
 
   async function enrichLeaveRequestsWithApprover(requests: LeaveRequest[]) {
