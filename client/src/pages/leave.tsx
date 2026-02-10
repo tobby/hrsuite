@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Inbox, Plus, Check, X, Loader2 } from "lucide-react";
+import { Inbox, Plus, Check, X, Loader2, Info } from "lucide-react";
 import { useRole, canApproveLeave, canViewAllRequests, canAccessLeave } from "@/lib/role-context";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -63,6 +63,8 @@ export default function Leave() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
+  const [rejectionDetailOpen, setRejectionDetailOpen] = useState(false);
+  const [rejectionDetail, setRejectionDetail] = useState<{ name: string; reason: string } | null>(null);
 
   const currentYear = new Date().getFullYear();
 
@@ -381,7 +383,7 @@ export default function Leave() {
                       <TableHead>End Date</TableHead>
                       <TableHead>Days</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Details</TableHead>
+                      <TableHead>Submitted On</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -393,27 +395,26 @@ export default function Leave() {
                         <TableCell>{new Date(req.endDate).toLocaleDateString()}</TableCell>
                         <TableCell>{req.totalDays}</TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1.5">
                             {getStatusBadge(req.status)}
-                            {req.status === "rejected" && (req as any).approverName && (
-                              <span className="text-xs text-muted-foreground">
-                                by {(req as any).approverName}
-                              </span>
+                            {req.status === "rejected" && ((req as any).approverComment || (req as any).approverName) && (
+                              <button
+                                className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                                onClick={() => {
+                                  setRejectionDetail({
+                                    name: (req as any).approverName || "Unknown",
+                                    reason: (req as any).approverComment || "No reason provided",
+                                  });
+                                  setRejectionDetailOpen(true);
+                                }}
+                                data-testid={`button-view-rejection-${req.id}`}
+                              >
+                                <Info className="h-3.5 w-3.5" />
+                              </button>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-xs text-muted-foreground">
-                              {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}
-                            </span>
-                            {req.status === "rejected" && (req as any).approverComment && (
-                              <span className="text-xs text-destructive italic" data-testid={`text-reject-reason-${req.id}`}>
-                                Reason: {(req as any).approverComment}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
+                        <TableCell>{req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}</TableCell>
                         <TableCell>
                           {(req.status === "pending" || req.status === "manager_approved") && (
                             <Button
@@ -540,7 +541,7 @@ export default function Leave() {
                     <TableHead>End Date</TableHead>
                     <TableHead>Days</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Details</TableHead>
+                    <TableHead>Submitted On</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -552,27 +553,26 @@ export default function Leave() {
                       <TableCell>{new Date(req.endDate).toLocaleDateString()}</TableCell>
                       <TableCell>{req.totalDays}</TableCell>
                       <TableCell>
-                        <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5">
                           {getStatusBadge(req.status)}
-                          {req.status === "rejected" && (req as any).approverName && (
-                            <span className="text-xs text-muted-foreground">
-                              by {(req as any).approverName}
-                            </span>
+                          {req.status === "rejected" && ((req as any).approverComment || (req as any).approverName) && (
+                            <button
+                              className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                              onClick={() => {
+                                setRejectionDetail({
+                                  name: (req as any).approverName || "Unknown",
+                                  reason: (req as any).approverComment || "No reason provided",
+                                });
+                                setRejectionDetailOpen(true);
+                              }}
+                              data-testid={`button-view-rejection-all-${req.id}`}
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-xs text-muted-foreground">
-                            {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}
-                          </span>
-                          {req.status === "rejected" && (req as any).approverComment && (
-                            <span className="text-xs text-destructive italic">
-                              Reason: {(req as any).approverComment}
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
+                      <TableCell>{req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -621,6 +621,26 @@ export default function Leave() {
               Reject
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={rejectionDetailOpen} onOpenChange={(open) => { setRejectionDetailOpen(open); if (!open) setRejectionDetail(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rejection Details</DialogTitle>
+          </DialogHeader>
+          {rejectionDetail && (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Rejected by</p>
+                <p className="text-sm" data-testid="text-rejector-name">{rejectionDetail.name}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Reason</p>
+                <p className="text-sm" data-testid="text-rejection-reason">{rejectionDetail.reason}</p>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
