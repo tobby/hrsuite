@@ -388,18 +388,18 @@ export default function LeaveSettings() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <Table data-testid="table-leave-balances">
+                <Table data-testid="table-leave-balances" className="table-fixed">
                   <TableHeader>
                     <TableRow className="bg-muted/50">
-                      <TableHead className="sticky left-0 z-20 bg-muted/50">Employee</TableHead>
+                      <TableHead className="sticky left-0 z-20 bg-muted/50 w-[160px]">Employee</TableHead>
                       {leaveTypes.map((lt) => (
-                        <TableHead key={lt.id} data-testid={`header-balance-${lt.id}`}>
-                          <div className="flex items-center gap-2" style={{ hyphens: "auto", wordBreak: "break-word" }}>
+                        <TableHead key={lt.id} className="w-[120px]" data-testid={`header-balance-${lt.id}`}>
+                          <div className="flex items-center gap-2 truncate" title={lt.name}>
                             <div
                               className="h-3 w-3 rounded-full shrink-0"
                               style={{ backgroundColor: lt.color }}
                             />
-                            {lt.name}
+                            <span className="truncate">{lt.name}</span>
                           </div>
                         </TableHead>
                       ))}
