@@ -180,10 +180,21 @@ export async function registerRoutes(
 
   // ==================== AUTH MIDDLEWARE ====================
 
-  function requireAuth(req: Request, res: Response, next: NextFunction) {
+  async function requireAuth(req: Request, res: Response, next: NextFunction) {
     const employeeId = (req.session as any)?.employeeId;
     if (!employeeId) {
       return res.status(401).json({ message: "Authentication required" });
+    }
+    try {
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee || employee.status === "inactive") {
+        req.session.destroy(() => {});
+        return res.status(401).json({ message: "Account no longer active" });
+      }
+      (req.session as any).role = employee.role;
+      (req.session as any).companyId = employee.companyId;
+    } catch (error) {
+      return res.status(500).json({ message: "Authentication check failed" });
     }
     next();
   }
