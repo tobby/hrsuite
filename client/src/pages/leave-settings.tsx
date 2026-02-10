@@ -286,7 +286,6 @@ export default function LeaveSettings() {
                   <TableRow>
                     <TableHead>Color</TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead>Description</TableHead>
                     <TableHead>Default Days</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -303,9 +302,6 @@ export default function LeaveSettings() {
                       </TableCell>
                       <TableCell className="font-medium" data-testid={`text-leave-type-name-${lt.id}`}>
                         {lt.name}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground" data-testid={`text-leave-type-desc-${lt.id}`}>
-                        {lt.description}
                       </TableCell>
                       <TableCell data-testid={`text-leave-type-days-${lt.id}`}>
                         {lt.defaultDays} days

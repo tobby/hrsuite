@@ -370,18 +370,11 @@ export default function Leave() {
                   return (
                     <Card key={balance.id} className="min-w-[200px] flex-shrink-0" data-testid={`card-balance-${balance.id}`}>
                       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                        <div className="min-w-0">
-                          <CardTitle className="text-sm font-medium">
-                            {lt?.name || "Unknown"}
-                          </CardTitle>
-                          {lt?.description && (
-                            <p className="text-xs text-muted-foreground mt-0.5 truncate" data-testid={`text-balance-desc-${balance.id}`}>
-                              {lt.description}
-                            </p>
-                          )}
-                        </div>
+                        <CardTitle className="text-sm font-medium">
+                          {lt?.name || "Unknown"}
+                        </CardTitle>
                         <div
-                          className="h-3 w-3 rounded-full flex-shrink-0"
+                          className="h-3 w-3 rounded-full"
                           style={{ backgroundColor: color }}
                         />
                       </CardHeader>
