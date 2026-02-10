@@ -381,7 +381,7 @@ export default function Leave() {
                       <TableHead>End Date</TableHead>
                       <TableHead>Days</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Submitted On</TableHead>
+                      <TableHead>Details</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -392,8 +392,28 @@ export default function Leave() {
                         <TableCell>{new Date(req.startDate).toLocaleDateString()}</TableCell>
                         <TableCell>{new Date(req.endDate).toLocaleDateString()}</TableCell>
                         <TableCell>{req.totalDays}</TableCell>
-                        <TableCell>{getStatusBadge(req.status)}</TableCell>
-                        <TableCell>{req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            {getStatusBadge(req.status)}
+                            {req.status === "rejected" && (req as any).approverName && (
+                              <span className="text-xs text-muted-foreground">
+                                by {(req as any).approverName}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-xs text-muted-foreground">
+                              {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}
+                            </span>
+                            {req.status === "rejected" && (req as any).approverComment && (
+                              <span className="text-xs text-destructive italic" data-testid={`text-reject-reason-${req.id}`}>
+                                Reason: {(req as any).approverComment}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           {(req.status === "pending" || req.status === "manager_approved") && (
                             <Button
@@ -520,7 +540,7 @@ export default function Leave() {
                     <TableHead>End Date</TableHead>
                     <TableHead>Days</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Submitted On</TableHead>
+                    <TableHead>Details</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -531,8 +551,28 @@ export default function Leave() {
                       <TableCell>{new Date(req.startDate).toLocaleDateString()}</TableCell>
                       <TableCell>{new Date(req.endDate).toLocaleDateString()}</TableCell>
                       <TableCell>{req.totalDays}</TableCell>
-                      <TableCell>{getStatusBadge(req.status)}</TableCell>
-                      <TableCell>{req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          {getStatusBadge(req.status)}
+                          {req.status === "rejected" && (req as any).approverName && (
+                            <span className="text-xs text-muted-foreground">
+                              by {(req as any).approverName}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs text-muted-foreground">
+                            {req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}
+                          </span>
+                          {req.status === "rejected" && (req as any).approverComment && (
+                            <span className="text-xs text-destructive italic">
+                              Reason: {(req as any).approverComment}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -557,12 +597,12 @@ export default function Leave() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="reject-comment">Comment</Label>
+              <Label htmlFor="reject-comment">Reason for rejection <span className="text-destructive">*</span></Label>
               <Textarea
                 id="reject-comment"
                 value={rejectComment}
                 onChange={(e) => setRejectComment(e.target.value)}
-                placeholder="Enter reason for rejection"
+                placeholder="Enter reason for rejection (required)"
                 data-testid="input-reject-comment"
               />
             </div>
@@ -574,7 +614,7 @@ export default function Leave() {
             <Button
               variant="destructive"
               onClick={submitReject}
-              disabled={rejectMutation.isPending}
+              disabled={rejectMutation.isPending || !rejectComment.trim()}
               data-testid="button-confirm-reject"
             >
               {rejectMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

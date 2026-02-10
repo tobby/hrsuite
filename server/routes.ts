@@ -506,11 +506,25 @@ export async function registerRoutes(
 
   // ==================== LEAVE REQUEST ROUTES ====================
 
+  async function enrichLeaveRequestsWithApprover(requests: LeaveRequest[]) {
+    const approverIds = [...new Set(requests.map(r => r.approverId).filter(Boolean))] as string[];
+    const approverMap: Record<string, string> = {};
+    for (const id of approverIds) {
+      const emp = await storage.getEmployee(id);
+      if (emp) approverMap[id] = `${emp.firstName} ${emp.lastName}`;
+    }
+    return requests.map(r => ({
+      ...r,
+      approverName: r.approverId ? approverMap[r.approverId] || null : null,
+    }));
+  }
+
   app.get("/api/leave-requests", requireAuth, async (req: Request, res: Response) => {
     try {
       const employeeId = (req.session as any).employeeId;
       const requests = await storage.getLeaveRequestsByEmployee(employeeId);
-      return res.json(requests);
+      const enriched = await enrichLeaveRequestsWithApprover(requests);
+      return res.json(enriched);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
@@ -520,7 +534,8 @@ export async function registerRoutes(
     try {
       const companyId = (req.session as any).companyId;
       const requests = await storage.getLeaveRequestsByCompany(companyId);
-      return res.json(requests);
+      const enriched = await enrichLeaveRequestsWithApprover(requests);
+      return res.json(enriched);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
@@ -530,7 +545,8 @@ export async function registerRoutes(
     try {
       const companyId = (req.session as any).companyId;
       const requests = await storage.getPendingLeaveRequestsByCompany(companyId);
-      return res.json(requests);
+      const enriched = await enrichLeaveRequestsWithApprover(requests);
+      return res.json(enriched);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
@@ -624,10 +640,14 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Only pending or manager-approved requests can be rejected" });
       }
 
+      if (!req.body.approverComment || !req.body.approverComment.trim()) {
+        return res.status(400).json({ message: "Rejection reason is required" });
+      }
+
       const updated = await storage.updateLeaveRequest(req.params.id, {
         status: "rejected",
         approverId,
-        approverComment: req.body.approverComment || null,
+        approverComment: req.body.approverComment.trim(),
       });
       return res.json(updated);
     } catch (error) {
