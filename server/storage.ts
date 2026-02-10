@@ -1,4 +1,4 @@
-import { eq, and, like, desc } from "drizzle-orm";
+import { eq, and, like, desc, sql } from "drizzle-orm";
 import { db } from "./db";
 import {
   companies, type Company, type InsertCompany,
@@ -268,7 +268,10 @@ export class DatabaseStorage implements IStorage {
 
   async getPendingLeaveRequestsByCompany(companyId: string): Promise<LeaveRequest[]> {
     return db.select().from(leaveRequests).where(
-      and(eq(leaveRequests.companyId, companyId), eq(leaveRequests.status, "pending"))
+      and(
+        eq(leaveRequests.companyId, companyId),
+        sql`${leaveRequests.status} IN ('pending', 'manager_approved')`
+      )
     ).orderBy(desc(leaveRequests.createdAt));
   }
 

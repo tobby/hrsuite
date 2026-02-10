@@ -28,7 +28,9 @@ type LeaveRequestFormData = z.infer<typeof leaveRequestFormSchema>;
 function getStatusBadge(status: string) {
   switch (status) {
     case "pending":
-      return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" data-testid={`badge-status-${status}`}>Pending</Badge>;
+      return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" data-testid={`badge-status-${status}`}>Pending Manager</Badge>;
+    case "manager_approved":
+      return <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" data-testid={`badge-status-${status}`}>Awaiting Admin</Badge>;
     case "approved":
       return <Badge variant="default" className="bg-green-600 text-white" data-testid={`badge-status-${status}`}>Approved</Badge>;
     case "rejected":
@@ -152,7 +154,7 @@ export default function Leave() {
 
   const rejectMutation = useMutation({
     mutationFn: async ({ id, comment }: { id: string; comment: string }) => {
-      const res = await apiRequest("PATCH", `/api/leave-requests/${id}/reject`, { comment });
+      const res = await apiRequest("PATCH", `/api/leave-requests/${id}/reject`, { approverComment: comment });
       return res.json();
     },
     onSuccess: () => {
@@ -393,7 +395,7 @@ export default function Leave() {
                         <TableCell>{getStatusBadge(req.status)}</TableCell>
                         <TableCell>{req.createdAt ? new Date(req.createdAt).toLocaleDateString() : "-"}</TableCell>
                         <TableCell>
-                          {req.status === "pending" && (
+                          {(req.status === "pending" || req.status === "manager_approved") && (
                             <Button
                               variant="outline"
                               size="sm"
@@ -437,44 +439,57 @@ export default function Leave() {
                     <TableHead>Start Date</TableHead>
                     <TableHead>End Date</TableHead>
                     <TableHead>Days</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Reason</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pendingRequests.map((req) => (
-                    <TableRow key={req.id} data-testid={`row-pending-${req.id}`}>
-                      <TableCell>{getEmployeeName(req.employeeId, employees)}</TableCell>
-                      <TableCell>{getLeaveTypeName(req.leaveTypeId, leaveTypes)}</TableCell>
-                      <TableCell>{new Date(req.startDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{new Date(req.endDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{req.totalDays}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{req.reason}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Button
-                            size="sm"
-                            onClick={() => approveMutation.mutate(req.id)}
-                            disabled={approveMutation.isPending}
-                            data-testid={`button-approve-${req.id}`}
-                          >
-                            <Check className="mr-1 h-4 w-4" />
-                            Approve
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleReject(req.id)}
-                            disabled={rejectMutation.isPending}
-                            data-testid={`button-reject-${req.id}`}
-                          >
-                            <X className="mr-1 h-4 w-4" />
-                            Reject
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {pendingRequests.map((req) => {
+                    const canApproveThis = (role === "manager" && req.status === "pending") || (role === "admin" && req.status === "manager_approved");
+                    const canRejectThis = (role === "manager" && req.status === "pending") || (role === "admin" && (req.status === "pending" || req.status === "manager_approved"));
+                    return (
+                      <TableRow key={req.id} data-testid={`row-pending-${req.id}`}>
+                        <TableCell>{getEmployeeName(req.employeeId, employees)}</TableCell>
+                        <TableCell>{getLeaveTypeName(req.leaveTypeId, leaveTypes)}</TableCell>
+                        <TableCell>{new Date(req.startDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{new Date(req.endDate).toLocaleDateString()}</TableCell>
+                        <TableCell>{req.totalDays}</TableCell>
+                        <TableCell>{getStatusBadge(req.status)}</TableCell>
+                        <TableCell className="max-w-[200px] truncate">{req.reason}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {canApproveThis && (
+                              <Button
+                                size="sm"
+                                onClick={() => approveMutation.mutate(req.id)}
+                                disabled={approveMutation.isPending}
+                                data-testid={`button-approve-${req.id}`}
+                              >
+                                <Check className="mr-1 h-4 w-4" />
+                                {role === "manager" ? "Approve" : "Final Approve"}
+                              </Button>
+                            )}
+                            {canRejectThis && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => handleReject(req.id)}
+                                disabled={rejectMutation.isPending}
+                                data-testid={`button-reject-${req.id}`}
+                              >
+                                <X className="mr-1 h-4 w-4" />
+                                Reject
+                              </Button>
+                            )}
+                            {!canApproveThis && !canRejectThis && (
+                              <span className="text-xs text-muted-foreground">Awaiting manager</span>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </Card>

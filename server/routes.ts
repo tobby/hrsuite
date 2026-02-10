@@ -562,34 +562,49 @@ export async function registerRoutes(
   app.patch("/api/leave-requests/:id/approve", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
     try {
       const approverId = (req.session as any).employeeId;
+      const role = (req.session as any).role;
       const request = await storage.getLeaveRequest(req.params.id);
       if (!request) return res.status(404).json({ message: "Leave request not found" });
-      if (request.status !== "pending") {
-        return res.status(400).json({ message: "Only pending requests can be approved" });
-      }
 
-      const updated = await storage.updateLeaveRequest(req.params.id, {
-        status: "approved",
-        approverId,
-      });
-
-      const startDate = new Date(request.startDate);
-      const year = startDate.getFullYear();
-      const balances = await storage.getLeaveBalancesByEmployee(request.employeeId, year);
-      const balance = balances.find(b => b.leaveTypeId === request.leaveTypeId);
-      if (balance) {
-        await storage.upsertLeaveBalance({
-          companyId: balance.companyId,
-          employeeId: balance.employeeId,
-          leaveTypeId: balance.leaveTypeId,
-          totalDays: balance.totalDays,
-          usedDays: balance.usedDays + request.totalDays,
-          remainingDays: balance.remainingDays - request.totalDays,
-          year: balance.year,
+      if (role === "manager") {
+        if (request.status !== "pending") {
+          return res.status(400).json({ message: "Only pending requests can be approved by a manager" });
+        }
+        const updated = await storage.updateLeaveRequest(req.params.id, {
+          status: "manager_approved",
+          approverId,
         });
+        return res.json(updated);
       }
 
-      return res.json(updated);
+      if (role === "admin") {
+        if (request.status !== "manager_approved") {
+          return res.status(400).json({ message: "This request needs manager approval first" });
+        }
+        const updated = await storage.updateLeaveRequest(req.params.id, {
+          status: "approved",
+          approverId,
+        });
+
+        const startDate = new Date(request.startDate);
+        const year = startDate.getFullYear();
+        const balances = await storage.getLeaveBalancesByEmployee(request.employeeId, year);
+        const balance = balances.find(b => b.leaveTypeId === request.leaveTypeId);
+        if (balance) {
+          await storage.upsertLeaveBalance({
+            companyId: balance.companyId,
+            employeeId: balance.employeeId,
+            leaveTypeId: balance.leaveTypeId,
+            totalDays: balance.totalDays,
+            usedDays: balance.usedDays + request.totalDays,
+            remainingDays: balance.remainingDays - request.totalDays,
+            year: balance.year,
+          });
+        }
+        return res.json(updated);
+      }
+
+      return res.status(403).json({ message: "Unauthorized" });
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
@@ -598,10 +613,15 @@ export async function registerRoutes(
   app.patch("/api/leave-requests/:id/reject", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
     try {
       const approverId = (req.session as any).employeeId;
+      const role = (req.session as any).role;
       const request = await storage.getLeaveRequest(req.params.id);
       if (!request) return res.status(404).json({ message: "Leave request not found" });
-      if (request.status !== "pending") {
-        return res.status(400).json({ message: "Only pending requests can be rejected" });
+
+      if (role === "manager" && request.status !== "pending") {
+        return res.status(400).json({ message: "Managers can only reject pending requests" });
+      }
+      if (role === "admin" && request.status !== "pending" && request.status !== "manager_approved") {
+        return res.status(400).json({ message: "Only pending or manager-approved requests can be rejected" });
       }
 
       const updated = await storage.updateLeaveRequest(req.params.id, {
@@ -623,8 +643,8 @@ export async function registerRoutes(
       if (request.employeeId !== employeeId) {
         return res.status(403).json({ message: "You can only cancel your own requests" });
       }
-      if (request.status !== "pending") {
-        return res.status(400).json({ message: "Only pending requests can be cancelled" });
+      if (request.status !== "pending" && request.status !== "manager_approved") {
+        return res.status(400).json({ message: "Only pending or manager-approved requests can be cancelled" });
       }
 
       const updated = await storage.updateLeaveRequest(req.params.id, {

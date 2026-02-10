@@ -324,9 +324,10 @@ export default function Dashboard() {
                           req.status === "approved" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
                           req.status === "rejected" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
                           req.status === "cancelled" ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" :
+                          req.status === "manager_approved" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
                           "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
                         }`}>
-                          {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                          {req.status === "manager_approved" ? "Awaiting Admin" : req.status.charAt(0).toUpperCase() + req.status.slice(1)}
                         </span>
                       </div>
                     );
