@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { LayoutGrid, List, Search, MoreHorizontal, Eye, ChevronRight, ChevronLeft, GripVertical, Inbox } from "lucide-react";
 
@@ -47,6 +48,8 @@ export default function RecruitmentCandidates() {
     const matchesJob = jobFilter === "all" || c.jobId === jobFilter;
     return matchesSearch && matchesJob;
   });
+
+  const { currentPage, totalPages, paginatedItems: paginatedCandidates, setCurrentPage, totalItems, pageSize } = usePagination(filteredCandidates, 10);
 
   const getCandidatesByStage = (stage: CandidateStage) =>
     filteredCandidates.filter((c) => c.stage === stage);
@@ -279,7 +282,7 @@ export default function RecruitmentCandidates() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCandidates.map((candidate) => (
+              {paginatedCandidates.map((candidate) => (
                 <TableRow key={candidate.id} data-testid={`row-candidate-${candidate.id}`}>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -337,6 +340,13 @@ export default function RecruitmentCandidates() {
               ))}
             </TableBody>
           </Table>
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={totalItems}
+            pageSize={pageSize}
+          />
         </Card>
       )}
     </div>

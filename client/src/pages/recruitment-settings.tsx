@@ -17,6 +17,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import { Plus, Pencil, Trash2, FileText, Shield, Mail } from "lucide-react";
 
 const templateFormSchema = z.object({
@@ -52,6 +53,15 @@ export default function RecruitmentSettings() {
     getSetting,
     updateSetting,
   } = useRecruitmentStore();
+
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems: paginatedTemplates,
+    setCurrentPage,
+    totalItems,
+    pageSize,
+  } = usePagination(emailTemplates, 10);
 
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
@@ -175,7 +185,7 @@ export default function RecruitmentSettings() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {emailTemplates.map((template) => (
+                  {paginatedTemplates.map((template) => (
                     <TableRow key={template.id} data-testid={`row-template-${template.id}`}>
                       <TableCell className="font-medium">{template.name}</TableCell>
                       <TableCell>
@@ -207,6 +217,13 @@ export default function RecruitmentSettings() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={totalItems}
+                pageSize={pageSize}
+              />
 
               <div className="mt-6 p-4 bg-muted rounded-lg">
                 <h4 className="font-medium mb-2">Available Template Variables</h4>

@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Briefcase, Plus, LayoutGrid, List, MapPin, Clock, Users, Copy, MoreHorizontal, Pencil, Trash2, ExternalLink, Inbox } from "lucide-react";
 
@@ -44,6 +45,8 @@ export default function RecruitmentJobs() {
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<string | null>(null);
+
+  const { currentPage, totalPages, paginatedItems: paginatedJobs, setCurrentPage, totalItems, pageSize } = usePagination(jobs, 10);
 
   const form = useForm<JobFormData>({
     resolver: zodResolver(jobFormSchema),
@@ -253,7 +256,7 @@ export default function RecruitmentJobs() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {jobs.map((job) => {
+              {paginatedJobs.map((job) => {
                 const candidateCount = getCandidatesByJob(job.id).length;
                 return (
                   <TableRow key={job.id} data-testid={`row-job-${job.id}`}>
@@ -292,6 +295,13 @@ export default function RecruitmentJobs() {
               })}
             </TableBody>
           </Table>
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            totalItems={totalItems}
+            pageSize={pageSize}
+          />
         </Card>
       )}
 

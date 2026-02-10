@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import {
   Table,
   TableBody,
@@ -189,6 +190,8 @@ export default function Employees() {
     return matchesSearch && matchesDepartment && matchesStatus;
   });
 
+  const { currentPage, totalPages, paginatedItems, setCurrentPage, totalItems, pageSize } = usePagination(filteredEmployees, 10);
+
   const openEmployeeDetail = (employee: Employee) => {
     setSelectedEmployee(employee);
     setIsDetailOpen(true);
@@ -367,7 +370,7 @@ export default function Employees() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      filteredEmployees.map((employee) => {
+                      paginatedItems.map((employee) => {
                         const department = employee.departmentId ? getDepartmentById(employee.departmentId) : null;
                         return (
                           <TableRow
@@ -457,6 +460,13 @@ export default function Employees() {
                   </TableBody>
                 </Table>
               </div>
+              <TablePagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                totalItems={totalItems}
+                pageSize={pageSize}
+              />
               <div className="mt-4 text-sm text-muted-foreground" data-testid="text-employee-count">
                 Showing {filteredEmployees.length} of {allEmployees.length} employees
               </div>

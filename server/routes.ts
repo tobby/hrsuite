@@ -506,24 +506,6 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/leave-balances/initialize-all", requireAuth, requireAdmin, async (req: Request, res: Response) => {
-    try {
-      const companyId = (req.session as any).companyId;
-      const { year } = req.body;
-      if (!year) {
-        return res.status(400).json({ message: "year is required" });
-      }
-      const employees = await storage.getEmployeesByCompany(companyId);
-      const activeEmployees = employees.filter(e => e.status === "active");
-      for (const emp of activeEmployees) {
-        await storage.initializeBalancesForEmployee(companyId, emp.id, year);
-      }
-      return res.json({ message: `Balances initialized for ${activeEmployees.length} employees` });
-    } catch (error) {
-      return res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
   app.patch("/api/leave-balances/update", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
       const companyId = (req.session as any).companyId;

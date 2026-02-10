@@ -46,8 +46,8 @@ import {
   Trash2,
   Loader2,
   Inbox,
-  RefreshCw,
 } from "lucide-react";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useToast } from "@/hooks/use-toast";
@@ -182,19 +182,6 @@ export default function LeaveSettings() {
     },
   });
 
-  const initializeAllMutation = useMutation({
-    mutationFn: async (year: number) => {
-      const res = await apiRequest("POST", "/api/leave-balances/initialize-all", { year });
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/leave-balances/all"] });
-      toast({ title: "Balances initialized", description: data.message });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
 
   function handleAddOpen() {
     addForm.reset({ name: "", description: "", defaultDays: 10, color: "#3b82f6" });
@@ -238,6 +225,24 @@ export default function LeaveSettings() {
     })
     .filter((row) => row.balances.length > 0);
 
+  const {
+    currentPage: typesCurrentPage,
+    totalPages: typesTotalPages,
+    paginatedItems: paginatedLeaveTypes,
+    setCurrentPage: typesSetCurrentPage,
+    totalItems: typesTotalItems,
+    pageSize: typesPageSize,
+  } = usePagination(leaveTypes, 10);
+
+  const {
+    currentPage: balancesCurrentPage,
+    totalPages: balancesTotalPages,
+    paginatedItems: paginatedBalancesByEmployee,
+    setCurrentPage: balancesSetCurrentPage,
+    totalItems: balancesTotalItems,
+    pageSize: balancesPageSize,
+  } = usePagination(balancesByEmployee, 10);
+
   return (
     <div className="space-y-6 p-6 min-w-0 overflow-hidden">
       <div className="flex flex-col gap-2">
@@ -275,6 +280,7 @@ export default function LeaveSettings() {
                 </p>
               </div>
             ) : (
+              <>
               <Table data-testid="table-leave-types">
                 <TableHeader>
                   <TableRow>
@@ -286,7 +292,7 @@ export default function LeaveSettings() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {leaveTypes.map((lt) => (
+                  {paginatedLeaveTypes.map((lt) => (
                     <TableRow key={lt.id} data-testid={`row-leave-type-${lt.id}`}>
                       <TableCell>
                         <div
@@ -328,6 +334,14 @@ export default function LeaveSettings() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                currentPage={typesCurrentPage}
+                totalPages={typesTotalPages}
+                onPageChange={typesSetCurrentPage}
+                totalItems={typesTotalItems}
+                pageSize={typesPageSize}
+              />
+              </>
             )}
           </CardContent>
         </Card>
@@ -351,18 +365,6 @@ export default function LeaveSettings() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button
-                data-testid="button-initialize-all-balances"
-                onClick={() => initializeAllMutation.mutate(selectedYear)}
-                disabled={initializeAllMutation.isPending || leaveTypes.length === 0}
-              >
-                {initializeAllMutation.isPending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                )}
-                Initialize All Balances
-              </Button>
             </div>
           </CardHeader>
           <CardContent>
@@ -406,7 +408,7 @@ export default function LeaveSettings() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {balancesByEmployee.map(({ employee, balances }) => (
+                    {paginatedBalancesByEmployee.map(({ employee, balances }) => (
                       <TableRow key={employee.id} data-testid={`row-balance-${employee.id}`}>
                         <TableCell className="font-medium sticky left-0 z-20 bg-background" data-testid={`text-balance-employee-${employee.id}`}>
                           {employee.firstName} {employee.lastName}
@@ -448,6 +450,13 @@ export default function LeaveSettings() {
                     ))}
                   </TableBody>
                 </Table>
+                <TablePagination
+                  currentPage={balancesCurrentPage}
+                  totalPages={balancesTotalPages}
+                  onPageChange={balancesSetCurrentPage}
+                  totalItems={balancesTotalItems}
+                  pageSize={balancesPageSize}
+                />
               </div>
             )}
           </CardContent>

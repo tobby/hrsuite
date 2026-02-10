@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,32 @@ export default function Leave() {
     enabled: canApproveLeave(role) || canViewAllRequests(role),
   });
 
+  const {
+    paginatedItems: paginatedMyRequests,
+    currentPage: myRequestsPage,
+    totalPages: myRequestsTotalPages,
+    setCurrentPage: setMyRequestsPage,
+    totalItems: myRequestsTotalItems,
+    pageSize: myRequestsPageSize,
+  } = usePagination<LeaveRequest>(myRequests || [], 10);
+
+  const {
+    paginatedItems: paginatedPendingRequests,
+    currentPage: pendingPage,
+    totalPages: pendingTotalPages,
+    setCurrentPage: setPendingPage,
+    totalItems: pendingTotalItems,
+    pageSize: pendingPageSize,
+  } = usePagination<LeaveRequest>(pendingRequests || [], 10);
+
+  const {
+    paginatedItems: paginatedAllRequests,
+    currentPage: allPage,
+    totalPages: allTotalPages,
+    setCurrentPage: setAllPage,
+    totalItems: allTotalItems,
+    pageSize: allPageSize,
+  } = usePagination<LeaveRequest>(allRequests || [], 10);
 
   const form = useForm<LeaveRequestFormData>({
     resolver: zodResolver(leaveRequestFormSchema),
@@ -343,11 +370,18 @@ export default function Leave() {
                   return (
                     <Card key={balance.id} className="min-w-[200px] flex-shrink-0" data-testid={`card-balance-${balance.id}`}>
                       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">
-                          {lt?.name || "Unknown"}
-                        </CardTitle>
+                        <div className="min-w-0">
+                          <CardTitle className="text-sm font-medium">
+                            {lt?.name || "Unknown"}
+                          </CardTitle>
+                          {lt?.description && (
+                            <p className="text-xs text-muted-foreground mt-0.5 truncate" data-testid={`text-balance-desc-${balance.id}`}>
+                              {lt.description}
+                            </p>
+                          )}
+                        </div>
                         <div
-                          className="h-3 w-3 rounded-full"
+                          className="h-3 w-3 rounded-full flex-shrink-0"
                           style={{ backgroundColor: color }}
                         />
                       </CardHeader>
@@ -393,7 +427,7 @@ export default function Leave() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {myRequests.map((req) => (
+                    {paginatedMyRequests.map((req) => (
                       <TableRow key={req.id} data-testid={`row-request-${req.id}`}>
                         <TableCell>{getLeaveTypeName(req.leaveTypeId, leaveTypes)}</TableCell>
                         <TableCell>{new Date(req.startDate).toLocaleDateString()}</TableCell>
@@ -437,6 +471,13 @@ export default function Leave() {
                     ))}
                   </TableBody>
                 </Table>
+                <TablePagination
+                  currentPage={myRequestsPage}
+                  totalPages={myRequestsTotalPages}
+                  onPageChange={setMyRequestsPage}
+                  totalItems={myRequestsTotalItems}
+                  pageSize={myRequestsPageSize}
+                />
               </Card>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -471,7 +512,7 @@ export default function Leave() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pendingRequests.map((req) => {
+                  {paginatedPendingRequests.map((req) => {
                     const canApproveThis = (role === "manager" && req.status === "pending") || (role === "admin" && (req.status === "pending" || req.status === "manager_approved"));
                     const canRejectThis = (role === "manager" && req.status === "pending") || (role === "admin" && (req.status === "pending" || req.status === "manager_approved"));
                     return (
@@ -518,6 +559,13 @@ export default function Leave() {
                   })}
                 </TableBody>
               </Table>
+              <TablePagination
+                currentPage={pendingPage}
+                totalPages={pendingTotalPages}
+                onPageChange={setPendingPage}
+                totalItems={pendingTotalItems}
+                pageSize={pendingPageSize}
+              />
             </Card>
           ) : (
             <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -550,7 +598,7 @@ export default function Leave() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {allRequests.map((req) => (
+                  {paginatedAllRequests.map((req) => (
                     <TableRow key={req.id} data-testid={`row-all-${req.id}`}>
                       <TableCell>{getEmployeeName(req.employeeId, employees)}</TableCell>
                       <TableCell>{getLeaveTypeName(req.leaveTypeId, leaveTypes)}</TableCell>
@@ -582,6 +630,13 @@ export default function Leave() {
                   ))}
                 </TableBody>
               </Table>
+              <TablePagination
+                currentPage={allPage}
+                totalPages={allTotalPages}
+                onPageChange={setAllPage}
+                totalItems={allTotalItems}
+                pageSize={allPageSize}
+              />
             </Card>
           ) : (
             <div className="flex flex-col items-center justify-center py-16 text-center">
