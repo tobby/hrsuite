@@ -60,6 +60,8 @@ export default function Leave() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+  const [approvingRequestId, setApprovingRequestId] = useState<string | null>(null);
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
@@ -144,6 +146,8 @@ export default function Leave() {
     },
     onSuccess: () => {
       toast({ title: "Leave request approved" });
+      setApproveDialogOpen(false);
+      setApprovingRequestId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/leave-requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/leave-requests/pending"] });
       queryClient.invalidateQueries({ queryKey: ["/api/leave-requests/all"] });
@@ -483,7 +487,7 @@ export default function Leave() {
                             {canApproveThis && (
                               <Button
                                 size="sm"
-                                onClick={() => approveMutation.mutate(req.id)}
+                                onClick={() => { setApprovingRequestId(req.id); setApproveDialogOpen(true); }}
                                 disabled={approveMutation.isPending}
                                 data-testid={`button-approve-${req.id}`}
                               >
@@ -589,6 +593,28 @@ export default function Leave() {
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog open={approveDialogOpen} onOpenChange={(open) => { setApproveDialogOpen(open); if (!open) setApprovingRequestId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirm Approval</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Are you sure you want to approve this leave request?</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setApproveDialogOpen(false); setApprovingRequestId(null); }} data-testid="button-cancel-approve">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => { if (approvingRequestId) approveMutation.mutate(approvingRequestId); }}
+              disabled={approveMutation.isPending}
+              data-testid="button-confirm-approve"
+            >
+              {approveMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Approve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <DialogContent>
