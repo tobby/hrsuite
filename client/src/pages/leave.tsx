@@ -336,7 +336,7 @@ export default function Leave() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : leaveBalances && leaveBalances.length > 0 ? (
-              <div className="flex gap-4 overflow-x-auto pb-2">
+              <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
                 {leaveBalances.map((balance) => {
                   const lt = leaveTypes?.find((t) => t.id === balance.leaveTypeId);
                   const color = lt?.color || "#6b7280";
