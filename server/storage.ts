@@ -49,7 +49,7 @@ export interface IStorage {
   initializeBalancesForEmployee(companyId: string, employeeId: string, year: number): Promise<void>;
 
   // Leave Requests
-  createLeaveRequest(data: InsertLeaveRequest & { companyId: string; employeeId: string; totalDays: number }): Promise<LeaveRequest>;
+  createLeaveRequest(data: InsertLeaveRequest & { companyId: string; employeeId: string; totalDays: number; status?: string }): Promise<LeaveRequest>;
   getLeaveRequestsByEmployee(employeeId: string): Promise<LeaveRequest[]>;
   getLeaveRequestsByCompany(companyId: string): Promise<LeaveRequest[]>;
   getPendingLeaveRequestsByCompany(companyId: string): Promise<LeaveRequest[]>;
@@ -253,7 +253,7 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== LEAVE REQUESTS ====================
 
-  async createLeaveRequest(data: InsertLeaveRequest & { companyId: string; employeeId: string; totalDays: number }): Promise<LeaveRequest> {
+  async createLeaveRequest(data: InsertLeaveRequest & { companyId: string; employeeId: string; totalDays: number; status?: string }): Promise<LeaveRequest> {
     const [request] = await db.insert(leaveRequests).values(data).returning();
     return request;
   }

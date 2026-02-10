@@ -563,11 +563,15 @@ export async function registerRoutes(
       const startDate = new Date(parsed.data.startDate);
       const endDate = new Date(parsed.data.endDate);
       const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee) return res.status(401).json({ message: "Employee not found" });
+      const initialStatus = employee.managerId ? "pending" : "manager_approved";
       const request = await storage.createLeaveRequest({
         ...parsed.data,
         companyId,
         employeeId,
         totalDays,
+        status: initialStatus,
       });
       return res.status(201).json(request);
     } catch (error) {
