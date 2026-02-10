@@ -390,11 +390,11 @@ export default function LeaveSettings() {
               <div className="overflow-x-auto">
                 <Table data-testid="table-leave-balances">
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Employee</TableHead>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="sticky left-0 z-20 bg-muted/50">Employee</TableHead>
                       {leaveTypes.map((lt) => (
                         <TableHead key={lt.id} data-testid={`header-balance-${lt.id}`}>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2" style={{ hyphens: "auto", wordBreak: "break-word" }}>
                             <div
                               className="h-3 w-3 rounded-full shrink-0"
                               style={{ backgroundColor: lt.color }}
@@ -408,7 +408,7 @@ export default function LeaveSettings() {
                   <TableBody>
                     {balancesByEmployee.map(({ employee, balances }) => (
                       <TableRow key={employee.id} data-testid={`row-balance-${employee.id}`}>
-                        <TableCell className="font-medium" data-testid={`text-balance-employee-${employee.id}`}>
+                        <TableCell className="font-medium sticky left-0 z-20 bg-background" data-testid={`text-balance-employee-${employee.id}`}>
                           {employee.firstName} {employee.lastName}
                         </TableCell>
                         {leaveTypes.map((lt) => {
