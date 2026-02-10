@@ -125,6 +125,21 @@ export default function Leave() {
     pageSize: allPageSize,
   } = usePagination<LeaveRequest>(allRequests || [], 10);
 
+  function countBusinessDays(start: string, end: string): number {
+    if (!start || !end) return 0;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (endDate < startDate) return 0;
+    let count = 0;
+    const current = new Date(startDate);
+    while (current <= endDate) {
+      const day = current.getDay();
+      if (day !== 0 && day !== 6) count++;
+      current.setDate(current.getDate() + 1);
+    }
+    return count;
+  }
+
   const form = useForm<LeaveRequestFormData>({
     resolver: zodResolver(leaveRequestFormSchema),
     defaultValues: {
@@ -314,6 +329,13 @@ export default function Leave() {
                     </FormItem>
                   )}
                 />
+                {form.watch("startDate") && form.watch("endDate") && (
+                  <div className="rounded-md bg-muted px-3 py-2 text-sm" data-testid="text-business-days-preview">
+                    <span className="text-muted-foreground">Business days: </span>
+                    <span className="font-medium">{countBusinessDays(form.watch("startDate"), form.watch("endDate"))}</span>
+                    <span className="text-muted-foreground"> (weekends excluded)</span>
+                  </div>
+                )}
                 <FormField
                   control={form.control}
                   name="reason"

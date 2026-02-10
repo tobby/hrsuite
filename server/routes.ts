@@ -590,7 +590,18 @@ export async function registerRoutes(
       }
       const startDate = new Date(parsed.data.startDate);
       const endDate = new Date(parsed.data.endDate);
-      const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      let totalDays = 0;
+      const current = new Date(startDate);
+      while (current <= endDate) {
+        const day = current.getDay();
+        if (day !== 0 && day !== 6) {
+          totalDays++;
+        }
+        current.setDate(current.getDate() + 1);
+      }
+      if (totalDays <= 0) {
+        return res.status(400).json({ message: "Selected dates contain no business days. Weekends are excluded from leave calculation." });
+      }
       const employee = await storage.getEmployee(employeeId);
       if (!employee) return res.status(401).json({ message: "Employee not found" });
       const initialStatus = employee.managerId ? "pending" : "manager_approved";
