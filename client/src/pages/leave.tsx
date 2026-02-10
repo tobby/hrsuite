@@ -467,7 +467,7 @@ export default function Leave() {
                 </TableHeader>
                 <TableBody>
                   {pendingRequests.map((req) => {
-                    const canApproveThis = (role === "manager" && req.status === "pending") || (role === "admin" && req.status === "manager_approved");
+                    const canApproveThis = (role === "manager" && req.status === "pending") || (role === "admin" && (req.status === "pending" || req.status === "manager_approved"));
                     const canRejectThis = (role === "manager" && req.status === "pending") || (role === "admin" && (req.status === "pending" || req.status === "manager_approved"));
                     return (
                       <TableRow key={req.id} data-testid={`row-pending-${req.id}`}>

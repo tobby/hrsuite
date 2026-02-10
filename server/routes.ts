@@ -598,8 +598,8 @@ export async function registerRoutes(
       }
 
       if (role === "admin") {
-        if (request.status !== "manager_approved") {
-          return res.status(400).json({ message: "This request needs manager approval first" });
+        if (request.status !== "manager_approved" && request.status !== "pending") {
+          return res.status(400).json({ message: "Only pending or manager-approved requests can be approved by admin" });
         }
         const updated = await storage.updateLeaveRequest(req.params.id, {
           status: "approved",
