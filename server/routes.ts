@@ -422,6 +422,8 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
       }
       const leaveType = await storage.createLeaveType(parsed.data);
+      const currentYear = new Date().getFullYear();
+      await storage.initializeBalancesForLeaveType(companyId, leaveType.id, leaveType.defaultDays, currentYear);
       return res.status(201).json(leaveType);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });

@@ -47,6 +47,7 @@ export interface IStorage {
   getLeaveBalancesByCompany(companyId: string, year: number): Promise<LeaveBalance[]>;
   upsertLeaveBalance(data: { companyId: string; employeeId: string; leaveTypeId: string; totalDays: number; usedDays: number; remainingDays: number; year: number }): Promise<LeaveBalance>;
   initializeBalancesForEmployee(companyId: string, employeeId: string, year: number): Promise<void>;
+  initializeBalancesForLeaveType(companyId: string, leaveTypeId: string, defaultDays: number, year: number): Promise<void>;
 
   // Leave Requests
   createLeaveRequest(data: InsertLeaveRequest & { companyId: string; employeeId: string; totalDays: number; status?: string }): Promise<LeaveRequest>;
@@ -246,6 +247,22 @@ export class DatabaseStorage implements IStorage {
         totalDays: lt.defaultDays,
         usedDays: 0,
         remainingDays: lt.defaultDays,
+        year,
+      });
+    }
+  }
+
+  async initializeBalancesForLeaveType(companyId: string, leaveTypeId: string, defaultDays: number, year: number): Promise<void> {
+    const companyEmployees = await this.getEmployeesByCompany(companyId);
+    for (const emp of companyEmployees) {
+      if (emp.role === 'contract' || emp.status !== 'active') continue;
+      await this.upsertLeaveBalance({
+        companyId,
+        employeeId: emp.id,
+        leaveTypeId,
+        totalDays: defaultDays,
+        usedDays: 0,
+        remainingDays: defaultDays,
         year,
       });
     }
