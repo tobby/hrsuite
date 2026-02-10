@@ -453,8 +453,26 @@ export async function registerRoutes(
   app.get("/api/leave-balances", requireAuth, async (req: Request, res: Response) => {
     try {
       const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
       const year = parseInt(req.query.year as string) || new Date().getFullYear();
-      const balances = await storage.getLeaveBalancesByEmployee(employeeId, year);
+      let balances = await storage.getLeaveBalancesByEmployee(employeeId, year);
+      const leaveTypes = await storage.getLeaveTypesByCompany(companyId);
+      const existingTypeIds = new Set(balances.map(b => b.leaveTypeId));
+      const missingTypes = leaveTypes.filter(lt => !existingTypeIds.has(lt.id));
+      if (missingTypes.length > 0) {
+        for (const lt of missingTypes) {
+          await storage.upsertLeaveBalance({
+            companyId,
+            employeeId,
+            leaveTypeId: lt.id,
+            totalDays: lt.defaultDays,
+            usedDays: 0,
+            remainingDays: lt.defaultDays,
+            year,
+          });
+        }
+        balances = await storage.getLeaveBalancesByEmployee(employeeId, year);
+      }
       return res.json(balances);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
@@ -619,6 +637,19 @@ export async function registerRoutes(
             usedDays: balance.usedDays + request.totalDays,
             remainingDays: balance.remainingDays - request.totalDays,
             year: balance.year,
+          });
+        } else {
+          const leaveType = await storage.getLeaveType(request.leaveTypeId);
+          const defaultDays = leaveType?.defaultDays || 0;
+          const remaining = Math.max(0, defaultDays - request.totalDays);
+          await storage.upsertLeaveBalance({
+            companyId: request.companyId,
+            employeeId: request.employeeId,
+            leaveTypeId: request.leaveTypeId,
+            totalDays: defaultDays,
+            usedDays: request.totalDays,
+            remainingDays: remaining,
+            year,
           });
         }
         return res.json(updated);
