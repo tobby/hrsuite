@@ -561,7 +561,14 @@ export async function registerRoutes(
   app.get("/api/leave-requests/all", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
     try {
       const companyId = (req.session as any).companyId;
-      const requests = await storage.getLeaveRequestsByCompany(companyId);
+      const role = (req.session as any).role;
+      const employeeId = (req.session as any).employeeId;
+      let requests = await storage.getLeaveRequestsByCompany(companyId);
+      if (role === "manager") {
+        const employees = await storage.getEmployeesByCompany(companyId);
+        const directReportIds = new Set(employees.filter(e => e.managerId === employeeId).map(e => e.id));
+        requests = requests.filter(r => directReportIds.has(r.employeeId));
+      }
       const enriched = await enrichLeaveRequestsWithApprover(requests);
       return res.json(enriched);
     } catch (error) {
@@ -572,7 +579,14 @@ export async function registerRoutes(
   app.get("/api/leave-requests/pending", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
     try {
       const companyId = (req.session as any).companyId;
-      const requests = await storage.getPendingLeaveRequestsByCompany(companyId);
+      const role = (req.session as any).role;
+      const employeeId = (req.session as any).employeeId;
+      let requests = await storage.getPendingLeaveRequestsByCompany(companyId);
+      if (role === "manager") {
+        const employees = await storage.getEmployeesByCompany(companyId);
+        const directReportIds = new Set(employees.filter(e => e.managerId === employeeId).map(e => e.id));
+        requests = requests.filter(r => directReportIds.has(r.employeeId));
+      }
       const enriched = await enrichLeaveRequestsWithApprover(requests);
       return res.json(enriched);
     } catch (error) {
@@ -626,6 +640,12 @@ export async function registerRoutes(
       if (!request) return res.status(404).json({ message: "Leave request not found" });
 
       if (role === "manager") {
+        const companyId = (req.session as any).companyId;
+        const employees = await storage.getEmployeesByCompany(companyId);
+        const directReportIds = new Set(employees.filter(e => e.managerId === approverId).map(e => e.id));
+        if (!directReportIds.has(request.employeeId)) {
+          return res.status(403).json({ message: "You can only approve leave requests from your direct reports" });
+        }
         if (request.status !== "pending") {
           return res.status(400).json({ message: "Only pending requests can be approved by a manager" });
         }
@@ -689,8 +709,16 @@ export async function registerRoutes(
       const request = await storage.getLeaveRequest(req.params.id);
       if (!request) return res.status(404).json({ message: "Leave request not found" });
 
-      if (role === "manager" && request.status !== "pending") {
-        return res.status(400).json({ message: "Managers can only reject pending requests" });
+      if (role === "manager") {
+        const companyId = (req.session as any).companyId;
+        const employees = await storage.getEmployeesByCompany(companyId);
+        const directReportIds = new Set(employees.filter(e => e.managerId === approverId).map(e => e.id));
+        if (!directReportIds.has(request.employeeId)) {
+          return res.status(403).json({ message: "You can only reject leave requests from your direct reports" });
+        }
+        if (request.status !== "pending") {
+          return res.status(400).json({ message: "Managers can only reject pending requests" });
+        }
       }
       if (role === "admin" && request.status !== "pending" && request.status !== "manager_approved") {
         return res.status(400).json({ message: "Only pending or manager-approved requests can be rejected" });
