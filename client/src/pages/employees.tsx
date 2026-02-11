@@ -196,7 +196,7 @@ function EmployeeQueriesSection({ employeeId }: { employeeId: string }) {
 }
 
 export default function Employees() {
-  const { role } = useRole();
+  const { role, currentUser } = useRole();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
@@ -669,7 +669,7 @@ export default function Employees() {
                     </div>
                   </div>
 
-                  {(role === "admin" || role === "manager") && (
+                  {(role === "admin" || (role === "manager" && emp.managerId === currentUser.id)) && (
                     <EmployeeQueriesSection employeeId={emp.id} />
                   )}
 
