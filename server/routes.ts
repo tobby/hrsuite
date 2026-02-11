@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCompanySchema, insertDepartmentSchema, insertEmployeeSchema, insertLeaveTypeSchema, insertLeaveRequestSchema, insertHrQuerySchema } from "@shared/schema";
+import { insertCompanySchema, insertDepartmentSchema, insertEmployeeSchema, insertLeaveTypeSchema, insertLeaveRequestSchema, insertHrQuerySchema, insertAppraisalCycleSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
@@ -1260,6 +1260,523 @@ export async function registerRoutes(
 
       const attachments = await storage.getHrQueryAttachmentsByQuery(req.params.id);
       return res.json(attachments);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== APPRAISAL TEMPLATES ====================
+
+  app.get("/api/appraisal-templates", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const templates = await storage.getAppraisalTemplatesByCompany(companyId);
+      return res.json(templates);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/appraisal-templates", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const { name, description, isDefault } = req.body;
+      if (!name) {
+        return res.status(400).json({ message: "Template name is required" });
+      }
+      const template = await storage.createAppraisalTemplate({ companyId, name, description, isDefault });
+      return res.status(201).json(template);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/appraisal-templates/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const template = await storage.getAppraisalTemplate(req.params.id);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      const questions = await storage.getTemplateQuestions(req.params.id);
+      return res.json({ ...template, questions });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/appraisal-templates/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const template = await storage.updateAppraisalTemplate(req.params.id, req.body);
+      if (!template) return res.status(404).json({ message: "Template not found" });
+      return res.json(template);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/appraisal-templates/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      await storage.deleteTemplateQuestionsByTemplate(req.params.id);
+      const deleted = await storage.deleteAppraisalTemplate(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Template not found" });
+      return res.json({ message: "Template deleted" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== TEMPLATE QUESTIONS ====================
+
+  app.get("/api/appraisal-templates/:id/questions", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const questions = await storage.getTemplateQuestions(req.params.id);
+      return res.json(questions);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/appraisal-templates/:id/questions", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { questionText, questionType, order, competencyId } = req.body;
+      if (!questionText || !questionType) {
+        return res.status(400).json({ message: "questionText and questionType are required" });
+      }
+      const question = await storage.createTemplateQuestion({
+        templateId: req.params.id,
+        questionText,
+        questionType,
+        order,
+        competencyId,
+      });
+      return res.status(201).json(question);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/template-questions/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const question = await storage.updateTemplateQuestion(req.params.id, req.body);
+      if (!question) return res.status(404).json({ message: "Question not found" });
+      return res.json(question);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/template-questions/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const deleted = await storage.deleteTemplateQuestion(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Question not found" });
+      return res.json({ message: "Question deleted" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== APPRAISAL CYCLES ====================
+
+  app.get("/api/appraisal-cycles", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const cycles = await storage.getAppraisalCyclesByCompany(companyId);
+      return res.json(cycles);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/appraisal-cycles", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const parsed = insertAppraisalCycleSchema.safeParse({ ...req.body, companyId });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+      }
+      const cycle = await storage.createAppraisalCycle(parsed.data);
+      return res.status(201).json(cycle);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/appraisal-cycles/:id", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const cycle = await storage.getAppraisalCycle(req.params.id);
+      if (!cycle) return res.status(404).json({ message: "Cycle not found" });
+      return res.json(cycle);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/appraisal-cycles/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const cycle = await storage.updateAppraisalCycle(req.params.id, req.body);
+      if (!cycle) return res.status(404).json({ message: "Cycle not found" });
+      return res.json(cycle);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/appraisal-cycles/:id/activate", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const cycle = await storage.getAppraisalCycle(req.params.id);
+      if (!cycle) return res.status(404).json({ message: "Cycle not found" });
+      if (cycle.status !== "draft") {
+        return res.status(400).json({ message: "Only draft cycles can be activated" });
+      }
+
+      const participants = await storage.getCycleParticipants(req.params.id);
+      if (participants.length === 0) {
+        return res.status(400).json({ message: "Cannot activate cycle with no participants" });
+      }
+
+      for (const participant of participants) {
+        const appraisal = await storage.createAppraisal({
+          cycleId: cycle.id,
+          employeeId: participant.employeeId,
+          status: "pending",
+        });
+
+        await storage.createAppraisalFeedback({
+          appraisalId: appraisal.id,
+          reviewerId: participant.employeeId,
+          reviewerType: "self",
+          status: "pending",
+        });
+
+        const employee = await storage.getEmployee(participant.employeeId);
+        if (employee && employee.managerId) {
+          await storage.createAppraisalFeedback({
+            appraisalId: appraisal.id,
+            reviewerId: employee.managerId,
+            reviewerType: "manager",
+            status: "pending",
+          });
+        }
+
+        if (cycle.type === "360") {
+          const peerAssignments = await storage.getPeerAssignmentsByReviewee(cycle.id, participant.employeeId);
+          for (const pa of peerAssignments) {
+            await storage.createAppraisalFeedback({
+              appraisalId: appraisal.id,
+              reviewerId: pa.reviewerId,
+              reviewerType: "peer",
+              status: "pending",
+            });
+          }
+        }
+      }
+
+      const updatedCycle = await storage.updateAppraisalCycle(req.params.id, { status: "active" });
+      return res.json(updatedCycle);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== CYCLE PARTICIPANTS ====================
+
+  app.get("/api/appraisal-cycles/:id/participants", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const participants = await storage.getCycleParticipants(req.params.id);
+      return res.json(participants);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/appraisal-cycles/:id/participants", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { employeeIds } = req.body;
+      if (!Array.isArray(employeeIds) || employeeIds.length === 0) {
+        return res.status(400).json({ message: "employeeIds array is required" });
+      }
+      const results = [];
+      for (const employeeId of employeeIds) {
+        const participant = await storage.addCycleParticipant({ cycleId: req.params.id, employeeId });
+        results.push(participant);
+      }
+      return res.status(201).json(results);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/appraisal-cycles/:id/participants", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { employeeIds } = req.body;
+      if (!Array.isArray(employeeIds) || employeeIds.length === 0) {
+        return res.status(400).json({ message: "employeeIds array is required" });
+      }
+      await storage.removeCycleParticipantsByIds(req.params.id, employeeIds);
+      return res.json({ message: "Participants removed" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== PEER ASSIGNMENTS ====================
+
+  app.get("/api/appraisal-cycles/:id/peer-assignments", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const assignments = await storage.getPeerAssignmentsByCycle(req.params.id);
+      return res.json(assignments);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/appraisal-cycles/:id/peer-assignments", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { revieweeId, reviewerId } = req.body;
+      if (!revieweeId || !reviewerId) {
+        return res.status(400).json({ message: "revieweeId and reviewerId are required" });
+      }
+      const assignment = await storage.createPeerAssignment({ cycleId: req.params.id, revieweeId, reviewerId });
+      return res.status(201).json(assignment);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/peer-assignments/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const deleted = await storage.deletePeerAssignment(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Peer assignment not found" });
+      return res.json({ message: "Peer assignment deleted" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== APPRAISALS ====================
+
+  app.get("/api/appraisals", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+
+      if (role === "admin") {
+        const cycles = await storage.getAppraisalCyclesByCompany(companyId);
+        const allAppraisals = [];
+        for (const cycle of cycles) {
+          const cycleAppraisals = await storage.getAppraisalsByCycle(cycle.id);
+          allAppraisals.push(...cycleAppraisals);
+        }
+        return res.json(allAppraisals);
+      } else if (role === "manager") {
+        const allEmployees = await storage.getEmployeesByCompany(companyId);
+        const directReportIds = allEmployees
+          .filter(e => e.managerId === employeeId)
+          .map(e => e.id);
+        const cycles = await storage.getAppraisalCyclesByCompany(companyId);
+        const allAppraisals = [];
+        for (const cycle of cycles) {
+          const cycleAppraisals = await storage.getAppraisalsByCycle(cycle.id);
+          allAppraisals.push(...cycleAppraisals.filter(a => directReportIds.includes(a.employeeId)));
+        }
+        return res.json(allAppraisals);
+      } else {
+        const appraisals = await storage.getAppraisalsByEmployee(employeeId);
+        return res.json(appraisals);
+      }
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/appraisals/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+
+      const appraisal = await storage.getAppraisal(req.params.id);
+      if (!appraisal) return res.status(404).json({ message: "Appraisal not found" });
+
+      if (role === "admin") {
+        const cycle = await storage.getAppraisalCycle(appraisal.cycleId);
+        if (!cycle || cycle.companyId !== companyId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      } else if (role === "manager") {
+        const employee = await storage.getEmployee(appraisal.employeeId);
+        if (!employee || employee.managerId !== employeeId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      } else {
+        if (appraisal.employeeId !== employeeId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+
+      const feedback = await storage.getAppraisalFeedbackByAppraisal(appraisal.id);
+      const feedbackWithRatings = [];
+      for (const fb of feedback) {
+        const ratings = await storage.getFeedbackRatings(fb.id);
+        feedbackWithRatings.push({ ...fb, ratings });
+      }
+
+      return res.json({ ...appraisal, feedback: feedbackWithRatings });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/employees/:id/appraisals", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const currentEmployeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const targetId = req.params.id;
+
+      if (role === "admin") {
+        const employee = await storage.getEmployee(targetId);
+        if (!employee || employee.companyId !== companyId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      } else if (role === "manager") {
+        const employee = await storage.getEmployee(targetId);
+        if (!employee || employee.managerId !== currentEmployeeId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      } else {
+        if (targetId !== currentEmployeeId) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+
+      const appraisals = await storage.getAppraisalsByEmployee(targetId);
+      return res.json(appraisals);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== FEEDBACK ====================
+
+  app.get("/api/feedback/pending", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const allFeedback = await storage.getAppraisalFeedbackByReviewer(employeeId);
+      const pending = allFeedback.filter(f => f.status === "pending");
+      return res.json(pending);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/feedback/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const role = (req.session as any).role;
+
+      const feedback = await storage.getAppraisalFeedback(req.params.id);
+      if (!feedback) return res.status(404).json({ message: "Feedback not found" });
+
+      if (role !== "admin" && feedback.reviewerId !== employeeId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const ratings = await storage.getFeedbackRatings(feedback.id);
+      const appraisal = await storage.getAppraisal(feedback.appraisalId);
+      let questions: any[] = [];
+      if (appraisal) {
+        const cycle = await storage.getAppraisalCycle(appraisal.cycleId);
+        if (cycle && cycle.templateId) {
+          questions = await storage.getTemplateQuestions(cycle.templateId);
+        }
+      }
+
+      return res.json({ ...feedback, ratings, questions });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/feedback/:id/submit", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+
+      const feedback = await storage.getAppraisalFeedback(req.params.id);
+      if (!feedback) return res.status(404).json({ message: "Feedback not found" });
+
+      if (feedback.reviewerId !== employeeId) {
+        return res.status(403).json({ message: "Only the assigned reviewer can submit this feedback" });
+      }
+
+      if (feedback.status === "submitted") {
+        return res.status(400).json({ message: "Feedback has already been submitted" });
+      }
+
+      const { overallComment, ratings } = req.body;
+      if (!overallComment) {
+        return res.status(400).json({ message: "overallComment is required" });
+      }
+
+      if (Array.isArray(ratings)) {
+        for (const r of ratings) {
+          await storage.createFeedbackRating({
+            feedbackId: feedback.id,
+            questionId: r.questionId,
+            rating: r.rating,
+            textResponse: r.textResponse,
+          });
+        }
+      }
+
+      await storage.updateAppraisalFeedback(feedback.id, {
+        overallComment,
+        status: "submitted",
+        submittedAt: new Date(),
+      });
+
+      const allFeedback = await storage.getAppraisalFeedbackByAppraisal(feedback.appraisalId);
+      const allSubmitted = allFeedback.every(f => f.id === feedback.id ? true : f.status === "submitted");
+
+      if (allSubmitted) {
+        const appraisal = await storage.getAppraisal(feedback.appraisalId);
+        if (appraisal) {
+          const cycle = await storage.getAppraisalCycle(appraisal.cycleId);
+          if (cycle && cycle.templateId) {
+            const questions = await storage.getTemplateQuestions(cycle.templateId);
+            const ratingQuestions = questions.filter(q => q.questionType === "rating");
+
+            if (ratingQuestions.length > 0) {
+              let totalWeightedSum = 0;
+              let totalWeight = 0;
+
+              for (const question of ratingQuestions) {
+                for (const fb of allFeedback) {
+                  const fbRatings = await storage.getFeedbackRatings(fb.id);
+                  const questionRating = fbRatings.find(r => r.questionId === question.id);
+                  if (questionRating && questionRating.rating !== null && questionRating.rating !== undefined) {
+                    let weight = 0;
+                    if (fb.reviewerType === "self") weight = cycle.selfWeight;
+                    else if (fb.reviewerType === "peer") weight = cycle.peerWeight;
+                    else if (fb.reviewerType === "manager") weight = cycle.managerWeight;
+
+                    totalWeightedSum += questionRating.rating * weight;
+                    totalWeight += weight;
+                  }
+                }
+              }
+
+              const overallRating = totalWeight > 0 ? Math.round(totalWeightedSum / totalWeight) : null;
+              await storage.updateAppraisal(appraisal.id, { status: "completed", overallRating });
+            } else {
+              await storage.updateAppraisal(appraisal.id, { status: "completed" });
+            }
+          } else {
+            await storage.updateAppraisal(appraisal.id, { status: "completed" });
+          }
+        }
+      }
+
+      return res.json({ message: "Feedback submitted successfully" });
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }

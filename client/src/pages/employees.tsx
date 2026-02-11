@@ -61,7 +61,8 @@ import {
 import { useRole, canManageEmployees } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Employee, Department, HrQuery } from "@shared/schema";
+import type { Employee, Department, HrQuery, Appraisal, AppraisalCycle } from "@shared/schema";
+import { Star, ClipboardList } from "lucide-react";
 import { Link as WouterLink } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
@@ -136,6 +137,87 @@ const queryPriorityStyles: Record<string, string> = {
   high: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
   critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
 };
+
+function EmployeeAppraisalsSection({ employeeId }: { employeeId: string }) {
+  const { data: appraisals = [], isLoading } = useQuery<Appraisal[]>({
+    queryKey: ['/api/employees', employeeId, 'appraisals'],
+    queryFn: async () => {
+      const res = await fetch(`/api/employees/${employeeId}/appraisals`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    retry: false,
+  });
+
+  const { data: cycles = [] } = useQuery<AppraisalCycle[]>({
+    queryKey: ['/api/appraisal-cycles'],
+  });
+
+  function getCycleName(cycleId: string) {
+    const cycle = cycles.find(c => c.id === cycleId);
+    return cycle?.name || "Review Cycle";
+  }
+
+  const appraisalStatusStyles: Record<string, string> = {
+    pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+    in_progress: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+    completed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+  };
+
+  return (
+    <div className="space-y-3 border-t pt-4" data-testid="section-employee-appraisals">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          <Label className="text-sm font-medium">Performance Appraisals</Label>
+          {!isLoading && (
+            <Badge variant="secondary" data-testid="text-appraisal-count">{appraisals.length}</Badge>
+          )}
+        </div>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        </div>
+      ) : appraisals.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-2" data-testid="text-no-appraisals">No appraisals found.</p>
+      ) : (
+        <div className="space-y-2">
+          {appraisals.map((a) => (
+            <WouterLink key={a.id} href={a.status === "completed" ? `/appraisals/results/${a.id}` : `/appraisals`}>
+              <Card className="hover-elevate cursor-pointer" data-testid={`card-appraisal-${a.id}`}>
+                <CardContent className="p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate" data-testid={`text-appraisal-cycle-${a.id}`}>
+                        {getCycleName(a.cycleId)}
+                      </p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="secondary" className={`text-xs ${appraisalStatusStyles[a.status] || ""}`} data-testid={`badge-appraisal-status-${a.id}`}>
+                          {a.status.replace(/_/g, " ")}
+                        </Badge>
+                        {a.overallRating != null && (
+                          <div className="flex items-center gap-1">
+                            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            <span className="text-xs font-medium">{(a.overallRating / 100).toFixed(1)}/5</span>
+                          </div>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {a.createdAt ? new Date(a.createdAt).toLocaleDateString() : ""}
+                        </span>
+                      </div>
+                    </div>
+                    <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                  </div>
+                </CardContent>
+              </Card>
+            </WouterLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function EmployeeQueriesSection({ employeeId }: { employeeId: string }) {
   const { data: queries = [], isLoading, isError } = useQuery<HrQuery[]>({
@@ -670,7 +752,10 @@ export default function Employees() {
                   </div>
 
                   {(role === "admin" || (role === "manager" && emp.managerId === currentUser.id)) && (
-                    <EmployeeQueriesSection employeeId={emp.id} />
+                    <>
+                      <EmployeeAppraisalsSection employeeId={emp.id} />
+                      <EmployeeQueriesSection employeeId={emp.id} />
+                    </>
                   )}
 
                   <div className="flex gap-2 pt-4">

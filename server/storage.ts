@@ -11,6 +11,14 @@ import {
   hrQueryComments, type HrQueryComment,
   hrQueryTimeline, type HrQueryTimeline,
   hrQueryAttachments, type HrQueryAttachment,
+  appraisalTemplates, type AppraisalTemplate,
+  templateQuestions, type TemplateQuestion,
+  appraisalCycles, type AppraisalCycle, type InsertAppraisalCycle,
+  appraisals, type Appraisal,
+  appraisalFeedback, type AppraisalFeedback, type InsertAppraisalFeedback,
+  feedbackRatings, type FeedbackRating,
+  cycleParticipants, type CycleParticipant,
+  peerAssignments, type PeerAssignment,
 } from "@shared/schema";
 import { randomUUID, randomBytes } from "crypto";
 
@@ -81,6 +89,58 @@ export interface IStorage {
   getHrQueryAttachment(id: string): Promise<HrQueryAttachment | undefined>;
   getHrQueryAttachmentsByQuery(queryId: string): Promise<HrQueryAttachment[]>;
   getHrQueryAttachmentsByComment(commentId: string): Promise<HrQueryAttachment[]>;
+
+  // Appraisal Templates
+  createAppraisalTemplate(data: { companyId: string; name: string; description?: string; isDefault?: number }): Promise<AppraisalTemplate>;
+  getAppraisalTemplatesByCompany(companyId: string): Promise<AppraisalTemplate[]>;
+  getAppraisalTemplate(id: string): Promise<AppraisalTemplate | undefined>;
+  updateAppraisalTemplate(id: string, data: Partial<{ name: string; description: string; isDefault: number }>): Promise<AppraisalTemplate | undefined>;
+  deleteAppraisalTemplate(id: string): Promise<boolean>;
+
+  // Template Questions
+  createTemplateQuestion(data: { templateId: string; questionText: string; questionType: string; order?: number; competencyId?: string }): Promise<TemplateQuestion>;
+  getTemplateQuestions(templateId: string): Promise<TemplateQuestion[]>;
+  updateTemplateQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number; competencyId: string }>): Promise<TemplateQuestion | undefined>;
+  deleteTemplateQuestion(id: string): Promise<boolean>;
+  deleteTemplateQuestionsByTemplate(templateId: string): Promise<void>;
+
+  // Appraisal Cycles
+  createAppraisalCycle(data: InsertAppraisalCycle): Promise<AppraisalCycle>;
+  getAppraisalCyclesByCompany(companyId: string): Promise<AppraisalCycle[]>;
+  getAppraisalCycle(id: string): Promise<AppraisalCycle | undefined>;
+  updateAppraisalCycle(id: string, data: Partial<AppraisalCycle>): Promise<AppraisalCycle | undefined>;
+
+  // Appraisals
+  createAppraisal(data: { cycleId: string; employeeId: string; status?: string }): Promise<Appraisal>;
+  getAppraisalsByCycle(cycleId: string): Promise<Appraisal[]>;
+  getAppraisalsByEmployee(employeeId: string): Promise<Appraisal[]>;
+  getAppraisal(id: string): Promise<Appraisal | undefined>;
+  updateAppraisal(id: string, data: Partial<Appraisal>): Promise<Appraisal | undefined>;
+
+  // Appraisal Feedback
+  createAppraisalFeedback(data: { appraisalId: string; reviewerId: string; reviewerType: string; status?: string }): Promise<AppraisalFeedback>;
+  getAppraisalFeedbackByAppraisal(appraisalId: string): Promise<AppraisalFeedback[]>;
+  getAppraisalFeedbackByReviewer(reviewerId: string): Promise<AppraisalFeedback[]>;
+  getAppraisalFeedback(id: string): Promise<AppraisalFeedback | undefined>;
+  updateAppraisalFeedback(id: string, data: Partial<AppraisalFeedback>): Promise<AppraisalFeedback | undefined>;
+
+  // Feedback Ratings
+  createFeedbackRating(data: { feedbackId: string; questionId: string; rating?: number; textResponse?: string }): Promise<FeedbackRating>;
+  getFeedbackRatings(feedbackId: string): Promise<FeedbackRating[]>;
+  getFeedbackRatingsByAppraisal(appraisalId: string): Promise<FeedbackRating[]>;
+
+  // Cycle Participants
+  addCycleParticipant(data: { cycleId: string; employeeId: string }): Promise<CycleParticipant>;
+  getCycleParticipants(cycleId: string): Promise<CycleParticipant[]>;
+  removeCycleParticipant(id: string): Promise<boolean>;
+  removeCycleParticipantsByIds(cycleId: string, employeeIds: string[]): Promise<void>;
+
+  // Peer Assignments
+  createPeerAssignment(data: { cycleId: string; revieweeId: string; reviewerId: string }): Promise<PeerAssignment>;
+  getPeerAssignmentsByCycle(cycleId: string): Promise<PeerAssignment[]>;
+  getPeerAssignmentsByReviewee(cycleId: string, revieweeId: string): Promise<PeerAssignment[]>;
+  deletePeerAssignment(id: string): Promise<boolean>;
+  deletePeerAssignmentsByCycle(cycleId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -392,6 +452,198 @@ export class DatabaseStorage implements IStorage {
 
   async getHrQueryAttachmentsByComment(commentId: string): Promise<HrQueryAttachment[]> {
     return db.select().from(hrQueryAttachments).where(eq(hrQueryAttachments.commentId, commentId)).orderBy(hrQueryAttachments.createdAt);
+  }
+
+  // ==================== APPRAISAL TEMPLATES ====================
+
+  async createAppraisalTemplate(data: { companyId: string; name: string; description?: string; isDefault?: number }): Promise<AppraisalTemplate> {
+    const [template] = await db.insert(appraisalTemplates).values(data).returning();
+    return template;
+  }
+
+  async getAppraisalTemplatesByCompany(companyId: string): Promise<AppraisalTemplate[]> {
+    return db.select().from(appraisalTemplates).where(eq(appraisalTemplates.companyId, companyId)).orderBy(desc(appraisalTemplates.createdAt));
+  }
+
+  async getAppraisalTemplate(id: string): Promise<AppraisalTemplate | undefined> {
+    const [template] = await db.select().from(appraisalTemplates).where(eq(appraisalTemplates.id, id));
+    return template;
+  }
+
+  async updateAppraisalTemplate(id: string, data: Partial<{ name: string; description: string; isDefault: number }>): Promise<AppraisalTemplate | undefined> {
+    const [template] = await db.update(appraisalTemplates).set(data).where(eq(appraisalTemplates.id, id)).returning();
+    return template;
+  }
+
+  async deleteAppraisalTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(appraisalTemplates).where(eq(appraisalTemplates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== TEMPLATE QUESTIONS ====================
+
+  async createTemplateQuestion(data: { templateId: string; questionText: string; questionType: string; order?: number; competencyId?: string }): Promise<TemplateQuestion> {
+    const [question] = await db.insert(templateQuestions).values(data).returning();
+    return question;
+  }
+
+  async getTemplateQuestions(templateId: string): Promise<TemplateQuestion[]> {
+    return db.select().from(templateQuestions).where(eq(templateQuestions.templateId, templateId)).orderBy(templateQuestions.order);
+  }
+
+  async updateTemplateQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number; competencyId: string }>): Promise<TemplateQuestion | undefined> {
+    const [question] = await db.update(templateQuestions).set(data).where(eq(templateQuestions.id, id)).returning();
+    return question;
+  }
+
+  async deleteTemplateQuestion(id: string): Promise<boolean> {
+    const result = await db.delete(templateQuestions).where(eq(templateQuestions.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async deleteTemplateQuestionsByTemplate(templateId: string): Promise<void> {
+    await db.delete(templateQuestions).where(eq(templateQuestions.templateId, templateId));
+  }
+
+  // ==================== APPRAISAL CYCLES ====================
+
+  async createAppraisalCycle(data: InsertAppraisalCycle): Promise<AppraisalCycle> {
+    const [cycle] = await db.insert(appraisalCycles).values(data).returning();
+    return cycle;
+  }
+
+  async getAppraisalCyclesByCompany(companyId: string): Promise<AppraisalCycle[]> {
+    return db.select().from(appraisalCycles).where(eq(appraisalCycles.companyId, companyId));
+  }
+
+  async getAppraisalCycle(id: string): Promise<AppraisalCycle | undefined> {
+    const [cycle] = await db.select().from(appraisalCycles).where(eq(appraisalCycles.id, id));
+    return cycle;
+  }
+
+  async updateAppraisalCycle(id: string, data: Partial<AppraisalCycle>): Promise<AppraisalCycle | undefined> {
+    const [cycle] = await db.update(appraisalCycles).set(data).where(eq(appraisalCycles.id, id)).returning();
+    return cycle;
+  }
+
+  // ==================== APPRAISALS ====================
+
+  async createAppraisal(data: { cycleId: string; employeeId: string; status?: string }): Promise<Appraisal> {
+    const [appraisal] = await db.insert(appraisals).values(data).returning();
+    return appraisal;
+  }
+
+  async getAppraisalsByCycle(cycleId: string): Promise<Appraisal[]> {
+    return db.select().from(appraisals).where(eq(appraisals.cycleId, cycleId)).orderBy(desc(appraisals.createdAt));
+  }
+
+  async getAppraisalsByEmployee(employeeId: string): Promise<Appraisal[]> {
+    return db.select().from(appraisals).where(eq(appraisals.employeeId, employeeId)).orderBy(desc(appraisals.createdAt));
+  }
+
+  async getAppraisal(id: string): Promise<Appraisal | undefined> {
+    const [appraisal] = await db.select().from(appraisals).where(eq(appraisals.id, id));
+    return appraisal;
+  }
+
+  async updateAppraisal(id: string, data: Partial<Appraisal>): Promise<Appraisal | undefined> {
+    const [appraisal] = await db.update(appraisals).set(data).where(eq(appraisals.id, id)).returning();
+    return appraisal;
+  }
+
+  // ==================== APPRAISAL FEEDBACK ====================
+
+  async createAppraisalFeedback(data: { appraisalId: string; reviewerId: string; reviewerType: string; status?: string }): Promise<AppraisalFeedback> {
+    const [feedback] = await db.insert(appraisalFeedback).values(data).returning();
+    return feedback;
+  }
+
+  async getAppraisalFeedbackByAppraisal(appraisalId: string): Promise<AppraisalFeedback[]> {
+    return db.select().from(appraisalFeedback).where(eq(appraisalFeedback.appraisalId, appraisalId));
+  }
+
+  async getAppraisalFeedbackByReviewer(reviewerId: string): Promise<AppraisalFeedback[]> {
+    return db.select().from(appraisalFeedback).where(eq(appraisalFeedback.reviewerId, reviewerId));
+  }
+
+  async getAppraisalFeedback(id: string): Promise<AppraisalFeedback | undefined> {
+    const [feedback] = await db.select().from(appraisalFeedback).where(eq(appraisalFeedback.id, id));
+    return feedback;
+  }
+
+  async updateAppraisalFeedback(id: string, data: Partial<AppraisalFeedback>): Promise<AppraisalFeedback | undefined> {
+    const [feedback] = await db.update(appraisalFeedback).set(data).where(eq(appraisalFeedback.id, id)).returning();
+    return feedback;
+  }
+
+  // ==================== FEEDBACK RATINGS ====================
+
+  async createFeedbackRating(data: { feedbackId: string; questionId: string; rating?: number; textResponse?: string }): Promise<FeedbackRating> {
+    const [rating] = await db.insert(feedbackRatings).values(data).returning();
+    return rating;
+  }
+
+  async getFeedbackRatings(feedbackId: string): Promise<FeedbackRating[]> {
+    return db.select().from(feedbackRatings).where(eq(feedbackRatings.feedbackId, feedbackId));
+  }
+
+  async getFeedbackRatingsByAppraisal(appraisalId: string): Promise<FeedbackRating[]> {
+    const feedbacks = await db.select().from(appraisalFeedback).where(eq(appraisalFeedback.appraisalId, appraisalId));
+    const feedbackIds = feedbacks.map(f => f.id);
+    if (feedbackIds.length === 0) return [];
+    return db.select().from(feedbackRatings).where(sql`${feedbackRatings.feedbackId} IN (${sql.join(feedbackIds.map(id => sql`${id}`), sql`, `)})`);
+  }
+
+  // ==================== CYCLE PARTICIPANTS ====================
+
+  async addCycleParticipant(data: { cycleId: string; employeeId: string }): Promise<CycleParticipant> {
+    const [participant] = await db.insert(cycleParticipants).values(data).returning();
+    return participant;
+  }
+
+  async getCycleParticipants(cycleId: string): Promise<CycleParticipant[]> {
+    return db.select().from(cycleParticipants).where(eq(cycleParticipants.cycleId, cycleId));
+  }
+
+  async removeCycleParticipant(id: string): Promise<boolean> {
+    const result = await db.delete(cycleParticipants).where(eq(cycleParticipants.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async removeCycleParticipantsByIds(cycleId: string, employeeIds: string[]): Promise<void> {
+    if (employeeIds.length === 0) return;
+    await db.delete(cycleParticipants).where(
+      and(
+        eq(cycleParticipants.cycleId, cycleId),
+        sql`${cycleParticipants.employeeId} IN (${sql.join(employeeIds.map(id => sql`${id}`), sql`, `)})`
+      )
+    );
+  }
+
+  // ==================== PEER ASSIGNMENTS ====================
+
+  async createPeerAssignment(data: { cycleId: string; revieweeId: string; reviewerId: string }): Promise<PeerAssignment> {
+    const [assignment] = await db.insert(peerAssignments).values(data).returning();
+    return assignment;
+  }
+
+  async getPeerAssignmentsByCycle(cycleId: string): Promise<PeerAssignment[]> {
+    return db.select().from(peerAssignments).where(eq(peerAssignments.cycleId, cycleId));
+  }
+
+  async getPeerAssignmentsByReviewee(cycleId: string, revieweeId: string): Promise<PeerAssignment[]> {
+    return db.select().from(peerAssignments).where(
+      and(eq(peerAssignments.cycleId, cycleId), eq(peerAssignments.revieweeId, revieweeId))
+    );
+  }
+
+  async deletePeerAssignment(id: string): Promise<boolean> {
+    const result = await db.delete(peerAssignments).where(eq(peerAssignments.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async deletePeerAssignmentsByCycle(cycleId: string): Promise<void> {
+    await db.delete(peerAssignments).where(eq(peerAssignments.cycleId, cycleId));
   }
 }
 

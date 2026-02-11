@@ -1,13 +1,12 @@
 # HRFlow - HR Management Platform
 
 ## Overview
-HRFlow is a frontend-only HR management platform designed for demonstration purposes, showcasing four core modules: Leave Management, Performance Appraisals, Employee Management, and Recruitment/ATS. It utilizes static demo data instead of live API calls. The platform's vision is to provide a comprehensive HR solution with a user-friendly interface, offering robust tools for managing human resources efficiently.
+HRFlow is a full-stack HR management platform with PostgreSQL backend, session-based authentication, invite-based onboarding, and multi-tenant architecture. It features seven core modules: Leave Management, Performance Appraisals, Employee Management, Recruitment/ATS, Task Management, HR Disciplinary Query System, and Reports & Analytics. Role-based access control (Employee, Manager, Admin, Contract) governs all features.
 
 ## User Preferences
-- Frontend-only implementation preferred
-- No API/backend complexity
-- Demo data for all modules
+- Full-stack implementation with PostgreSQL
 - Professional HR platform aesthetic
+- Role-based access control throughout
 
 ## System Architecture
 

@@ -1,23 +1,227 @@
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, Inbox } from "lucide-react";
-import { useRole, canEditOrgSettings } from "@/lib/role-context";
+import { useState } from "react";
 import { Link, useParams } from "wouter";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useToast } from "@/hooks/use-toast";
+import { useRole } from "@/lib/role-context";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { AppraisalCycle, CycleParticipant, PeerAssignment, Appraisal, Employee } from "@shared/schema";
+import {
+  ArrowLeft, Users, UserPlus, Trash2, Play, CheckCircle2, Calendar,
+  Weight, Link2, Clock, AlertCircle, Inbox, Settings, CircleCheck
+} from "lucide-react";
+import { format } from "date-fns";
+
+const statusConfig: Record<string, { label: string; variant: "outline" | "secondary" | "default"; className: string }> = {
+  draft: { label: "Draft", variant: "outline", className: "" },
+  active: { label: "Active", variant: "secondary", className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" },
+  completed: { label: "Completed", variant: "secondary", className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" },
+};
+
+const typeLabels: Record<string, string> = {
+  "360": "360-Degree",
+  self: "Self Review",
+  manager: "Manager Review",
+  peer: "Peer Review",
+};
+
+const appraisalStatusConfig: Record<string, { label: string; className: string }> = {
+  pending: { label: "Pending", className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300" },
+  in_progress: { label: "In Progress", className: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300" },
+  completed: { label: "Completed", className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" },
+};
 
 export default function CycleProgress() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  const cycleId = params.id;
   const { role } = useRole();
-  const isAdmin = canEditOrgSettings(role);
+  const { toast } = useToast();
+  const isAdmin = role === "admin";
 
-  if (!isAdmin) {
+  const [isAddParticipantsOpen, setIsAddParticipantsOpen] = useState(false);
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [isAddPeerOpen, setIsAddPeerOpen] = useState(false);
+  const [peerRevieweeId, setPeerRevieweeId] = useState("");
+  const [peerReviewerId, setPeerReviewerId] = useState("");
+  const [isActivateOpen, setIsActivateOpen] = useState(false);
+  const [isCompleteOpen, setIsCompleteOpen] = useState(false);
+
+  const { data: cycle, isLoading: cycleLoading } = useQuery<AppraisalCycle>({
+    queryKey: ["/api/appraisal-cycles", cycleId],
+  });
+
+  const { data: participants = [], isLoading: participantsLoading } = useQuery<CycleParticipant[]>({
+    queryKey: ["/api/appraisal-cycles", cycleId, "participants"],
+  });
+
+  const { data: peerAssignments = [] } = useQuery<PeerAssignment[]>({
+    queryKey: ["/api/appraisal-cycles", cycleId, "peer-assignments"],
+  });
+
+  const { data: allAppraisals = [] } = useQuery<Appraisal[]>({
+    queryKey: ["/api/appraisals"],
+  });
+
+  const { data: employees = [] } = useQuery<Employee[]>({
+    queryKey: ["/api/employees"],
+  });
+
+  const cycleAppraisals = allAppraisals.filter(a => a.cycleId === cycleId);
+
+  function getEmployee(id: string) {
+    return employees.find(e => e.id === id);
+  }
+
+  function getEmployeeName(id: string) {
+    const emp = getEmployee(id);
+    return emp ? `${emp.firstName} ${emp.lastName}` : "Unknown";
+  }
+
+  function getAppraisalForParticipant(employeeId: string) {
+    return cycleAppraisals.find(a => a.employeeId === employeeId);
+  }
+
+  const participantEmployeeIds = new Set(participants.map(p => p.employeeId));
+  const availableEmployees = employees.filter(e => !participantEmployeeIds.has(e.id));
+
+  const addParticipantsMutation = useMutation({
+    mutationFn: async (employeeIds: string[]) => {
+      const res = await apiRequest("POST", `/api/appraisal-cycles/${cycleId}/participants`, { employeeIds });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles", cycleId, "participants"] });
+      toast({ title: "Participants added", description: "Employees have been added to the cycle." });
+      setIsAddParticipantsOpen(false);
+      setSelectedEmployeeIds([]);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const removeParticipantMutation = useMutation({
+    mutationFn: async (employeeIds: string[]) => {
+      await apiRequest("DELETE", `/api/appraisal-cycles/${cycleId}/participants`, { employeeIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles", cycleId, "participants"] });
+      toast({ title: "Participant removed", description: "The employee has been removed from the cycle." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const addPeerMutation = useMutation({
+    mutationFn: async (data: { revieweeId: string; reviewerId: string }) => {
+      const res = await apiRequest("POST", `/api/appraisal-cycles/${cycleId}/peer-assignments`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles", cycleId, "peer-assignments"] });
+      toast({ title: "Peer assignment added", description: "The peer review assignment has been created." });
+      setIsAddPeerOpen(false);
+      setPeerRevieweeId("");
+      setPeerReviewerId("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const removePeerMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/peer-assignments/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles", cycleId, "peer-assignments"] });
+      toast({ title: "Assignment removed", description: "The peer review assignment has been removed." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const activateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/appraisal-cycles/${cycleId}/activate`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles", cycleId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisals"] });
+      toast({ title: "Cycle activated", description: "The review cycle is now active. Appraisals have been created for all participants." });
+      setIsActivateOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", `/api/appraisal-cycles/${cycleId}`, { status: "completed" });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles", cycleId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles"] });
+      toast({ title: "Cycle completed", description: "The review cycle has been marked as completed." });
+      setIsCompleteOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  function toggleEmployeeSelection(empId: string) {
+    setSelectedEmployeeIds(prev =>
+      prev.includes(empId) ? prev.filter(id => id !== empId) : [...prev, empId]
+    );
+  }
+
+  if (cycleLoading) {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-9 w-9" />
+          <div className="space-y-2 flex-1">
+            <Skeleton className="h-7 w-64" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        </div>
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (!cycle) {
     return (
       <div className="flex flex-col items-center justify-center p-12">
-        <p className="text-muted-foreground" data-testid="text-access-restricted">Access restricted to administrators only</p>
-        <Link href="/appraisals">
-          <Button variant="ghost" className="mt-4" data-testid="button-back-appraisals-error">Back to Appraisals</Button>
+        <AlertCircle className="h-12 w-12 text-muted-foreground mb-4" />
+        <p className="text-muted-foreground" data-testid="text-cycle-not-found">Cycle not found</p>
+        <Link href="/appraisals/cycles">
+          <Button variant="ghost" className="mt-4" data-testid="button-back-cycles-error">Back to Cycles</Button>
         </Link>
       </div>
     );
   }
+
+  const isDraft = cycle.status === "draft";
+  const isActive = cycle.status === "active";
+  const cycleStatusCfg = statusConfig[cycle.status] || statusConfig.draft;
+  const is360 = cycle.type === "360";
 
   return (
     <div className="space-y-6 p-6">
@@ -28,20 +232,399 @@ export default function CycleProgress() {
           </Button>
         </Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-cycle-progress-title">
-            Cycle Progress
-          </h1>
-          <p className="text-muted-foreground">Track review completion for this cycle</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-cycle-progress-title">
+              {cycle.name}
+            </h1>
+            <Badge variant={cycleStatusCfg.variant} className={cycleStatusCfg.className} data-testid="badge-cycle-status">
+              {cycleStatusCfg.label}
+            </Badge>
+            <Badge variant="outline" data-testid="badge-cycle-type">
+              {typeLabels[cycle.type] || cycle.type}
+            </Badge>
+          </div>
+          <p className="text-muted-foreground text-sm mt-1">Manage participants, assignments, and track review progress</p>
         </div>
+        {isAdmin && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {isDraft && (
+              <Button
+                onClick={() => setIsActivateOpen(true)}
+                disabled={participants.length === 0}
+                data-testid="button-activate-cycle"
+              >
+                <Play className="h-4 w-4 mr-2" />
+                Activate Cycle
+              </Button>
+            )}
+            {isActive && (
+              <Button
+                variant="outline"
+                onClick={() => setIsCompleteOpen(true)}
+                data-testid="button-complete-cycle"
+              >
+                <CircleCheck className="h-4 w-4 mr-2" />
+                Complete Cycle
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <Inbox className="h-12 w-12 text-muted-foreground/50 mb-4" />
-        <h3 className="text-lg font-medium text-muted-foreground">No cycle data yet</h3>
-        <p className="text-sm text-muted-foreground mt-1 max-w-md">
-          Cycle progress details will appear here once a review cycle is created and participants are assigned.
-        </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              <span>Date Range</span>
+            </div>
+            <p className="font-medium" data-testid="text-cycle-dates">
+              {format(new Date(cycle.startDate), "MMM d, yyyy")} - {format(new Date(cycle.endDate), "MMM d, yyyy")}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 space-y-2">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Weight className="h-4 w-4" />
+              <span>Weight Distribution</span>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap" data-testid="text-cycle-weights">
+              <span className="text-sm">Self: <span className="font-medium">{cycle.selfWeight}%</span></span>
+              <span className="text-sm">Peer: <span className="font-medium">{cycle.peerWeight}%</span></span>
+              <span className="text-sm">Manager: <span className="font-medium">{cycle.managerWeight}%</span></span>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-muted-foreground" />
+              <h2 className="text-lg font-semibold" data-testid="text-participants-heading">Participants</h2>
+              <Badge variant="secondary" data-testid="badge-participant-count">{participants.length}</Badge>
+            </div>
+            {isAdmin && isDraft && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSelectedEmployeeIds([]);
+                  setIsAddParticipantsOpen(true);
+                }}
+                data-testid="button-add-participants"
+              >
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add Participants
+              </Button>
+            )}
+          </div>
+
+          {participantsLoading ? (
+            <div className="space-y-3">
+              {[1, 2, 3].map(i => (
+                <Skeleton key={i} className="h-14 w-full" />
+              ))}
+            </div>
+          ) : participants.length === 0 ? (
+            <div className="flex flex-col items-center py-8 text-center">
+              <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+              <p className="text-sm text-muted-foreground" data-testid="text-no-participants">No participants added yet</p>
+              {isAdmin && isDraft && (
+                <p className="text-xs text-muted-foreground mt-1">Add employees to this cycle to get started</p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {participants.map(participant => {
+                const emp = getEmployee(participant.employeeId);
+                const appraisal = getAppraisalForParticipant(participant.employeeId);
+                const appraisalStatus = appraisal?.status || "pending";
+                const statusCfg = appraisalStatusConfig[appraisalStatus] || appraisalStatusConfig.pending;
+
+                return (
+                  <div
+                    key={participant.id}
+                    className="flex items-center justify-between gap-4 p-3 rounded-md border flex-wrap"
+                    data-testid={`participant-row-${participant.employeeId}`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs">
+                          {emp ? `${emp.firstName[0]}${emp.lastName[0]}` : "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate" data-testid={`text-participant-name-${participant.employeeId}`}>
+                          {emp ? `${emp.firstName} ${emp.lastName}` : "Unknown Employee"}
+                        </p>
+                        {emp && (
+                          <p className="text-xs text-muted-foreground truncate">{emp.position}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {!isDraft && appraisal && (
+                        <>
+                          <Badge variant="secondary" className={statusCfg.className} data-testid={`badge-appraisal-status-${participant.employeeId}`}>
+                            {statusCfg.label}
+                          </Badge>
+                          {appraisalStatus === "completed" && (
+                            <Link href={`/appraisals/results/${appraisal.id}`}>
+                              <Button variant="ghost" size="sm" data-testid={`button-view-results-${participant.employeeId}`}>
+                                <Link2 className="h-3 w-3 mr-1" />
+                                Results
+                              </Button>
+                            </Link>
+                          )}
+                        </>
+                      )}
+                      {isDraft && (
+                        <Badge variant="outline" data-testid={`badge-draft-status-${participant.employeeId}`}>
+                          <Clock className="h-3 w-3 mr-1" />
+                          Awaiting activation
+                        </Badge>
+                      )}
+                      {isAdmin && isDraft && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeParticipantMutation.mutate([participant.employeeId])}
+                          disabled={removeParticipantMutation.isPending}
+                          data-testid={`button-remove-participant-${participant.employeeId}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {is360 && isDraft && isAdmin && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Link2 className="h-5 w-5 text-muted-foreground" />
+                <h2 className="text-lg font-semibold" data-testid="text-peer-assignments-heading">Peer Assignments</h2>
+                <Badge variant="secondary" data-testid="badge-peer-count">{peerAssignments.length}</Badge>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPeerRevieweeId("");
+                  setPeerReviewerId("");
+                  setIsAddPeerOpen(true);
+                }}
+                disabled={participants.length < 2}
+                data-testid="button-add-peer-assignment"
+              >
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add Peer Assignment
+              </Button>
+            </div>
+
+            {peerAssignments.length === 0 ? (
+              <div className="flex flex-col items-center py-8 text-center">
+                <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                <p className="text-sm text-muted-foreground" data-testid="text-no-peer-assignments">No peer assignments yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Assign peers to review each other</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {peerAssignments.map(assignment => (
+                  <div
+                    key={assignment.id}
+                    className="flex items-center justify-between gap-4 p-3 rounded-md border flex-wrap"
+                    data-testid={`peer-assignment-row-${assignment.id}`}
+                  >
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">Reviewee:</span>
+                      <span className="font-medium" data-testid={`text-peer-reviewee-${assignment.id}`}>
+                        {getEmployeeName(assignment.revieweeId)}
+                      </span>
+                      <ArrowLeft className="h-3 w-3 text-muted-foreground rotate-180" />
+                      <span className="text-muted-foreground">Reviewer:</span>
+                      <span className="font-medium" data-testid={`text-peer-reviewer-${assignment.id}`}>
+                        {getEmployeeName(assignment.reviewerId)}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removePeerMutation.mutate(assignment.id)}
+                      disabled={removePeerMutation.isPending}
+                      data-testid={`button-remove-peer-${assignment.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={isAddParticipantsOpen} onOpenChange={setIsAddParticipantsOpen}>
+        <DialogContent className="sm:max-w-[480px]" data-testid="dialog-add-participants">
+          <DialogHeader>
+            <DialogTitle>Add Participants</DialogTitle>
+            <DialogDescription>Select employees to add to this review cycle.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[300px] overflow-y-auto space-y-1">
+            {availableEmployees.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">All employees are already in this cycle</p>
+            ) : (
+              availableEmployees.map(emp => (
+                <label
+                  key={emp.id}
+                  className="flex items-center gap-3 p-2 rounded-md hover-elevate cursor-pointer"
+                  data-testid={`checkbox-employee-${emp.id}`}
+                >
+                  <Checkbox
+                    checked={selectedEmployeeIds.includes(emp.id)}
+                    onCheckedChange={() => toggleEmployeeSelection(emp.id)}
+                  />
+                  <Avatar className="h-7 w-7">
+                    <AvatarFallback className="text-[10px]">{emp.firstName[0]}{emp.lastName[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{emp.firstName} {emp.lastName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{emp.position}</p>
+                  </div>
+                </label>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddParticipantsOpen(false)} data-testid="button-cancel-add-participants">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => addParticipantsMutation.mutate(selectedEmployeeIds)}
+              disabled={selectedEmployeeIds.length === 0 || addParticipantsMutation.isPending}
+              data-testid="button-confirm-add-participants"
+            >
+              {addParticipantsMutation.isPending ? "Adding..." : `Add ${selectedEmployeeIds.length} Participant${selectedEmployeeIds.length !== 1 ? "s" : ""}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAddPeerOpen} onOpenChange={setIsAddPeerOpen}>
+        <DialogContent className="sm:max-w-[420px]" data-testid="dialog-add-peer">
+          <DialogHeader>
+            <DialogTitle>Add Peer Assignment</DialogTitle>
+            <DialogDescription>Select who will be reviewed and who will review them.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Reviewee (being reviewed)</Label>
+              <Select value={peerRevieweeId} onValueChange={setPeerRevieweeId}>
+                <SelectTrigger data-testid="select-peer-reviewee">
+                  <SelectValue placeholder="Select reviewee..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {participants.map(p => {
+                    const emp = getEmployee(p.employeeId);
+                    return emp ? (
+                      <SelectItem key={p.employeeId} value={p.employeeId}>
+                        {emp.firstName} {emp.lastName}
+                      </SelectItem>
+                    ) : null;
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Reviewer</Label>
+              <Select value={peerReviewerId} onValueChange={setPeerReviewerId}>
+                <SelectTrigger data-testid="select-peer-reviewer">
+                  <SelectValue placeholder="Select reviewer..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {participants
+                    .filter(p => p.employeeId !== peerRevieweeId)
+                    .map(p => {
+                      const emp = getEmployee(p.employeeId);
+                      return emp ? (
+                        <SelectItem key={p.employeeId} value={p.employeeId}>
+                          {emp.firstName} {emp.lastName}
+                        </SelectItem>
+                      ) : null;
+                    })}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddPeerOpen(false)} data-testid="button-cancel-add-peer">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => addPeerMutation.mutate({ revieweeId: peerRevieweeId, reviewerId: peerReviewerId })}
+              disabled={!peerRevieweeId || !peerReviewerId || addPeerMutation.isPending}
+              data-testid="button-confirm-add-peer"
+            >
+              {addPeerMutation.isPending ? "Adding..." : "Add Assignment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isActivateOpen} onOpenChange={setIsActivateOpen}>
+        <DialogContent data-testid="dialog-activate-cycle">
+          <DialogHeader>
+            <DialogTitle>Activate Review Cycle</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to activate this cycle? This will create appraisals for all {participants.length} participants.
+              Once activated, you cannot modify participants or peer assignments.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsActivateOpen(false)} data-testid="button-cancel-activate">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => activateMutation.mutate()}
+              disabled={activateMutation.isPending}
+              data-testid="button-confirm-activate"
+            >
+              {activateMutation.isPending ? "Activating..." : "Activate Cycle"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isCompleteOpen} onOpenChange={setIsCompleteOpen}>
+        <DialogContent data-testid="dialog-complete-cycle">
+          <DialogHeader>
+            <DialogTitle>Complete Review Cycle</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to mark this cycle as completed? This action indicates the review period is over.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCompleteOpen(false)} data-testid="button-cancel-complete">
+              Cancel
+            </Button>
+            <Button
+              onClick={() => completeMutation.mutate()}
+              disabled={completeMutation.isPending}
+              data-testid="button-confirm-complete"
+            >
+              {completeMutation.isPending ? "Completing..." : "Complete Cycle"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
