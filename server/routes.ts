@@ -3,6 +3,69 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertCompanySchema, insertDepartmentSchema, insertEmployeeSchema, insertLeaveTypeSchema, insertLeaveRequestSchema, insertHrQuerySchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import express from "express";
+
+const uploadsDir = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+const uploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, uniqueSuffix + ext);
+  },
+});
+
+const upload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowedTypes = [
+      "image/jpeg", "image/png", "image/gif", "image/webp",
+      "application/pdf",
+      "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/plain", "text/csv",
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("File type not allowed. Supported: images, PDF, Word, Excel, text, CSV"));
+    }
+  },
+});
+
+function validateAttachments(attachments: any): attachments is Array<{ fileName: string; fileUrl: string; fileSize: number; mimeType: string }> {
+  if (!Array.isArray(attachments)) return false;
+  if (attachments.length > 5) return false;
+  return attachments.every(a =>
+    typeof a.fileName === "string" && a.fileName.length > 0 &&
+    typeof a.fileUrl === "string" && a.fileUrl.startsWith("/uploads/") &&
+    typeof a.fileSize === "number" && a.fileSize > 0 && a.fileSize <= 10 * 1024 * 1024 &&
+    typeof a.mimeType === "string" && a.mimeType.length > 0
+  );
+}
+
+async function saveAttachments(attachments: any[], queryId: string, uploadedBy: string, commentId?: string) {
+  if (!validateAttachments(attachments)) return;
+  for (const att of attachments) {
+    await storage.createHrQueryAttachment({
+      queryId,
+      commentId,
+      fileName: att.fileName,
+      fileUrl: att.fileUrl,
+      fileSize: att.fileSize,
+      mimeType: att.mimeType,
+      uploadedBy,
+    });
+  }
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -876,6 +939,10 @@ export async function registerRoutes(
 
       const query = await storage.createHrQuery(parsed.data);
 
+      if (req.body.attachments) {
+        await saveAttachments(req.body.attachments, query.id, employeeId);
+      }
+
       await storage.createHrQueryTimeline({
         queryId: query.id,
         action: "created",
@@ -1016,6 +1083,10 @@ export async function registerRoutes(
         isInternal: isInternalStr,
       });
 
+      if (req.body.attachments) {
+        await saveAttachments(req.body.attachments, req.params.id, employeeId, comment.id);
+      }
+
       await storage.updateHrQuery(req.params.id, {});
 
       await storage.createHrQueryTimeline({
@@ -1061,6 +1132,10 @@ export async function registerRoutes(
         isInternal: "false",
       });
 
+      if (req.body.attachments) {
+        await saveAttachments(req.body.attachments, req.params.id, employeeId, comment.id);
+      }
+
       await storage.updateHrQuery(req.params.id, { status: "responded" });
 
       await storage.createHrQueryTimeline({
@@ -1103,6 +1178,88 @@ export async function registerRoutes(
 
       const timeline = await storage.getHrQueryTimeline(req.params.id);
       return res.json(timeline);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== FILE UPLOADS ====================
+
+  app.get("/api/attachments/:attachmentId/download", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+
+      const attachment = await storage.getHrQueryAttachment(req.params.attachmentId);
+      if (!attachment) {
+        return res.status(404).json({ message: "Attachment not found" });
+      }
+
+      const query = await storage.getHrQuery(attachment.queryId);
+      if (!query) {
+        return res.status(404).json({ message: "Query not found" });
+      }
+
+      const hasAccess = await checkQueryAccess(employeeId, companyId, role, query);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const safeName = path.basename(attachment.fileUrl);
+      const filePath = path.join(uploadsDir, safeName);
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({ message: "File not found on disk" });
+      }
+
+      res.setHeader("Content-Disposition", `inline; filename="${attachment.fileName}"`);
+      res.setHeader("Content-Type", attachment.mimeType);
+      return res.sendFile(filePath);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/uploads", requireAuth, upload.array("files", 5), async (req: Request, res: Response) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        return res.status(400).json({ message: "No files uploaded" });
+      }
+
+      const uploadedFiles = files.map(file => ({
+        fileName: file.originalname,
+        fileUrl: `/uploads/${file.filename}`,
+        fileSize: file.size,
+        mimeType: file.mimetype,
+      }));
+
+      return res.status(201).json(uploadedFiles);
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message || "Upload failed" });
+    }
+  });
+
+  // ==================== HR QUERY ATTACHMENTS ====================
+
+  app.get("/api/hr-queries/:id/attachments", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+
+      const query = await storage.getHrQuery(req.params.id);
+      if (!query) {
+        return res.status(404).json({ message: "Query not found" });
+      }
+
+      const hasAccess = await checkQueryAccess(employeeId, companyId, role, query);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const attachments = await storage.getHrQueryAttachmentsByQuery(req.params.id);
+      return res.json(attachments);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }

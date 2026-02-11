@@ -14,7 +14,8 @@ import { useRole } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Employee, HrQuery } from "@shared/schema";
-import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning } from "lucide-react";
+import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning, Paperclip } from "lucide-react";
+import { FileUpload, type UploadedFile } from "@/components/file-upload";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -93,11 +94,12 @@ export default function Queries() {
   const [newCategory, setNewCategory] = useState<string>("attendance");
   const [newPriority, setNewPriority] = useState<string>("medium");
   const [newEmployeeId, setNewEmployeeId] = useState<string>("");
+  const [newAttachments, setNewAttachments] = useState<UploadedFile[]>([]);
 
   const canIssueQuery = role === "admin" || role === "manager";
 
   const createMutation = useMutation({
-    mutationFn: async (data: { subject: string; description: string; category: string; priority: string; employeeId: string }) => {
+    mutationFn: async (data: { subject: string; description: string; category: string; priority: string; employeeId: string; attachments?: UploadedFile[] }) => {
       const res = await apiRequest("POST", "/api/hr-queries", data);
       return res.json();
     },
@@ -110,6 +112,7 @@ export default function Queries() {
       setNewCategory("attendance");
       setNewPriority("medium");
       setNewEmployeeId("");
+      setNewAttachments([]);
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -156,6 +159,7 @@ export default function Queries() {
       category: newCategory,
       priority: newPriority,
       employeeId: newEmployeeId,
+      attachments: newAttachments.length > 0 ? newAttachments : undefined,
     });
   }
 
@@ -165,6 +169,7 @@ export default function Queries() {
     setNewCategory("attendance");
     setNewPriority("medium");
     setNewEmployeeId("");
+    setNewAttachments([]);
     setIsIssueOpen(true);
   }
 
@@ -377,6 +382,10 @@ export default function Queries() {
                 rows={5}
                 data-testid="input-query-description"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Attachments</Label>
+              <FileUpload files={newAttachments} onFilesChange={setNewAttachments} disabled={createMutation.isPending} />
             </div>
           </div>
           <DialogFooter>

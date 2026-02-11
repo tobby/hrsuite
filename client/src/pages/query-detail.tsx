@@ -28,7 +28,10 @@ import {
   UserPlus,
   Reply,
   FileWarning,
+  Paperclip,
 } from "lucide-react";
+import { FileUpload, AttachmentDisplay, type UploadedFile } from "@/components/file-upload";
+import type { HrQueryAttachment } from "@shared/schema";
 import { format } from "date-fns";
 import { Link } from "wouter";
 
@@ -119,6 +122,13 @@ export default function QueryDetail() {
   const [commentText, setCommentText] = useState("");
   const [responseText, setResponseText] = useState("");
   const [isInternal, setIsInternal] = useState(false);
+  const [commentAttachments, setCommentAttachments] = useState<UploadedFile[]>([]);
+  const [responseAttachments, setResponseAttachments] = useState<UploadedFile[]>([]);
+
+  const { data: attachments = [] } = useQuery<HrQueryAttachment[]>({
+    queryKey: ['/api/hr-queries', queryId, 'attachments'],
+    enabled: !!queryId,
+  });
 
   const isAdmin = role === "admin";
   const isManager = role === "manager";
@@ -153,16 +163,18 @@ export default function QueryDetail() {
   });
 
   const commentMutation = useMutation({
-    mutationFn: async (data: { content: string; isInternal: boolean }) => {
+    mutationFn: async (data: { content: string; isInternal: boolean; attachments?: UploadedFile[] }) => {
       const res = await apiRequest("POST", `/api/hr-queries/${queryId}/comments`, data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/hr-queries', queryId, 'comments'] });
       queryClient.invalidateQueries({ queryKey: ['/api/hr-queries', queryId, 'timeline'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/hr-queries', queryId, 'attachments'] });
       toast({ title: isInternal ? "Internal note added" : "Comment added" });
       setCommentText("");
       setIsInternal(false);
+      setCommentAttachments([]);
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -170,14 +182,16 @@ export default function QueryDetail() {
   });
 
   const respondMutation = useMutation({
-    mutationFn: async (content: string) => {
-      const res = await apiRequest("POST", `/api/hr-queries/${queryId}/respond`, { content });
+    mutationFn: async (data: { content: string; attachments?: UploadedFile[] }) => {
+      const res = await apiRequest("POST", `/api/hr-queries/${queryId}/respond`, data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/hr-queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/hr-queries', queryId, 'attachments'] });
       toast({ title: "Response submitted", description: "Your response has been submitted and is now under review." });
       setResponseText("");
+      setResponseAttachments([]);
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -225,7 +239,11 @@ export default function QueryDetail() {
 
   function handleAddComment() {
     if (!commentText.trim()) return;
-    commentMutation.mutate({ content: commentText.trim(), isInternal });
+    commentMutation.mutate({
+      content: commentText.trim(),
+      isInternal,
+      attachments: commentAttachments.length > 0 ? commentAttachments : undefined,
+    });
   }
 
   function handleSubmitResponse() {
@@ -233,7 +251,10 @@ export default function QueryDetail() {
       toast({ title: "Validation Error", description: "Your response must be at least 10 characters.", variant: "destructive" });
       return;
     }
-    respondMutation.mutate(responseText.trim());
+    respondMutation.mutate({
+      content: responseText.trim(),
+      attachments: responseAttachments.length > 0 ? responseAttachments : undefined,
+    });
   }
 
   function handleStatusChange(newStatus: string) {
@@ -277,6 +298,7 @@ export default function QueryDetail() {
                   rows={4}
                   data-testid="input-response"
                 />
+                <FileUpload files={responseAttachments} onFilesChange={setResponseAttachments} disabled={respondMutation.isPending} />
                 <div className="flex items-center justify-end">
                   <Button onClick={handleSubmitResponse} disabled={responseText.trim().length < 10 || respondMutation.isPending} data-testid="button-submit-response">
                     <Reply className="h-4 w-4 mr-2" />
@@ -297,6 +319,10 @@ export default function QueryDetail() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm whitespace-pre-wrap" data-testid="text-query-description">{query.description}</p>
+              {(() => {
+                const queryAttachments = attachments.filter(a => !a.commentId);
+                return queryAttachments.length > 0 ? <AttachmentDisplay attachments={queryAttachments} /> : null;
+              })()}
             </CardContent>
           </Card>
 
@@ -346,6 +372,10 @@ export default function QueryDetail() {
                         </span>
                       </div>
                       <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
+                      {(() => {
+                        const commentAtts = attachments.filter(a => a.commentId === comment.id);
+                        return commentAtts.length > 0 ? <AttachmentDisplay attachments={commentAtts} /> : null;
+                      })()}
                     </div>
                   );
                 })
@@ -362,6 +392,7 @@ export default function QueryDetail() {
                       rows={3}
                       data-testid="input-comment"
                     />
+                    <FileUpload files={commentAttachments} onFilesChange={setCommentAttachments} disabled={commentMutation.isPending} />
                     <div className="flex items-center justify-between gap-4 flex-wrap">
                       <div className="flex items-center gap-3 flex-wrap">
                         {isAdmin && (

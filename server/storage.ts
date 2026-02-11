@@ -10,6 +10,7 @@ import {
   hrQueries, type HrQuery, type InsertHrQuery,
   hrQueryComments, type HrQueryComment,
   hrQueryTimeline, type HrQueryTimeline,
+  hrQueryAttachments, type HrQueryAttachment,
 } from "@shared/schema";
 import { randomUUID, randomBytes } from "crypto";
 
@@ -74,6 +75,12 @@ export interface IStorage {
   // HR Query Timeline
   createHrQueryTimeline(data: { queryId: string; action: string; details: string; actorId: string }): Promise<HrQueryTimeline>;
   getHrQueryTimeline(queryId: string): Promise<HrQueryTimeline[]>;
+
+  // HR Query Attachments
+  createHrQueryAttachment(data: { queryId: string; commentId?: string; fileName: string; fileUrl: string; fileSize: number; mimeType: string; uploadedBy: string }): Promise<HrQueryAttachment>;
+  getHrQueryAttachment(id: string): Promise<HrQueryAttachment | undefined>;
+  getHrQueryAttachmentsByQuery(queryId: string): Promise<HrQueryAttachment[]>;
+  getHrQueryAttachmentsByComment(commentId: string): Promise<HrQueryAttachment[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -365,6 +372,26 @@ export class DatabaseStorage implements IStorage {
 
   async getHrQueryTimeline(queryId: string): Promise<HrQueryTimeline[]> {
     return db.select().from(hrQueryTimeline).where(eq(hrQueryTimeline.queryId, queryId)).orderBy(hrQueryTimeline.createdAt);
+  }
+
+  // ==================== HR QUERY ATTACHMENTS ====================
+
+  async createHrQueryAttachment(data: { queryId: string; commentId?: string; fileName: string; fileUrl: string; fileSize: number; mimeType: string; uploadedBy: string }): Promise<HrQueryAttachment> {
+    const [attachment] = await db.insert(hrQueryAttachments).values(data).returning();
+    return attachment;
+  }
+
+  async getHrQueryAttachment(id: string): Promise<HrQueryAttachment | undefined> {
+    const [attachment] = await db.select().from(hrQueryAttachments).where(eq(hrQueryAttachments.id, id));
+    return attachment;
+  }
+
+  async getHrQueryAttachmentsByQuery(queryId: string): Promise<HrQueryAttachment[]> {
+    return db.select().from(hrQueryAttachments).where(eq(hrQueryAttachments.queryId, queryId)).orderBy(hrQueryAttachments.createdAt);
+  }
+
+  async getHrQueryAttachmentsByComment(commentId: string): Promise<HrQueryAttachment[]> {
+    return db.select().from(hrQueryAttachments).where(eq(hrQueryAttachments.commentId, commentId)).orderBy(hrQueryAttachments.createdAt);
   }
 }
 

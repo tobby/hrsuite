@@ -449,6 +449,22 @@ export const hrQueryTimeline = pgTable("hr_query_timeline", {
 
 export type HrQueryTimeline = typeof hrQueryTimeline.$inferSelect;
 
+// ==================== HR QUERY ATTACHMENTS ====================
+
+export const hrQueryAttachments = pgTable("hr_query_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  queryId: varchar("query_id").notNull(),
+  commentId: varchar("comment_id"),
+  fileName: text("file_name").notNull(),
+  fileUrl: text("file_url").notNull(),
+  fileSize: integer("file_size").notNull(),
+  mimeType: text("mime_type").notNull(),
+  uploadedBy: varchar("uploaded_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type HrQueryAttachment = typeof hrQueryAttachments.$inferSelect;
+
 // ==================== TASK MANAGEMENT ====================
 
 export const taskTemplates = pgTable("task_templates", {

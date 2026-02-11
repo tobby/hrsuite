@@ -23,7 +23,7 @@ The project is built with React + TypeScript, Vite, and Tailwind CSS. Zustand is
 - **Employee Management**: Provides employee directory, organogram views, and administrative tools for adding and editing employee details and managing departments.
 - **Recruitment/ATS**: Comprehensive module with job postings, a public careers page, a multi-step job application form, a candidate pipeline with Kanban and table views, and candidate detail pages. Also includes recruitment settings for email templates.
 - **Task Management**: Features task templates, a task tracker for administrators to assign and monitor checklists, and a "My Tasks" view for employees to manage their assigned tasks.
-- **HR Disciplinary Query System**: Allows admins/managers to issue disciplinary queries, with a detailed view for employees to respond, and a robust workflow for status updates, comments, and internal notes.
+- **HR Disciplinary Query System**: Allows admins/managers to issue disciplinary queries, with a detailed view for employees to respond, and a robust workflow for status updates, comments, and internal notes. Supports file/image attachments when issuing queries, responding, or commenting (up to 5 files per action, 10MB max each). Attachments stored on disk via multer, tracked in `hr_query_attachments` table.
 - **Reports & Analytics**: An admin-only module providing tabbed dashboards for workforce, leave, recruitment, queries, and tasks, featuring various charts and filtering capabilities using recharts.
 
 ### System Design Choices
