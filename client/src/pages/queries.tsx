@@ -14,7 +14,7 @@ import { useRole } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Employee, HrQuery } from "@shared/schema";
-import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning, Paperclip } from "lucide-react";
+import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning, Paperclip, Info, ArrowRight } from "lucide-react";
 import { FileUpload, type UploadedFile } from "@/components/file-upload";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -53,7 +53,9 @@ const statusLabels: Record<string, string> = {
   open: "Open",
   awaiting_response: "Awaiting Response",
   responded: "Responded",
+  under_review: "Under Review",
   resolved: "Resolved",
+  escalated: "Escalated",
   closed: "Closed",
 };
 
@@ -61,7 +63,9 @@ const statusIcons: Record<string, typeof AlertCircle> = {
   open: AlertCircle,
   awaiting_response: Send,
   responded: MessageSquare,
+  under_review: Search,
   resolved: CheckCircle2,
+  escalated: FileWarning,
   closed: XCircle,
 };
 
@@ -69,8 +73,20 @@ const statusColors: Record<string, string> = {
   open: "text-blue-600 dark:text-blue-400",
   awaiting_response: "text-amber-600 dark:text-amber-400",
   responded: "text-indigo-600 dark:text-indigo-400",
+  under_review: "text-orange-600 dark:text-orange-400",
   resolved: "text-green-600 dark:text-green-400",
+  escalated: "text-red-600 dark:text-red-400",
   closed: "text-muted-foreground",
+};
+
+const statusDescriptions: Record<string, string> = {
+  open: "The query has been issued and is waiting for the employee to respond.",
+  awaiting_response: "A follow-up response is needed from the employee.",
+  responded: "The employee has submitted their response.",
+  under_review: "The response is being reviewed by management.",
+  resolved: "The query has been reviewed and closed with a resolution.",
+  escalated: "The matter has been escalated for further investigation.",
+  closed: "The query is fully concluded and no longer active.",
 };
 
 export default function Queries() {
@@ -95,6 +111,7 @@ export default function Queries() {
   const [newPriority, setNewPriority] = useState<string>("medium");
   const [newEmployeeId, setNewEmployeeId] = useState<string>("");
   const [newAttachments, setNewAttachments] = useState<UploadedFile[]>([]);
+  const [showStatusGuide, setShowStatusGuide] = useState(false);
 
   const canIssueQuery = role === "admin" || role === "manager";
 
@@ -177,7 +194,17 @@ export default function Queries() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-queries-title">Queries</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-queries-title">Queries</h1>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => setShowStatusGuide(!showStatusGuide)}
+              data-testid="button-status-guide"
+            >
+              <Info className="h-4 w-4" />
+            </Button>
+          </div>
           <p className="text-muted-foreground text-sm">
             {role === "employee"
               ? "View and respond to queries issued to you"
@@ -193,6 +220,40 @@ export default function Queries() {
           </Button>
         )}
       </div>
+
+      {showStatusGuide && (
+        <Card data-testid="card-status-guide">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-4 mb-3">
+              <h3 className="text-sm font-semibold">Status Guide</h3>
+              <Button size="icon" variant="ghost" onClick={() => setShowStatusGuide(false)} data-testid="button-close-status-guide">
+                <XCircle className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {Object.entries(statusDescriptions).map(([key, description]) => {
+                const StatusIcon = statusIcons[key] || AlertCircle;
+                const color = statusColors[key] || "text-muted-foreground";
+                const label = statusLabels[key] || key.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                return (
+                  <div key={key} className="flex items-start gap-2 text-sm" data-testid={`status-guide-${key}`}>
+                    <StatusIcon className={`h-4 w-4 mt-0.5 shrink-0 ${color}`} />
+                    <div>
+                      <span className="font-medium">{label}</span>
+                      <span className="text-muted-foreground"> &mdash; {description}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-3 pt-3 border-t">
+              <p className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+                Typical flow: Open <ArrowRight className="h-3 w-3 inline" /> Responded <ArrowRight className="h-3 w-3 inline" /> Under Review <ArrowRight className="h-3 w-3 inline" /> Resolved / Closed
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
@@ -241,7 +302,9 @@ export default function Queries() {
             <SelectItem value="open">Open</SelectItem>
             <SelectItem value="awaiting_response">Awaiting Response</SelectItem>
             <SelectItem value="responded">Responded</SelectItem>
+            <SelectItem value="under_review">Under Review</SelectItem>
             <SelectItem value="resolved">Resolved</SelectItem>
+            <SelectItem value="escalated">Escalated</SelectItem>
             <SelectItem value="closed">Closed</SelectItem>
           </SelectContent>
         </Select>
