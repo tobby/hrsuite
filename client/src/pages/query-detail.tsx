@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRoute, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/lib/role-context";
-import { useQueryStore, type CommentAttachment } from "@/lib/query-store";
-import { useQuery } from "@tanstack/react-query";
-import type { Employee } from "@shared/schema";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Employee, HrQuery, HrQueryComment, HrQueryTimeline } from "@shared/schema";
 import {
   ArrowLeft,
   Clock,
@@ -27,27 +28,9 @@ import {
   UserPlus,
   Reply,
   FileWarning,
-  Paperclip,
-  FileText,
-  Image,
-  File,
-  X,
-  Download,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "wouter";
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function getFileIcon(type: string) {
-  if (type.startsWith("image/")) return Image;
-  if (type.includes("pdf") || type.includes("document") || type.includes("text")) return FileText;
-  return File;
-}
 
 const categoryLabels: Record<string, string> = {
   attendance: "Attendance",
@@ -110,8 +93,24 @@ export default function QueryDetail() {
   const [, navigate] = useLocation();
   const { role, currentUser } = useRole();
   const { toast } = useToast();
-  const { getQueryById, getCommentsForQuery, getTimelineForQuery, addComment, addResponse, updateQueryStatus, assignQuery } = useQueryStore();
   const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
+
+  const queryId = params?.id;
+
+  const { data: query, isLoading: queryLoading } = useQuery<HrQuery>({
+    queryKey: ['/api/hr-queries', queryId],
+    enabled: !!queryId,
+  });
+
+  const { data: comments = [] } = useQuery<HrQueryComment[]>({
+    queryKey: ['/api/hr-queries', queryId, 'comments'],
+    enabled: !!queryId,
+  });
+
+  const { data: timeline = [] } = useQuery<HrQueryTimeline[]>({
+    queryKey: ['/api/hr-queries', queryId, 'timeline'],
+    enabled: !!queryId,
+  });
 
   function getEmployee(id: string) {
     return employees.find(e => e.id === id);
@@ -120,30 +119,87 @@ export default function QueryDetail() {
   const [commentText, setCommentText] = useState("");
   const [responseText, setResponseText] = useState("");
   const [isInternal, setIsInternal] = useState(false);
-  const [commentFiles, setCommentFiles] = useState<CommentAttachment[]>([]);
-  const [responseFiles, setResponseFiles] = useState<CommentAttachment[]>([]);
-  const commentFileRef = useRef<HTMLInputElement>(null);
-  const responseFileRef = useRef<HTMLInputElement>(null);
-
-  const queryId = params?.id;
-  const query = queryId ? getQueryById(queryId) : undefined;
-  const comments = queryId ? getCommentsForQuery(queryId) : [];
-  const timeline = queryId ? getTimelineForQuery(queryId) : [];
 
   const isAdmin = role === "admin";
   const isManager = role === "manager";
   const canManage = isAdmin || isManager;
 
-  const hasAccess = query ? (() => {
-    if (role === "admin") return true;
-    if (role === "manager") {
-      const teamIds = employees.filter(e => e.managerId === currentUser.id).map(e => e.id);
-      return query.issuedBy === currentUser.id || query.employeeId === currentUser.id || teamIds.includes(query.employeeId);
-    }
-    return query.employeeId === currentUser.id;
-  })() : false;
+  const statusMutation = useMutation({
+    mutationFn: async (status: string) => {
+      const res = await apiRequest("PATCH", `/api/hr-queries/${queryId}/status`, { status });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/hr-queries'] });
+      toast({ title: "Status updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
 
-  if (!query || !hasAccess) {
+  const assignMutation = useMutation({
+    mutationFn: async (assignedTo: string | null) => {
+      const res = await apiRequest("PATCH", `/api/hr-queries/${queryId}/assign`, { assignedTo });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/hr-queries'] });
+      toast({ title: "Assignment updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const commentMutation = useMutation({
+    mutationFn: async (data: { content: string; isInternal: boolean }) => {
+      const res = await apiRequest("POST", `/api/hr-queries/${queryId}/comments`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/hr-queries', queryId, 'comments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/hr-queries', queryId, 'timeline'] });
+      toast({ title: isInternal ? "Internal note added" : "Comment added" });
+      setCommentText("");
+      setIsInternal(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const respondMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await apiRequest("POST", `/api/hr-queries/${queryId}/respond`, { content });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/hr-queries'] });
+      toast({ title: "Response submitted", description: "Your response has been submitted and is now under review." });
+      setResponseText("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  if (queryLoading) {
+    return (
+      <div className="p-6 max-w-5xl mx-auto space-y-6">
+        <Skeleton className="h-8 w-1/2" />
+        <Skeleton className="h-4 w-1/3" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <Card><CardContent className="p-6"><Skeleton className="h-32 w-full" /></CardContent></Card>
+          </div>
+          <Card><CardContent className="p-6"><Skeleton className="h-64 w-full" /></CardContent></Card>
+        </div>
+      </div>
+    );
+  }
+
+  if (!query) {
     return (
       <div className="p-6 text-center">
         <h2 className="text-xl font-bold mb-2">Query Not Found</h2>
@@ -161,61 +217,15 @@ export default function QueryDetail() {
   const targetEmployee = getEmployee(query.employeeId);
   const issuer = getEmployee(query.issuedBy);
   const assignee = query.assignedTo ? getEmployee(query.assignedTo) : null;
-  const visibleComments = comments.filter(c => isAdmin || c.isInternal !== "true");
+  const visibleComments = comments;
   const isTargetEmployee = query.employeeId === currentUser.id;
   const canRespond = isTargetEmployee && (query.status === "open" || query.status === "awaiting_response");
 
-  const hrEmployees = employees.filter(e => e.departmentId === "dept-2");
-
-  function handleFilesSelected(files: FileList | null, target: "comment" | "response") {
-    if (!files || files.length === 0) return;
-    const maxSize = 10 * 1024 * 1024;
-    const newAttachments: CommentAttachment[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (file.size > maxSize) {
-        toast({ title: "File too large", description: `${file.name} exceeds the 10 MB limit.`, variant: "destructive" });
-        continue;
-      }
-      newAttachments.push({
-        id: `att-${Date.now()}-${i}`,
-        name: file.name,
-        size: file.size,
-        type: file.type || "application/octet-stream",
-        url: URL.createObjectURL(file),
-      });
-    }
-    if (target === "comment") {
-      setCommentFiles(prev => [...prev, ...newAttachments]);
-    } else {
-      setResponseFiles(prev => [...prev, ...newAttachments]);
-    }
-  }
-
-  function removeFile(id: string, target: "comment" | "response") {
-    if (target === "comment") {
-      setCommentFiles(prev => {
-        const file = prev.find(f => f.id === id);
-        if (file) URL.revokeObjectURL(file.url);
-        return prev.filter(f => f.id !== id);
-      });
-    } else {
-      setResponseFiles(prev => {
-        const file = prev.find(f => f.id === id);
-        if (file) URL.revokeObjectURL(file.url);
-        return prev.filter(f => f.id !== id);
-      });
-    }
-  }
+  const hrEmployees = employees.filter(e => e.role === "admin" || e.role === "manager");
 
   function handleAddComment() {
-    if (!commentText.trim() && commentFiles.length === 0) return;
-    addComment(queryId!, commentText.trim() || (commentFiles.length > 0 ? `Attached ${commentFiles.length} file${commentFiles.length > 1 ? "s" : ""}` : ""), currentUser.id, isInternal, commentFiles.length > 0 ? commentFiles : undefined);
-    toast({ title: isInternal ? "Internal note added" : "Comment added" });
-    setCommentText("");
-    setIsInternal(false);
-    setCommentFiles([]);
-    if (commentFileRef.current) commentFileRef.current.value = "";
+    if (!commentText.trim()) return;
+    commentMutation.mutate({ content: commentText.trim(), isInternal });
   }
 
   function handleSubmitResponse() {
@@ -223,22 +233,15 @@ export default function QueryDetail() {
       toast({ title: "Validation Error", description: "Your response must be at least 10 characters.", variant: "destructive" });
       return;
     }
-    addResponse(queryId!, responseText.trim(), currentUser.id, responseFiles.length > 0 ? responseFiles : undefined);
-    toast({ title: "Response submitted", description: "Your response has been submitted and is now under review." });
-    setResponseText("");
-    setResponseFiles([]);
-    if (responseFileRef.current) responseFileRef.current.value = "";
+    respondMutation.mutate(responseText.trim());
   }
 
   function handleStatusChange(newStatus: string) {
-    updateQueryStatus(queryId!, newStatus, currentUser.id);
-    toast({ title: "Status updated", description: `Query status changed to ${statusLabels[newStatus]}` });
+    statusMutation.mutate(newStatus);
   }
 
   function handleAssign(assigneeId: string) {
-    const emp = getEmployee(assigneeId);
-    assignQuery(queryId!, assigneeId === "unassigned" ? null : assigneeId, currentUser.id);
-    toast({ title: assigneeId === "unassigned" ? "Query unassigned" : "Query assigned", description: assigneeId !== "unassigned" ? `Assigned to ${emp?.firstName} ${emp?.lastName}` : undefined });
+    assignMutation.mutate(assigneeId === "unassigned" ? null : assigneeId);
   }
 
   return (
@@ -252,7 +255,7 @@ export default function QueryDetail() {
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold tracking-tight truncate" data-testid="text-query-detail-subject">{query.subject}</h1>
           <p className="text-sm text-muted-foreground">
-            Query #{query.id.replace("query-", "")} &middot; Issued {format(new Date(query.createdAt!), "MMM d, yyyy 'at' h:mm a")}
+            Query #{query.id.slice(0, 8)} &middot; Issued {format(new Date(query.createdAt!), "MMM d, yyyy 'at' h:mm a")}
           </p>
         </div>
       </div>
@@ -274,39 +277,10 @@ export default function QueryDetail() {
                   rows={4}
                   data-testid="input-response"
                 />
-                {responseFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {responseFiles.map(file => {
-                      const IconComp = getFileIcon(file.type);
-                      return (
-                        <div key={file.id} className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm" data-testid={`response-file-${file.id}`}>
-                          <IconComp className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                          <span className="truncate max-w-[150px]">{file.name}</span>
-                          <span className="text-xs text-muted-foreground flex-shrink-0">({formatFileSize(file.size)})</span>
-                          <button type="button" onClick={() => removeFile(file.id, "response")} className="ml-1 text-muted-foreground hover:text-foreground flex-shrink-0" data-testid={`remove-response-file-${file.id}`}>
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                <input
-                  type="file"
-                  ref={responseFileRef}
-                  className="hidden"
-                  multiple
-                  onChange={e => handleFilesSelected(e.target.files, "response")}
-                  data-testid="input-response-file"
-                />
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <Button variant="outline" size="sm" onClick={() => responseFileRef.current?.click()} data-testid="button-attach-response-file">
-                    <Paperclip className="h-4 w-4 mr-2" />
-                    Attach File
-                  </Button>
-                  <Button onClick={handleSubmitResponse} disabled={responseText.trim().length < 10} data-testid="button-submit-response">
+                <div className="flex items-center justify-end">
+                  <Button onClick={handleSubmitResponse} disabled={responseText.trim().length < 10 || respondMutation.isPending} data-testid="button-submit-response">
                     <Reply className="h-4 w-4 mr-2" />
-                    Submit Response
+                    {respondMutation.isPending ? "Submitting..." : "Submit Response"}
                   </Button>
                 </div>
               </div>
@@ -323,32 +297,6 @@ export default function QueryDetail() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm whitespace-pre-wrap" data-testid="text-query-description">{query.description}</p>
-              {query.attachments && query.attachments.length > 0 && (
-                <div className="space-y-2">
-                  <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Attachments</div>
-                  <div className="flex flex-wrap gap-2">
-                    {query.attachments.map(att => {
-                      const IconComp = getFileIcon(att.type);
-                      return (
-                        <a
-                          key={att.id}
-                          href={att.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download={att.name}
-                          className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm hover-elevate"
-                          data-testid={`query-attachment-${att.id}`}
-                        >
-                          <IconComp className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                          <span className="truncate max-w-[150px]">{att.name}</span>
-                          <span className="text-xs text-muted-foreground flex-shrink-0">({formatFileSize(att.size)})</span>
-                          <Download className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                        </a>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
 
@@ -398,29 +346,6 @@ export default function QueryDetail() {
                         </span>
                       </div>
                       <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
-                      {comment.attachments && comment.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {comment.attachments.map(att => {
-                            const IconComp = getFileIcon(att.type);
-                            return (
-                              <a
-                                key={att.id}
-                                href={att.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                download={att.name}
-                                className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm hover-elevate"
-                                data-testid={`attachment-${att.id}`}
-                              >
-                                <IconComp className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                                <span className="truncate max-w-[150px]">{att.name}</span>
-                                <span className="text-xs text-muted-foreground flex-shrink-0">({formatFileSize(att.size)})</span>
-                                <Download className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                              </a>
-                            );
-                          })}
-                        </div>
-                      )}
                     </div>
                   );
                 })
@@ -437,31 +362,6 @@ export default function QueryDetail() {
                       rows={3}
                       data-testid="input-comment"
                     />
-                    {commentFiles.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {commentFiles.map(file => {
-                          const IconComp = getFileIcon(file.type);
-                          return (
-                            <div key={file.id} className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm" data-testid={`comment-file-${file.id}`}>
-                              <IconComp className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                              <span className="truncate max-w-[150px]">{file.name}</span>
-                              <span className="text-xs text-muted-foreground flex-shrink-0">({formatFileSize(file.size)})</span>
-                              <button type="button" onClick={() => removeFile(file.id, "comment")} className="ml-1 text-muted-foreground hover:text-foreground flex-shrink-0" data-testid={`remove-comment-file-${file.id}`}>
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <input
-                      type="file"
-                      ref={commentFileRef}
-                      className="hidden"
-                      multiple
-                      onChange={e => handleFilesSelected(e.target.files, "comment")}
-                      data-testid="input-comment-file"
-                    />
                     <div className="flex items-center justify-between gap-4 flex-wrap">
                       <div className="flex items-center gap-3 flex-wrap">
                         {isAdmin && (
@@ -477,19 +377,15 @@ export default function QueryDetail() {
                             </Label>
                           </div>
                         )}
-                        <Button variant="outline" size="sm" onClick={() => commentFileRef.current?.click()} data-testid="button-attach-comment-file">
-                          <Paperclip className="h-4 w-4 mr-2" />
-                          Attach File
-                        </Button>
                       </div>
                       <Button
                         onClick={handleAddComment}
-                        disabled={!commentText.trim() && commentFiles.length === 0}
+                        disabled={!commentText.trim() || commentMutation.isPending}
                         className="ml-auto"
                         data-testid="button-add-comment"
                       >
                         <Send className="h-4 w-4 mr-2" />
-                        {isInternal ? "Add Note" : "Add Comment"}
+                        {commentMutation.isPending ? "Adding..." : isInternal ? "Add Note" : "Add Comment"}
                       </Button>
                     </div>
                   </div>
@@ -660,6 +556,9 @@ export default function QueryDetail() {
                     </div>
                   );
                 })}
+                {timeline.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-2">No timeline events</p>
+                )}
               </div>
             </CardContent>
           </Card>

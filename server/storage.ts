@@ -7,6 +7,9 @@ import {
   leaveTypes, type LeaveType, type InsertLeaveType,
   leaveBalances, type LeaveBalance,
   leaveRequests, type LeaveRequest, type InsertLeaveRequest,
+  hrQueries, type HrQuery, type InsertHrQuery,
+  hrQueryComments, type HrQueryComment,
+  hrQueryTimeline, type HrQueryTimeline,
 } from "@shared/schema";
 import { randomUUID, randomBytes } from "crypto";
 
@@ -56,6 +59,20 @@ export interface IStorage {
   getPendingLeaveRequestsByCompany(companyId: string): Promise<LeaveRequest[]>;
   getLeaveRequest(id: string): Promise<LeaveRequest | undefined>;
   updateLeaveRequest(id: string, data: Partial<LeaveRequest>): Promise<LeaveRequest | undefined>;
+
+  // HR Queries
+  createHrQuery(data: InsertHrQuery): Promise<HrQuery>;
+  getHrQueriesByCompany(companyId: string): Promise<HrQuery[]>;
+  getHrQuery(id: string): Promise<HrQuery | undefined>;
+  updateHrQuery(id: string, data: Partial<HrQuery>): Promise<HrQuery | undefined>;
+
+  // HR Query Comments
+  createHrQueryComment(data: { queryId: string; content: string; authorId: string; isInternal: string }): Promise<HrQueryComment>;
+  getHrQueryComments(queryId: string): Promise<HrQueryComment[]>;
+
+  // HR Query Timeline
+  createHrQueryTimeline(data: { queryId: string; action: string; details: string; actorId: string }): Promise<HrQueryTimeline>;
+  getHrQueryTimeline(queryId: string): Promise<HrQueryTimeline[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -300,6 +317,49 @@ export class DatabaseStorage implements IStorage {
   async updateLeaveRequest(id: string, data: Partial<LeaveRequest>): Promise<LeaveRequest | undefined> {
     const [request] = await db.update(leaveRequests).set(data).where(eq(leaveRequests.id, id)).returning();
     return request;
+  }
+
+  // ==================== HR QUERIES ====================
+
+  async createHrQuery(data: InsertHrQuery): Promise<HrQuery> {
+    const [query] = await db.insert(hrQueries).values(data).returning();
+    return query;
+  }
+
+  async getHrQueriesByCompany(companyId: string): Promise<HrQuery[]> {
+    return db.select().from(hrQueries).where(eq(hrQueries.companyId, companyId)).orderBy(desc(hrQueries.createdAt));
+  }
+
+  async getHrQuery(id: string): Promise<HrQuery | undefined> {
+    const [query] = await db.select().from(hrQueries).where(eq(hrQueries.id, id));
+    return query;
+  }
+
+  async updateHrQuery(id: string, data: Partial<HrQuery>): Promise<HrQuery | undefined> {
+    const [query] = await db.update(hrQueries).set({ ...data, updatedAt: new Date() }).where(eq(hrQueries.id, id)).returning();
+    return query;
+  }
+
+  // ==================== HR QUERY COMMENTS ====================
+
+  async createHrQueryComment(data: { queryId: string; content: string; authorId: string; isInternal: string }): Promise<HrQueryComment> {
+    const [comment] = await db.insert(hrQueryComments).values(data).returning();
+    return comment;
+  }
+
+  async getHrQueryComments(queryId: string): Promise<HrQueryComment[]> {
+    return db.select().from(hrQueryComments).where(eq(hrQueryComments.queryId, queryId)).orderBy(hrQueryComments.createdAt);
+  }
+
+  // ==================== HR QUERY TIMELINE ====================
+
+  async createHrQueryTimeline(data: { queryId: string; action: string; details: string; actorId: string }): Promise<HrQueryTimeline> {
+    const [entry] = await db.insert(hrQueryTimeline).values(data).returning();
+    return entry;
+  }
+
+  async getHrQueryTimeline(queryId: string): Promise<HrQueryTimeline[]> {
+    return db.select().from(hrQueryTimeline).where(eq(hrQueryTimeline.queryId, queryId)).orderBy(hrQueryTimeline.createdAt);
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,23 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/lib/role-context";
-import { useQueryStore, type CommentAttachment } from "@/lib/query-store";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Employee, HrQuery } from "@shared/schema";
-import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning, Paperclip, FileText, Image, File, X } from "lucide-react";
+import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning } from "lucide-react";
 import { format } from "date-fns";
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function getFileIcon(type: string) {
-  if (type.startsWith("image/")) return Image;
-  if (type.includes("pdf") || type.includes("document") || type.includes("text")) return FileText;
-  return File;
-}
+import { Skeleton } from "@/components/ui/skeleton";
 
 const categoryLabels: Record<string, string> = {
   attendance: "Attendance",
@@ -86,7 +75,7 @@ const statusColors: Record<string, string> = {
 export default function Queries() {
   const { role, currentUser } = useRole();
   const { toast } = useToast();
-  const { queries, addQuery } = useQueryStore();
+  const { data: queries = [], isLoading: queriesLoading } = useQuery<HrQuery[]>({ queryKey: ['/api/hr-queries'] });
   const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
 
   function getEmployee(id: string) {
@@ -104,21 +93,30 @@ export default function Queries() {
   const [newCategory, setNewCategory] = useState<string>("attendance");
   const [newPriority, setNewPriority] = useState<string>("medium");
   const [newEmployeeId, setNewEmployeeId] = useState<string>("");
-  const [queryFiles, setQueryFiles] = useState<CommentAttachment[]>([]);
-  const queryFileRef = useRef<HTMLInputElement>(null);
 
   const canIssueQuery = role === "admin" || role === "manager";
 
-  const visibleQueries = queries.filter(q => {
-    if (role === "admin") return true;
-    if (role === "manager") {
-      const teamIds = employees.filter(e => e.managerId === currentUser.id).map(e => e.id);
-      return q.issuedBy === currentUser.id || q.employeeId === currentUser.id || teamIds.includes(q.employeeId);
-    }
-    return q.employeeId === currentUser.id;
+  const createMutation = useMutation({
+    mutationFn: async (data: { subject: string; description: string; category: string; priority: string; employeeId: string }) => {
+      const res = await apiRequest("POST", "/api/hr-queries", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/hr-queries'] });
+      toast({ title: "Query issued", description: "The disciplinary query has been issued successfully." });
+      setIsIssueOpen(false);
+      setNewSubject("");
+      setNewDescription("");
+      setNewCategory("attendance");
+      setNewPriority("medium");
+      setNewEmployeeId("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
   });
 
-  const filteredQueries = visibleQueries.filter(q => {
+  const filteredQueries = queries.filter(q => {
     const emp = getEmployee(q.employeeId);
     const issuer = getEmployee(q.issuedBy);
     const matchesSearch =
@@ -135,10 +133,10 @@ export default function Queries() {
   }).sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
 
   const stats = {
-    total: visibleQueries.length,
-    open: visibleQueries.filter(q => q.status === "open").length,
-    awaitingResponse: visibleQueries.filter(q => q.status === "awaiting_response").length,
-    responded: visibleQueries.filter(q => q.status === "responded").length,
+    total: queries.length,
+    open: queries.filter(q => q.status === "open").length,
+    awaitingResponse: queries.filter(q => q.status === "awaiting_response").length,
+    responded: queries.filter(q => q.status === "responded").length,
   };
 
   const issuableEmployees = (() => {
@@ -147,58 +145,18 @@ export default function Queries() {
     return [];
   })();
 
-  function handleQueryFilesSelected(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    const maxSize = 10 * 1024 * 1024;
-    const newAttachments: CommentAttachment[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (file.size > maxSize) {
-        toast({ title: "File too large", description: `${file.name} exceeds the 10 MB limit.`, variant: "destructive" });
-        continue;
-      }
-      newAttachments.push({
-        id: `att-${Date.now()}-${i}`,
-        name: file.name,
-        size: file.size,
-        type: file.type || "application/octet-stream",
-        url: URL.createObjectURL(file),
-      });
-    }
-    setQueryFiles(prev => [...prev, ...newAttachments]);
-  }
-
-  function removeQueryFile(id: string) {
-    setQueryFiles(prev => {
-      const file = prev.find(f => f.id === id);
-      if (file) URL.revokeObjectURL(file.url);
-      return prev.filter(f => f.id !== id);
-    });
-  }
-
   function handleIssueQuery() {
     if (!newSubject.trim() || newDescription.trim().length < 10 || !newEmployeeId) {
       toast({ title: "Validation Error", description: "Please fill in all required fields. Select an employee and provide a description (at least 10 characters).", variant: "destructive" });
       return;
     }
-    addQuery({
+    createMutation.mutate({
       subject: newSubject.trim(),
       description: newDescription.trim(),
       category: newCategory,
       priority: newPriority,
       employeeId: newEmployeeId,
-      issuedBy: currentUser.id,
-      companyId: currentUser.companyId,
-    }, queryFiles.length > 0 ? queryFiles : undefined);
-    toast({ title: "Query issued", description: "The disciplinary query has been issued successfully." });
-    setIsIssueOpen(false);
-    setNewSubject("");
-    setNewDescription("");
-    setNewCategory("attendance");
-    setNewPriority("medium");
-    setNewEmployeeId("");
-    setQueryFiles([]);
-    if (queryFileRef.current) queryFileRef.current.value = "";
+    });
   }
 
   function handleOpenIssue() {
@@ -207,7 +165,6 @@ export default function Queries() {
     setNewCategory("attendance");
     setNewPriority("medium");
     setNewEmployeeId("");
-    setQueryFiles([]);
     setIsIssueOpen(true);
   }
 
@@ -311,7 +268,24 @@ export default function Queries() {
       </div>
 
       <div className="space-y-3">
-        {filteredQueries.length === 0 ? (
+        {queriesLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map(i => (
+              <Card key={i}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 space-y-2">
+                      <Skeleton className="h-5 w-3/4" />
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-4 w-1/2" />
+                    </div>
+                    <Skeleton className="h-6 w-24" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : filteredQueries.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <FileWarning className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
@@ -404,43 +378,12 @@ export default function Queries() {
                 data-testid="input-query-description"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Attachments</Label>
-              {queryFiles.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {queryFiles.map(file => {
-                    const IconComp = getFileIcon(file.type);
-                    return (
-                      <div key={file.id} className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-sm" data-testid={`query-file-${file.id}`}>
-                        <IconComp className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        <span className="truncate max-w-[150px]">{file.name}</span>
-                        <span className="text-xs text-muted-foreground flex-shrink-0">({formatFileSize(file.size)})</span>
-                        <button type="button" onClick={() => removeQueryFile(file.id)} className="ml-1 text-muted-foreground hover:text-foreground flex-shrink-0" data-testid={`remove-query-file-${file.id}`}>
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              <input
-                type="file"
-                ref={queryFileRef}
-                className="hidden"
-                multiple
-                onChange={e => handleQueryFilesSelected(e.target.files)}
-                data-testid="input-query-file"
-              />
-              <Button variant="outline" size="sm" type="button" onClick={() => queryFileRef.current?.click()} data-testid="button-attach-query-file">
-                <Paperclip className="h-4 w-4 mr-2" />
-                Attach File
-              </Button>
-              <p className="text-xs text-muted-foreground">Attach supporting evidence such as documents, screenshots, or reports. Max 10 MB per file.</p>
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsIssueOpen(false)} data-testid="button-cancel-query">Cancel</Button>
-            <Button onClick={handleIssueQuery} data-testid="button-confirm-issue-query">Issue Query</Button>
+            <Button onClick={handleIssueQuery} disabled={createMutation.isPending} data-testid="button-confirm-issue-query">
+              {createMutation.isPending ? "Issuing..." : "Issue Query"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -453,8 +396,6 @@ function QueryCard({ query, role, currentUserId, employees }: { query: HrQuery; 
   const emp = getEmployee(query.employeeId);
   const issuer = getEmployee(query.issuedBy);
   const StatusIcon = statusIcons[query.status] || AlertCircle;
-  const { getCommentsForQuery } = useQueryStore();
-  const commentCount = getCommentsForQuery(query.id).filter(c => role === "admin" || c.isInternal !== "true").length;
   const isIssuedToMe = query.employeeId === currentUserId;
 
   return (
@@ -481,12 +422,6 @@ function QueryCard({ query, role, currentUserId, employees }: { query: HrQuery; 
                 <span className="text-xs text-muted-foreground">
                   {format(new Date(query.createdAt!), "MMM d, yyyy")}
                 </span>
-                {commentCount > 0 && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <MessageSquare className="h-3 w-3" />
-                    {commentCount}
-                  </span>
-                )}
               </div>
             </div>
             <div className="flex flex-col items-end gap-2">

@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCompanySchema, insertDepartmentSchema, insertEmployeeSchema, insertLeaveTypeSchema, insertLeaveRequestSchema } from "@shared/schema";
+import { insertCompanySchema, insertDepartmentSchema, insertEmployeeSchema, insertLeaveTypeSchema, insertLeaveRequestSchema, insertHrQuerySchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
 
 export async function registerRoutes(
@@ -727,6 +727,327 @@ export async function registerRoutes(
         status: "cancelled",
       });
       return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== HR QUERY HELPERS ====================
+
+  async function checkQueryAccess(employeeId: string, companyId: string, role: string, queryRecord: { companyId: string; issuedBy: string; employeeId: string }): Promise<boolean> {
+    if (queryRecord.companyId !== companyId) return false;
+    if (role === "admin") return true;
+    if (role === "manager") {
+      const employees = await storage.getEmployeesByCompany(companyId);
+      const teamIds = employees.filter(e => e.managerId === employeeId).map(e => e.id);
+      return queryRecord.issuedBy === employeeId || queryRecord.employeeId === employeeId || teamIds.includes(queryRecord.employeeId);
+    }
+    return queryRecord.employeeId === employeeId;
+  }
+
+  // ==================== HR QUERY ROUTES ====================
+
+  app.get("/api/hr-queries", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const employeeId = (req.session as any).employeeId;
+      const role = (req.session as any).role;
+      const allQueries = await storage.getHrQueriesByCompany(companyId);
+
+      if (role === "admin") {
+        return res.json(allQueries);
+      }
+
+      if (role === "manager") {
+        const employees = await storage.getEmployeesByCompany(companyId);
+        const teamIds = employees.filter(e => e.managerId === employeeId).map(e => e.id);
+        const visible = allQueries.filter(q =>
+          q.issuedBy === employeeId || q.employeeId === employeeId || teamIds.includes(q.employeeId)
+        );
+        return res.json(visible);
+      }
+
+      const myQueries = allQueries.filter(q => q.employeeId === employeeId);
+      return res.json(myQueries);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/hr-queries/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const query = await storage.getHrQuery(req.params.id);
+      if (!query) {
+        return res.status(404).json({ message: "Query not found" });
+      }
+
+      const hasAccess = await checkQueryAccess(employeeId, companyId, role, query);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      return res.json(query);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/hr-queries", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const employeeId = (req.session as any).employeeId;
+      const role = (req.session as any).role;
+
+      const parsed = insertHrQuerySchema.safeParse({
+        ...req.body,
+        companyId,
+        issuedBy: employeeId,
+      });
+
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+      }
+
+      if (role === "manager") {
+        const employees = await storage.getEmployeesByCompany(companyId);
+        const teamIds = employees.filter(e => e.managerId === employeeId).map(e => e.id);
+        if (!teamIds.includes(parsed.data.employeeId)) {
+          return res.status(403).json({ message: "Managers can only issue queries to their direct reports" });
+        }
+      }
+
+      const query = await storage.createHrQuery(parsed.data);
+
+      await storage.createHrQueryTimeline({
+        queryId: query.id,
+        action: "created",
+        details: "Query issued",
+        actorId: employeeId,
+      });
+
+      return res.status(201).json(query);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/hr-queries/:id/status", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const { status } = req.body;
+
+      const validStatuses = ["open", "awaiting_response", "responded", "resolved", "closed"];
+      if (!status || !validStatuses.includes(status)) {
+        return res.status(400).json({ message: "Invalid status" });
+      }
+
+      const query = await storage.getHrQuery(req.params.id);
+      if (!query || query.companyId !== companyId) {
+        return res.status(404).json({ message: "Query not found" });
+      }
+
+      if (role !== "admin" && role !== "manager") {
+        return res.status(403).json({ message: "Only managers and admins can change query status" });
+      }
+
+      const statusLabels: Record<string, string> = {
+        open: "Open", awaiting_response: "Awaiting Response", responded: "Responded", resolved: "Resolved", closed: "Closed",
+      };
+
+      const updateData: Record<string, any> = { status };
+      if (status === "resolved") {
+        updateData.resolvedAt = new Date();
+      }
+
+      const updated = await storage.updateHrQuery(req.params.id, updateData);
+
+      await storage.createHrQueryTimeline({
+        queryId: query.id,
+        action: "status_changed",
+        details: `Status changed to ${statusLabels[status] || status}`,
+        actorId: employeeId,
+      });
+
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/hr-queries/:id/assign", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const { assignedTo } = req.body;
+
+      const query = await storage.getHrQuery(req.params.id);
+      if (!query || query.companyId !== companyId) {
+        return res.status(404).json({ message: "Query not found" });
+      }
+
+      const updated = await storage.updateHrQuery(req.params.id, {
+        assignedTo: assignedTo || null,
+      });
+
+      await storage.createHrQueryTimeline({
+        queryId: query.id,
+        action: "assigned",
+        details: assignedTo ? "Query assigned" : "Query unassigned",
+        actorId: employeeId,
+      });
+
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== HR QUERY COMMENTS ====================
+
+  app.get("/api/hr-queries/:id/comments", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+
+      const query = await storage.getHrQuery(req.params.id);
+      if (!query) {
+        return res.status(404).json({ message: "Query not found" });
+      }
+
+      const hasAccess = await checkQueryAccess(employeeId, companyId, role, query);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      let comments = await storage.getHrQueryComments(req.params.id);
+      if (role !== "admin") {
+        comments = comments.filter(c => c.isInternal !== "true");
+      }
+
+      return res.json(comments);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/hr-queries/:id/comments", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const { content, isInternal } = req.body;
+
+      if (!content || !content.trim()) {
+        return res.status(400).json({ message: "Content is required" });
+      }
+
+      const query = await storage.getHrQuery(req.params.id);
+      if (!query || query.companyId !== companyId) {
+        return res.status(404).json({ message: "Query not found" });
+      }
+
+      const isInternalStr = isInternal && role === "admin" ? "true" : "false";
+
+      const comment = await storage.createHrQueryComment({
+        queryId: req.params.id,
+        content: content.trim(),
+        authorId: employeeId,
+        isInternal: isInternalStr,
+      });
+
+      await storage.updateHrQuery(req.params.id, {});
+
+      await storage.createHrQueryTimeline({
+        queryId: req.params.id,
+        action: "commented",
+        details: isInternalStr === "true" ? "Internal note added" : "Comment added",
+        actorId: employeeId,
+      });
+
+      return res.status(201).json(comment);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/hr-queries/:id/respond", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const { content } = req.body;
+
+      if (!content || content.trim().length < 10) {
+        return res.status(400).json({ message: "Response must be at least 10 characters" });
+      }
+
+      const query = await storage.getHrQuery(req.params.id);
+      if (!query || query.companyId !== companyId) {
+        return res.status(404).json({ message: "Query not found" });
+      }
+
+      if (query.employeeId !== employeeId) {
+        return res.status(403).json({ message: "Only the queried employee can respond" });
+      }
+
+      if (query.status !== "open" && query.status !== "awaiting_response") {
+        return res.status(400).json({ message: "This query is no longer accepting responses" });
+      }
+
+      const comment = await storage.createHrQueryComment({
+        queryId: req.params.id,
+        content: content.trim(),
+        authorId: employeeId,
+        isInternal: "false",
+      });
+
+      await storage.updateHrQuery(req.params.id, { status: "responded" });
+
+      await storage.createHrQueryTimeline({
+        queryId: req.params.id,
+        action: "responded",
+        details: "Employee submitted response",
+        actorId: employeeId,
+      });
+
+      await storage.createHrQueryTimeline({
+        queryId: req.params.id,
+        action: "status_changed",
+        details: "Status changed to Responded",
+        actorId: employeeId,
+      });
+
+      return res.status(201).json(comment);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== HR QUERY TIMELINE ====================
+
+  app.get("/api/hr-queries/:id/timeline", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+
+      const query = await storage.getHrQuery(req.params.id);
+      if (!query) {
+        return res.status(404).json({ message: "Query not found" });
+      }
+
+      const hasAccess = await checkQueryAccess(employeeId, companyId, role, query);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const timeline = await storage.getHrQueryTimeline(req.params.id);
+      return res.json(timeline);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
