@@ -63,6 +63,7 @@ export interface IStorage {
   // HR Queries
   createHrQuery(data: InsertHrQuery): Promise<HrQuery>;
   getHrQueriesByCompany(companyId: string): Promise<HrQuery[]>;
+  getHrQueriesByEmployee(employeeId: string): Promise<HrQuery[]>;
   getHrQuery(id: string): Promise<HrQuery | undefined>;
   updateHrQuery(id: string, data: Partial<HrQuery>): Promise<HrQuery | undefined>;
 
@@ -328,6 +329,10 @@ export class DatabaseStorage implements IStorage {
 
   async getHrQueriesByCompany(companyId: string): Promise<HrQuery[]> {
     return db.select().from(hrQueries).where(eq(hrQueries.companyId, companyId)).orderBy(desc(hrQueries.createdAt));
+  }
+
+  async getHrQueriesByEmployee(employeeId: string): Promise<HrQuery[]> {
+    return db.select().from(hrQueries).where(eq(hrQueries.employeeId, employeeId)).orderBy(desc(hrQueries.createdAt));
   }
 
   async getHrQuery(id: string): Promise<HrQuery | undefined> {

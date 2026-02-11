@@ -49,6 +49,8 @@ import {
   Link,
   Trash2,
   Hash,
+  AlertTriangle,
+  ExternalLink,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -59,7 +61,8 @@ import {
 import { useRole, canManageEmployees } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Employee, Department } from "@shared/schema";
+import type { Employee, Department, HrQuery } from "@shared/schema";
+import { Link as WouterLink } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -116,6 +119,81 @@ const editEmployeeSchema = z.object({
 });
 
 type EditEmployeeForm = z.infer<typeof editEmployeeSchema>;
+
+const queryStatusStyles: Record<string, string> = {
+  open: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  in_progress: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  awaiting_response: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  responded: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+  resolved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+  escalated: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  closed: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+};
+
+const queryPriorityStyles: Record<string, string> = {
+  low: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+  medium: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  high: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+};
+
+function EmployeeQueriesSection({ employeeId }: { employeeId: string }) {
+  const { data: queries = [], isLoading, isError } = useQuery<HrQuery[]>({
+    queryKey: [`/api/employees/${employeeId}/queries`],
+    retry: false,
+  });
+
+  return (
+    <div className="space-y-3 border-t pt-4" data-testid="section-employee-queries">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+          <Label className="text-sm font-medium">Disciplinary Queries</Label>
+          {!isLoading && (
+            <Badge variant="secondary" data-testid="text-query-count">{queries.length}</Badge>
+          )}
+        </div>
+      </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-4">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        </div>
+      ) : isError ? (
+        <p className="text-sm text-muted-foreground py-2">Unable to load queries for this employee.</p>
+      ) : queries.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-2" data-testid="text-no-queries">No disciplinary queries found.</p>
+      ) : (
+        <div className="space-y-2">
+          {queries.map((q) => (
+            <WouterLink key={q.id} href={`/queries/${q.id}`}>
+              <Card className="hover-elevate cursor-pointer" data-testid={`card-query-${q.id}`}>
+                <CardContent className="p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1 min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate" data-testid={`text-query-subject-${q.id}`}>{q.subject}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="secondary" className={`text-xs ${queryStatusStyles[q.status] || ""}`} data-testid={`badge-query-status-${q.id}`}>
+                          {q.status.replace(/_/g, " ")}
+                        </Badge>
+                        <Badge variant="secondary" className={`text-xs ${queryPriorityStyles[q.priority] || ""}`} data-testid={`badge-query-priority-${q.id}`}>
+                          {q.priority}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {q.createdAt ? new Date(q.createdAt).toLocaleDateString() : "—"}
+                        </span>
+                      </div>
+                    </div>
+                    <ExternalLink className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                  </div>
+                </CardContent>
+              </Card>
+            </WouterLink>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Employees() {
   const { role } = useRole();
@@ -509,7 +587,7 @@ export default function Employees() {
       </Tabs>
 
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-lg" data-testid="dialog-employee-detail">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-employee-detail">
           {selectedEmployee && (() => {
             const emp = getEmployee(selectedEmployee.id) || selectedEmployee;
             return (
@@ -590,6 +668,11 @@ export default function Employees() {
                       </p>
                     </div>
                   </div>
+
+                  {(role === "admin" || role === "manager") && (
+                    <EmployeeQueriesSection employeeId={emp.id} />
+                  )}
+
                   <div className="flex gap-2 pt-4">
                     {canManageEmployees(role) && (
                       <Button

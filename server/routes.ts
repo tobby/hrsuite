@@ -760,6 +760,33 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== EMPLOYEE QUERIES ====================
+
+  app.get("/api/employees/:id/queries", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const currentEmployeeId = (req.session as any).employeeId;
+      const targetEmployeeId = req.params.id;
+
+      const targetEmployee = await storage.getEmployee(targetEmployeeId);
+      if (!targetEmployee || targetEmployee.companyId !== companyId) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      if (role === "manager") {
+        if (targetEmployee.managerId !== currentEmployeeId) {
+          return res.status(403).json({ message: "You can only view queries for your direct reports" });
+        }
+      }
+
+      const queries = await storage.getHrQueriesByEmployee(targetEmployeeId);
+      return res.json(queries);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // ==================== HR QUERY HELPERS ====================
 
   async function checkQueryAccess(employeeId: string, companyId: string, role: string, queryRecord: { companyId: string; issuedBy: string; employeeId: string }): Promise<boolean> {
