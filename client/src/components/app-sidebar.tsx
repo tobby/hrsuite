@@ -402,7 +402,7 @@ export function AppSidebar() {
                 >
                   <Link href="/queries" data-testid="nav-queries">
                     <HelpCircle className="h-4 w-4" />
-                    <span>Queries</span>
+                    <span>Queries & Warnings</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

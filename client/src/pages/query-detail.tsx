@@ -29,6 +29,8 @@ import {
   Reply,
   FileWarning,
   Paperclip,
+  ShieldAlert,
+  TriangleAlert,
 } from "lucide-react";
 import { FileUpload, AttachmentDisplay, type UploadedFile } from "@/components/file-upload";
 import type { HrQueryAttachment } from "@shared/schema";
@@ -69,6 +71,7 @@ const statusLabels: Record<string, string> = {
   open: "Open",
   awaiting_response: "Awaiting Response",
   responded: "Responded",
+  acknowledged: "Acknowledged",
   resolved: "Resolved",
   closed: "Closed",
 };
@@ -77,6 +80,7 @@ const statusBgColors: Record<string, string> = {
   open: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
   awaiting_response: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
   responded: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
+  acknowledged: "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300",
   resolved: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   closed: "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300",
 };
@@ -233,7 +237,8 @@ export default function QueryDetail() {
   const assignee = query.assignedTo ? getEmployee(query.assignedTo) : null;
   const visibleComments = comments;
   const isTargetEmployee = query.employeeId === currentUser.id;
-  const canRespond = isTargetEmployee && (query.status === "open" || query.status === "awaiting_response");
+  const isWarning = query.type === "warning";
+  const canRespond = isTargetEmployee && !isWarning && (query.status === "open" || query.status === "awaiting_response");
 
   const hrEmployees = employees.filter(e => e.role === "admin" || e.role === "manager");
 
@@ -274,12 +279,35 @@ export default function QueryDetail() {
           </Button>
         </Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold tracking-tight truncate" data-testid="text-query-detail-subject">{query.subject}</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl font-bold tracking-tight truncate" data-testid="text-query-detail-subject">{query.subject}</h1>
+            <Badge
+              variant="secondary"
+              className={`text-xs ${isWarning ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"}`}
+              data-testid="badge-query-type"
+            >
+              {isWarning ? <><TriangleAlert className="h-3 w-3 mr-1" />Warning</> : <><ShieldAlert className="h-3 w-3 mr-1" />Query</>}
+            </Badge>
+          </div>
           <p className="text-sm text-muted-foreground">
-            Query #{query.id.slice(0, 8)} &middot; Issued {format(new Date(query.createdAt!), "MMM d, yyyy 'at' h:mm a")}
+            {isWarning ? "Warning" : "Query"} #{query.id.slice(0, 8)} &middot; Issued {format(new Date(query.createdAt!), "MMM d, yyyy 'at' h:mm a")}
           </p>
         </div>
       </div>
+
+      {isTargetEmployee && isWarning && (query.status === "open" || query.status === "acknowledged") && (
+        <Card className="border-amber-300 dark:border-amber-700">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <TriangleAlert className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium">Warning Notice</p>
+                <p className="text-sm text-muted-foreground">You have been issued a formal warning. This is a documented notice. No response is required, but you may add comments below if needed.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {canRespond && (
         <Card className="border-amber-300 dark:border-amber-700">
@@ -315,7 +343,7 @@ export default function QueryDetail() {
         <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Query Details</CardTitle>
+              <CardTitle className="text-base">{isWarning ? "Warning" : "Query"} Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm whitespace-pre-wrap" data-testid="text-query-description">{query.description}</p>
@@ -441,8 +469,9 @@ export default function QueryDetail() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="open">Open</SelectItem>
-                      <SelectItem value="awaiting_response">Awaiting Response</SelectItem>
-                      <SelectItem value="responded">Responded</SelectItem>
+                      {!isWarning && <SelectItem value="awaiting_response">Awaiting Response</SelectItem>}
+                      {!isWarning && <SelectItem value="responded">Responded</SelectItem>}
+                      {isWarning && <SelectItem value="acknowledged">Acknowledged</SelectItem>}
                       <SelectItem value="resolved">Resolved</SelectItem>
                       <SelectItem value="closed">Closed</SelectItem>
                     </SelectContent>

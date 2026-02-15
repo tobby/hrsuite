@@ -946,7 +946,7 @@ export async function registerRoutes(
       await storage.createHrQueryTimeline({
         queryId: query.id,
         action: "created",
-        details: "Query issued",
+        details: parsed.data.type === "warning" ? "Warning issued" : "Query issued",
         actorId: employeeId,
       });
 
@@ -963,7 +963,7 @@ export async function registerRoutes(
       const role = (req.session as any).role;
       const { status } = req.body;
 
-      const validStatuses = ["open", "awaiting_response", "responded", "resolved", "closed"];
+      const validStatuses = ["open", "awaiting_response", "responded", "acknowledged", "resolved", "closed"];
       if (!status || !validStatuses.includes(status)) {
         return res.status(400).json({ message: "Invalid status" });
       }

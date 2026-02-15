@@ -14,7 +14,7 @@ import { useRole } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Employee, HrQuery } from "@shared/schema";
-import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning, Paperclip, Info, ArrowRight } from "lucide-react";
+import { Plus, Search, MessageSquare, Clock, AlertCircle, CheckCircle2, XCircle, Send, FileWarning, Paperclip, Info, ArrowRight, ShieldAlert, TriangleAlert } from "lucide-react";
 import { FileUpload, type UploadedFile } from "@/components/file-upload";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -53,6 +53,7 @@ const statusLabels: Record<string, string> = {
   open: "Open",
   awaiting_response: "Awaiting Response",
   responded: "Responded",
+  acknowledged: "Acknowledged",
   under_review: "Under Review",
   resolved: "Resolved",
   escalated: "Escalated",
@@ -63,6 +64,7 @@ const statusIcons: Record<string, typeof AlertCircle> = {
   open: AlertCircle,
   awaiting_response: Send,
   responded: MessageSquare,
+  acknowledged: CheckCircle2,
   under_review: Search,
   resolved: CheckCircle2,
   escalated: FileWarning,
@@ -73,6 +75,7 @@ const statusColors: Record<string, string> = {
   open: "text-blue-600 dark:text-blue-400",
   awaiting_response: "text-amber-600 dark:text-amber-400",
   responded: "text-indigo-600 dark:text-indigo-400",
+  acknowledged: "text-teal-600 dark:text-teal-400",
   under_review: "text-orange-600 dark:text-orange-400",
   resolved: "text-green-600 dark:text-green-400",
   escalated: "text-red-600 dark:text-red-400",
@@ -80,13 +83,14 @@ const statusColors: Record<string, string> = {
 };
 
 const statusDescriptions: Record<string, string> = {
-  open: "The query has been issued and is waiting for the employee to respond.",
+  open: "The query/warning has been issued and is waiting for action.",
   awaiting_response: "A follow-up response is needed from the employee.",
   responded: "The employee has submitted their response.",
+  acknowledged: "The warning has been acknowledged by the employee.",
   under_review: "The response is being reviewed by management.",
-  resolved: "The query has been reviewed and closed with a resolution.",
+  resolved: "The item has been reviewed and closed with a resolution.",
   escalated: "The matter has been escalated for further investigation.",
-  closed: "The query is fully concluded and no longer active.",
+  closed: "The item is fully concluded and no longer active.",
 };
 
 export default function Queries() {
@@ -103,8 +107,10 @@ export default function Queries() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [isIssueOpen, setIsIssueOpen] = useState(false);
 
+  const [newType, setNewType] = useState<string>("query");
   const [newSubject, setNewSubject] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newCategory, setNewCategory] = useState<string>("attendance");
@@ -116,14 +122,16 @@ export default function Queries() {
   const canIssueQuery = role === "admin" || role === "manager";
 
   const createMutation = useMutation({
-    mutationFn: async (data: { subject: string; description: string; category: string; priority: string; employeeId: string; attachments?: UploadedFile[] }) => {
+    mutationFn: async (data: { type: string; subject: string; description: string; category: string; priority: string; employeeId: string; attachments?: UploadedFile[] }) => {
       const res = await apiRequest("POST", "/api/hr-queries", data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/hr-queries'] });
-      toast({ title: "Query issued", description: "The disciplinary query has been issued successfully." });
+      const label = newType === "warning" ? "Warning" : "Query";
+      toast({ title: `${label} issued`, description: `The disciplinary ${label.toLowerCase()} has been issued successfully.` });
       setIsIssueOpen(false);
+      setNewType("query");
       setNewSubject("");
       setNewDescription("");
       setNewCategory("attendance");
@@ -149,14 +157,16 @@ export default function Queries() {
     const matchesStatus = statusFilter === "all" || q.status === statusFilter;
     const matchesCategory = categoryFilter === "all" || q.category === categoryFilter;
     const matchesPriority = priorityFilter === "all" || q.priority === priorityFilter;
-    return matchesSearch && matchesStatus && matchesCategory && matchesPriority;
+    const matchesType = typeFilter === "all" || q.type === typeFilter;
+    return matchesSearch && matchesStatus && matchesCategory && matchesPriority && matchesType;
   }).sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
 
   const stats = {
     total: queries.length,
+    warnings: queries.filter(q => q.type === "warning").length,
+    queriesCount: queries.filter(q => q.type === "query" || !q.type).length,
     open: queries.filter(q => q.status === "open").length,
     awaitingResponse: queries.filter(q => q.status === "awaiting_response").length,
-    responded: queries.filter(q => q.status === "responded").length,
   };
 
   const issuableEmployees = (() => {
@@ -171,6 +181,7 @@ export default function Queries() {
       return;
     }
     createMutation.mutate({
+      type: newType,
       subject: newSubject.trim(),
       description: newDescription.trim(),
       category: newCategory,
@@ -181,6 +192,7 @@ export default function Queries() {
   }
 
   function handleOpenIssue() {
+    setNewType("query");
     setNewSubject("");
     setNewDescription("");
     setNewCategory("attendance");
@@ -195,7 +207,7 @@ export default function Queries() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-queries-title">Queries</h1>
+            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-queries-title">Queries & Warnings</h1>
             <Button
               size="icon"
               variant="ghost"
@@ -207,16 +219,16 @@ export default function Queries() {
           </div>
           <p className="text-muted-foreground text-sm">
             {role === "employee"
-              ? "View and respond to queries issued to you"
+              ? "View and respond to queries and warnings issued to you"
               : role === "manager"
-                ? "Issue and manage queries for your team"
-                : "Issue and manage all disciplinary queries"}
+                ? "Issue and manage queries and warnings for your team"
+                : "Issue and manage all disciplinary queries and warnings"}
           </p>
         </div>
         {canIssueQuery && (
           <Button onClick={handleOpenIssue} data-testid="button-issue-query">
             <Plus className="h-4 w-4 mr-2" />
-            Issue Query
+            Issue Query / Warning
           </Button>
         )}
       </div>
@@ -264,20 +276,20 @@ export default function Queries() {
         </Card>
         <Card>
           <CardContent className="p-4">
+            <div className="text-sm text-muted-foreground flex items-center gap-1.5"><ShieldAlert className="h-3.5 w-3.5" /> Queries</div>
+            <div className="text-2xl font-bold text-red-600 dark:text-red-400" data-testid="stat-queries">{stats.queriesCount}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-sm text-muted-foreground flex items-center gap-1.5"><TriangleAlert className="h-3.5 w-3.5" /> Warnings</div>
+            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400" data-testid="stat-warnings">{stats.warnings}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
             <div className="text-sm text-muted-foreground">Open</div>
             <div className="text-2xl font-bold text-blue-600" data-testid="stat-open">{stats.open}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm text-muted-foreground">Awaiting Response</div>
-            <div className="text-2xl font-bold text-amber-600" data-testid="stat-awaiting">{stats.awaitingResponse}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-sm text-muted-foreground">Responded</div>
-            <div className="text-2xl font-bold text-indigo-600" data-testid="stat-responded">{stats.responded}</div>
           </CardContent>
         </Card>
       </div>
@@ -293,6 +305,16 @@ export default function Queries() {
             data-testid="input-search-queries"
           />
         </div>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-[140px]" data-testid="filter-type">
+            <SelectValue placeholder="Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="query">Queries</SelectItem>
+            <SelectItem value="warning">Warnings</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[160px]" data-testid="filter-status">
             <SelectValue placeholder="Status" />
@@ -302,6 +324,7 @@ export default function Queries() {
             <SelectItem value="open">Open</SelectItem>
             <SelectItem value="awaiting_response">Awaiting Response</SelectItem>
             <SelectItem value="responded">Responded</SelectItem>
+            <SelectItem value="acknowledged">Acknowledged</SelectItem>
             <SelectItem value="under_review">Under Review</SelectItem>
             <SelectItem value="resolved">Resolved</SelectItem>
             <SelectItem value="escalated">Escalated</SelectItem>
@@ -357,13 +380,13 @@ export default function Queries() {
           <Card>
             <CardContent className="p-8 text-center">
               <FileWarning className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
-              <h3 className="font-medium mb-1">No queries found</h3>
+              <h3 className="font-medium mb-1">No queries or warnings found</h3>
               <p className="text-sm text-muted-foreground">
-                {searchTerm || statusFilter !== "all" || categoryFilter !== "all" || priorityFilter !== "all"
+                {searchTerm || statusFilter !== "all" || categoryFilter !== "all" || priorityFilter !== "all" || typeFilter !== "all"
                   ? "Try adjusting your filters"
                   : role === "employee"
-                    ? "No queries have been issued to you"
-                    : "No queries have been issued yet"}
+                    ? "No queries or warnings have been issued to you"
+                    : "No queries or warnings have been issued yet"}
               </p>
             </CardContent>
           </Card>
@@ -375,10 +398,30 @@ export default function Queries() {
       <Dialog open={isIssueOpen} onOpenChange={setIsIssueOpen}>
         <DialogContent className="sm:max-w-[500px]" data-testid="dialog-issue-query">
           <DialogHeader>
-            <DialogTitle>Issue a Query</DialogTitle>
-            <DialogDescription>Issue a formal disciplinary query to an employee. They will be notified and required to respond.</DialogDescription>
+            <DialogTitle>{newType === "warning" ? "Issue a Warning" : "Issue a Query"}</DialogTitle>
+            <DialogDescription>
+              {newType === "warning"
+                ? "Issue a formal warning to an employee. This serves as a documented notice and does not require a response."
+                : "Issue a formal disciplinary query to an employee. They will be notified and required to respond."}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select value={newType} onValueChange={setNewType}>
+                <SelectTrigger data-testid="select-query-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="query">
+                    <span className="flex items-center gap-2"><ShieldAlert className="h-4 w-4 text-red-500" /> Query (requires response)</span>
+                  </SelectItem>
+                  <SelectItem value="warning">
+                    <span className="flex items-center gap-2"><TriangleAlert className="h-4 w-4 text-amber-500" /> Warning (notice only)</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label>Employee</Label>
               <Select value={newEmployeeId} onValueChange={setNewEmployeeId}>
@@ -454,7 +497,7 @@ export default function Queries() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsIssueOpen(false)} data-testid="button-cancel-query">Cancel</Button>
             <Button onClick={handleIssueQuery} disabled={createMutation.isPending} data-testid="button-confirm-issue-query">
-              {createMutation.isPending ? "Issuing..." : "Issue Query"}
+              {createMutation.isPending ? "Issuing..." : newType === "warning" ? "Issue Warning" : "Issue Query"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -469,6 +512,7 @@ function QueryCard({ query, role, currentUserId, employees }: { query: HrQuery; 
   const issuer = getEmployee(query.issuedBy);
   const StatusIcon = statusIcons[query.status] || AlertCircle;
   const isIssuedToMe = query.employeeId === currentUserId;
+  const isWarning = query.type === "warning";
 
   return (
     <Link href={`/queries/${query.id}`}>
@@ -479,6 +523,13 @@ function QueryCard({ query, role, currentUserId, employees }: { query: HrQuery; 
               <div className="flex items-center gap-2 flex-wrap">
                 <StatusIcon className={`h-4 w-4 flex-shrink-0 ${statusColors[query.status]}`} />
                 <span className="font-medium truncate" data-testid={`text-query-subject-${query.id}`}>{query.subject}</span>
+                <Badge
+                  variant="secondary"
+                  className={`text-[10px] ${isWarning ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"}`}
+                  data-testid={`badge-type-${query.id}`}
+                >
+                  {isWarning ? <><TriangleAlert className="h-3 w-3 mr-1" />Warning</> : <><ShieldAlert className="h-3 w-3 mr-1" />Query</>}
+                </Badge>
                 {isIssuedToMe && role !== "employee" && (
                   <Badge variant="outline" className="text-xs">Issued to you</Badge>
                 )}

@@ -401,6 +401,7 @@ export type RecruitmentSetting = typeof recruitmentSettings.$inferSelect;
 export const hrQueries = pgTable("hr_queries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").notNull(),
+  type: text("type").notNull().default("query"),
   subject: text("subject").notNull(),
   description: text("description").notNull(),
   category: text("category").notNull(),
@@ -417,6 +418,7 @@ export const hrQueries = pgTable("hr_queries", {
 export const insertHrQuerySchema = createInsertSchema(hrQueries).omit({
   id: true, createdAt: true, updatedAt: true, resolvedAt: true, status: true, assignedTo: true,
 }).extend({
+  type: z.enum(["warning", "query"]).default("query"),
   subject: z.string().min(1, "Subject is required"),
   description: z.string().min(10, "Description must be at least 10 characters"),
   category: z.enum(["attendance", "conduct", "performance", "policy_violation", "other"]),
