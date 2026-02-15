@@ -1,0 +1,209 @@
+User Stories
+Job Posting & Management
+As an Admin, I want to:
+Create and publish job postings so I can attract qualified candidates
+Edit or close job postings so I can manage active openings
+Assign job postings to specific managers/departments so they know which roles to help fill
+Track the status of each job posting (draft, active, on-hold, closed)
+Set application deadlines for job postings
+See all job postings across the organization
+As a Manager, I want to:
+View job postings for positions in my department
+See how many applications each opening in my department has received
+Provide input on job descriptions and requirements
+Candidate Management
+As an Admin, I want to:
+View all applications across all job postings
+Add candidates manually (from referrals, direct applications)
+Filter candidates by status (new, screening, interview, offer, rejected, hired)
+Add notes and comments on candidate profiles
+Upload and store candidate resumes/documents
+Move candidates through different stages of the hiring pipeline
+Schedule interviews with candidates
+Send email communications to candidates (acknowledgment, rejection, interview invitation)
+Assign candidates to managers for review
+As a Manager, I want to:
+View candidates applying for positions in my department
+Review candidate profiles and resumes
+Add comments and feedback on candidates
+Provide hiring recommendations (approve/reject)
+See candidates assigned to me for review
+Collaborate with Admin on final hiring decisions
+Interview Process
+As an Admin, I want to:
+Schedule interviews and assign interviewers (managers or other employees)
+Track interview feedback from interviewers
+Set up different interview rounds (screening, technical, HR, final)
+Send interview invitations to candidates
+See all scheduled interviews across the organization
+As a Manager, I want to:
+See interviews scheduled for my department's candidates
+Conduct interviews for positions in my department
+Submit feedback and ratings after interviews
+View candidate information before my scheduled interviews
+See my upcoming interviews
+Reporting & Analytics
+As an Admin, I want to:
+See recruitment metrics (time-to-hire, applications per posting, conversion rates)
+Track recruitment pipeline health across all departments
+Generate reports on hiring activities
+See department-wise recruitment data
+As a Manager, I want to:
+See recruitment metrics for my department only
+Track pipeline for my department's openings
+View summary of applications and hires in my department
+
+Requirements
+Functional Requirements
+Job Posting Module:
+Create Job Posting (Admin only)
+
+
+Job title, description, requirements, responsibilities
+Department assignment (links to manager)
+Employment type (full-time, part-time, contract, internship)
+Location (on-site, remote, hybrid)
+Salary range (optional)
+Application deadline
+Number of openings
+Status (draft, active, on-hold, closed)
+Assigned manager
+Job Posting Management
+
+
+Admin: Full edit, publish, close, archive access
+Manager: View-only for their department's postings
+Candidate/Application Module:
+Application Tracking
+
+
+Candidate personal information (name, email, phone)
+Resume/CV upload
+Cover letter
+Application date
+Source (website, referral, LinkedIn, etc.)
+Current status in pipeline
+Assigned department/manager
+Pipeline Stages
+
+
+New Application
+Screening (Admin)
+Manager Review
+Phone Interview
+Technical Interview
+Final Interview
+Offer Extended
+Hired
+Rejected (with reason)
+Withdrawn
+Candidate Profile
+
+
+All application details
+Timeline of activities
+Notes and comments (visible to both Admin and assigned Manager)
+Interview feedback
+Documents/attachments
+Communication history
+Interview Management:
+Schedule Interviews (Admin)
+Date, time, duration
+Interview type/round
+Interviewer assignment (Manager or other employee)
+Meeting link (for virtual)
+Location (for in-person)
+Interview Feedback (Admin and Manager)
+
+
+Rating scale (1-5)
+Strengths and weaknesses
+Recommendation (strong yes, yes, maybe, no)
+Comments
+Decision (move forward / reject)
+
+Visibility & Permissions:
+Admin: Full access to all recruitment data across all departments
+Manager: Access to candidates/postings for their department only
+Can view candidates assigned to their department
+Can add feedback and comments
+Can approve/reject at their stage
+Cannot move candidates to final stages (only Admin can extend offers)
+Notifications:
+Admin: New applications, interview scheduled, offer responses, manager feedback submitted
+Manager: Candidates assigned for review, upcoming interviews, interview reminders
+Non-Functional Requirements
+Performance:
+Quick search and filtering of candidates
+Efficient loading of candidate lists
+User Experience:
+Drag-and-drop to move candidates between pipeline stages (Admin only)
+Clear role-based interface (Admin sees everything, Manager sees department-specific)
+Dashboard with key metrics based on role
+Mobile-friendly for reviewing candidates
+Security & Privacy:
+Managers can only access data for their department
+Admins have full access
+Secure storage of candidate personal data
+Acceptance Criteria
+Job Posting (Admin):
+[ ] Create job posting form with all fields
+[ ] Assign to specific department/manager
+[ ] Save as draft or publish
+[ ] Edit/close existing postings
+[ ] View all postings
+Job Posting (Manager):
+[ ] View postings for their department
+[ ] See application count per posting
+[ ] Cannot edit or create postings
+Candidate Pipeline (Admin):
+[ ] See all candidates across all departments
+[ ] Drag-and-drop to change status
+[ ] Filter by department, status, job posting
+[ ] Assign candidates to managers for review
+[ ] Add notes and comments
+[ ] Move candidates through all stages
+Candidate Pipeline (Manager):
+[ ] See only candidates for their department
+[ ] View candidates assigned to them
+[ ] Add feedback and comments
+[ ] Recommend approve/reject
+[ ] Cannot move candidates to offer stage
+Interview Scheduling (Admin):
+[ ] Schedule interviews for any candidate
+[ ] Assign manager or employee as interviewer
+[ ] Send interview invitations
+[ ] View all scheduled interviews
+Interview Participation (Manager):
+[ ] View interviews where they're the interviewer
+[ ] Submit interview feedback
+[ ] See upcoming interviews
+[ ] View candidate details before interview
+
+Dashboard Metrics:
+Admin Dashboard:
+[ ] Total active job postings
+[ ] Total applications (all departments)
+[ ] Candidates by stage
+[ ] Upcoming interviews (all)
+[ ] Pending offers
+[ ] Recent hires
+[ ] Department-wise breakdown
+Manager Dashboard:
+[ ] Active postings in their department
+[ ] Applications for their department
+[ ] Candidates awaiting their review
+[ ] Their upcoming interviews
+[ ] Recent hires in their department
+
+Workflow Example
+Typical Hiring Flow:
+Admin creates job posting, assigns to Finance Department (Manager: John)
+Candidates apply (or Admin adds them manually)
+Admin screens applications, moves qualified ones to "Manager Review"
+Manager John reviews candidates, adds comments, recommends top candidates
+Admin schedules interviews, assigns Manager John as interviewer
+Manager John conducts interview, submits feedback
+Admin moves candidate to "Offer Extended" after internal discussion
+Admin marks as "Hired" and initiates onboarding
+
