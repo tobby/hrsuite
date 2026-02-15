@@ -7,8 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import type { Employee, Department } from "@shared/schema";
-import { useOnboardingStore } from "@/lib/onboarding-store";
+import type { Employee, Department, TaskAssignment } from "@shared/schema";
 import { useQueryStore } from "@/lib/query-store";
 import { useRecruitmentStore } from "@/lib/recruitment-store";
 import {
@@ -23,6 +22,8 @@ import {
   UserCheck,
   UserX,
   Clock,
+  ClipboardList,
+  AlertTriangle,
 } from "lucide-react";
 import {
   BarChart,
@@ -53,7 +54,7 @@ export default function Reports() {
   const { role } = useRole();
   const [, navigate] = useLocation();
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
-  const { assignments } = useOnboardingStore();
+  const { data: taskAssignments = [] } = useQuery<TaskAssignment[]>({ queryKey: ['/api/task-assignments'] });
   const queries = useQueryStore((s) => s.queries);
   const { jobs, candidates } = useRecruitmentStore();
 
@@ -119,11 +120,10 @@ export default function Reports() {
     { name: "Other", value: queries.filter((q) => q.category === "other").length },
   ].filter((d) => d.value > 0);
 
-  const activeOnboardings = assignments.filter((a) => a.status !== "completed").length;
-  const completedOnboardings = assignments.filter((a) => a.status === "completed").length;
-  const totalOnboardingTasks = assignments.reduce((s, a) => s + a.tasks.length, 0);
-  const completedOnboardingTasks = assignments.reduce((s, a) => s + a.tasks.filter((t) => t.isCompleted).length, 0);
-  const onboardingPercentage = totalOnboardingTasks > 0 ? Math.round((completedOnboardingTasks / totalOnboardingTasks) * 100) : 0;
+  const totalTaskAssignments = taskAssignments.length;
+  const individualAssignments = taskAssignments.filter(a => a.assignmentType === "individual").length;
+  const groupAssignments = taskAssignments.filter(a => a.assignmentType !== "individual").length;
+  const overdueAssignments = taskAssignments.filter(a => a.dueDate && new Date(a.dueDate) < new Date()).length;
 
   return (
     <div className="space-y-6 p-6">
@@ -564,16 +564,29 @@ export default function Reports() {
         </TabsContent>
 
         <TabsContent value="onboarding" className="space-y-4 mt-4">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30">
-                    <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                    <ClipboardList className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{activeOnboardings}</p>
-                    <p className="text-xs text-muted-foreground">Active Assignments</p>
+                    <p className="text-2xl font-bold">{totalTaskAssignments}</p>
+                    <p className="text-xs text-muted-foreground">Total Assignments</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-purple-100 dark:bg-purple-900/30">
+                    <UserCheck className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{individualAssignments}</p>
+                    <p className="text-xs text-muted-foreground">Individual</p>
                   </div>
                 </div>
               </CardContent>
@@ -582,57 +595,54 @@ export default function Reports() {
               <CardContent className="pt-6">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-md bg-green-100 dark:bg-green-900/30">
-                    <UserCheck className="h-5 w-5 text-green-600 dark:text-green-400" />
+                    <Users className="h-5 w-5 text-green-600 dark:text-green-400" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{completedOnboardings}</p>
-                    <p className="text-xs text-muted-foreground">Completed</p>
+                    <p className="text-2xl font-bold">{groupAssignments}</p>
+                    <p className="text-xs text-muted-foreground">Group/Company</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="pt-6">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Overall Progress</span>
-                    <span className="text-sm font-bold">{onboardingPercentage}%</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-red-100 dark:bg-red-900/30">
+                    <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
                   </div>
-                  <Progress value={onboardingPercentage} className="h-2" />
-                  <p className="text-xs text-muted-foreground">{completedOnboardingTasks}/{totalOnboardingTasks} tasks done</p>
+                  <div>
+                    <p className="text-2xl font-bold">{overdueAssignments}</p>
+                    <p className="text-xs text-muted-foreground">Past Due Date</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
-          <Card data-testid="card-onboarding-assignments">
+          <Card data-testid="card-task-assignments">
             <CardHeader>
               <CardTitle className="text-base">Task Assignments</CardTitle>
-              <CardDescription>Progress for each assignment</CardDescription>
+              <CardDescription>All task assignments across the organization</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {assignments.map((assignment) => {
-                  const emp = employees.find((e) => e.id === assignment.employeeId);
-                  if (!emp) return null;
-                  const completed = assignment.tasks.filter((t) => t.isCompleted).length;
-                  const total = assignment.tasks.length;
-                  const pct = Math.round((completed / total) * 100);
+                {taskAssignments.map((assignment) => {
+                  const items = (() => { try { return JSON.parse(assignment.items); } catch { return []; } })();
                   return (
-                    <div key={assignment.id} className="space-y-2">
+                    <div key={assignment.id} className="space-y-1">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">{emp.firstName} {emp.lastName}</span>
-                          <Badge variant="secondary" className="text-xs">{assignment.templateName}</Badge>
+                          <span className="text-sm font-medium">{assignment.title}</span>
+                          <Badge variant="secondary" className="text-xs">{assignment.assignmentType}</Badge>
+                          <Badge variant="secondary" className="text-xs">{assignment.priority}</Badge>
                         </div>
-                        <span className="text-sm text-muted-foreground">{completed}/{total} ({pct}%)</span>
+                        <span className="text-sm text-muted-foreground">{items.length} items</span>
                       </div>
-                      <Progress value={pct} className="h-2" />
                     </div>
                   );
                 })}
-                {assignments.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">No onboarding assignments yet</p>
+                {taskAssignments.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">No task assignments yet</p>
                 )}
               </div>
             </CardContent>

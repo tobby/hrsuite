@@ -3,35 +3,145 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useLocation } from "wouter";
-import { useOnboardingStore, categoryLabels, type OnboardingAssignment, type OnboardingTask } from "@/lib/onboarding-store";
-import { useQuery } from "@tanstack/react-query";
-import type { Employee } from "@shared/schema";
-import { Plus, Users, CheckCircle2, Clock, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Employee, Department, TaskTemplate, TaskAssignment, TaskCompletion } from "@shared/schema";
+import { Plus, Users, CheckCircle2, Clock, AlertTriangle, UserCheck, Building2, Globe, Trash2, ClipboardList, CalendarDays } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
-function AssignOnboardingDialog() {
-  const { templates, assignments, assignOnboarding } = useOnboardingStore();
-  const { currentUser } = useRole();
+interface TaskItem {
+  id: string;
+  title: string;
+  description: string;
+  isRequired: boolean;
+}
+
+function parseItems(str: string): TaskItem[] {
+  try { return JSON.parse(str); } catch { return []; }
+}
+
+const assignmentTypeLabels: Record<string, string> = {
+  individual: "Individual",
+  department: "Department",
+  managers: "All Managers",
+  everyone: "Everyone",
+};
+
+const assignmentTypeColors: Record<string, string> = {
+  individual: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  department: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  managers: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  everyone: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+};
+
+const assignmentTypeIcons: Record<string, typeof Users> = {
+  individual: UserCheck,
+  department: Building2,
+  managers: Users,
+  everyone: Globe,
+};
+
+const priorityLabels: Record<string, string> = { low: "Low", medium: "Medium", high: "High", urgent: "Urgent" };
+const priorityColors: Record<string, string> = {
+  low: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  medium: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  high: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  urgent: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+};
+
+function AssignTaskDialog() {
+  const { toast } = useToast();
   const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
+  const { data: templates = [] } = useQuery<TaskTemplate[]>({ queryKey: ['/api/task-templates'] });
   const [open, setOpen] = useState(false);
-  const [employeeId, setEmployeeId] = useState("");
-  const [templateId, setTemplateId] = useState("");
+  const [assignmentType, setAssignmentType] = useState("individual");
+  const [targetEmployeeId, setTargetEmployeeId] = useState("");
+  const [targetDepartmentId, setTargetDepartmentId] = useState("");
+  const [templateId, setTemplateId] = useState("none");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [dueDate, setDueDate] = useState("");
+  const [customItems, setCustomItems] = useState<{ title: string; description: string; isRequired: boolean }[]>([]);
+  const [itemTitle, setItemTitle] = useState("");
+  const [itemDesc, setItemDesc] = useState("");
 
-  const assignedEmployeeIds = assignments.map((a) => a.employeeId);
-  const availableEmployees = employees.filter((e) => !assignedEmployeeIds.includes(e.id) && e.status === "active");
+  const selectedTemplate = templates.find(t => t.id === templateId);
 
-  const handleAssign = () => {
-    if (!employeeId || !templateId) return;
-    assignOnboarding(employeeId, templateId, currentUser.id, new Date());
-    setEmployeeId("");
-    setTemplateId("");
-    setOpen(false);
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/task-assignments", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/task-assignments'] });
+      toast({ title: "Tasks assigned successfully" });
+      resetForm();
+      setOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetForm = () => {
+    setAssignmentType("individual"); setTargetEmployeeId(""); setTargetDepartmentId("");
+    setTemplateId("none"); setTitle(""); setDescription("");
+    setPriority("medium"); setDueDate(""); setCustomItems([]);
+  };
+
+  const addItem = () => {
+    if (!itemTitle.trim()) return;
+    setCustomItems([...customItems, { title: itemTitle.trim(), description: itemDesc.trim(), isRequired: true }]);
+    setItemTitle(""); setItemDesc("");
+  };
+
+  const handleSubmit = () => {
+    let items: TaskItem[];
+    let assignTitle = title.trim();
+
+    if (templateId !== "none" && selectedTemplate) {
+      items = parseItems(selectedTemplate.items);
+      if (!assignTitle) assignTitle = selectedTemplate.name;
+    } else {
+      if (customItems.length === 0) return;
+      items = customItems.map((item, i) => ({ ...item, id: `item-${Date.now()}-${i}` }));
+    }
+
+    if (!assignTitle) return;
+
+    createMutation.mutate({
+      title: assignTitle,
+      description: description.trim() || undefined,
+      assignmentType,
+      targetEmployeeId: assignmentType === "individual" ? targetEmployeeId : undefined,
+      targetDepartmentId: assignmentType === "department" ? targetDepartmentId : undefined,
+      templateId: templateId !== "none" ? templateId : undefined,
+      items: JSON.stringify(items),
+      priority,
+      dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
+    });
+  };
+
+  const activeEmployees = employees.filter(e => e.status === "active");
+
+  const canSubmit = () => {
+    if (!title.trim() && templateId === "none") return false;
+    if (templateId === "none" && customItems.length === 0) return false;
+    if (assignmentType === "individual" && !targetEmployeeId) return false;
+    if (assignmentType === "department" && !targetDepartmentId) return false;
+    return true;
   };
 
   return (
@@ -42,47 +152,151 @@ function AssignOnboardingDialog() {
           Assign Tasks
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Assign Task Checklist</DialogTitle>
-          <DialogDescription>Select an employee and a task template</DialogDescription>
+          <DialogTitle>Assign Tasks</DialogTitle>
+          <DialogDescription>Assign a task checklist to employees, departments, managers, or everyone</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Employee</Label>
-            <Select value={employeeId} onValueChange={setEmployeeId}>
-              <SelectTrigger data-testid="select-onboarding-employee">
-                <SelectValue placeholder="Select employee..." />
+            <Label>Assign To</Label>
+            <Select value={assignmentType} onValueChange={(v) => { setAssignmentType(v); setTargetEmployeeId(""); setTargetDepartmentId(""); }}>
+              <SelectTrigger data-testid="select-assignment-type">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {availableEmployees.map((emp) => (
-                  <SelectItem key={emp.id} value={emp.id}>
-                    {emp.firstName} {emp.lastName} - {emp.position}
-                  </SelectItem>
-                ))}
+                <SelectItem value="individual">Individual Employee</SelectItem>
+                <SelectItem value="department">Entire Department</SelectItem>
+                <SelectItem value="managers">All Managers</SelectItem>
+                <SelectItem value="everyone">Everyone</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {assignmentType === "individual" && (
+            <div className="space-y-2">
+              <Label>Select Employee</Label>
+              <Select value={targetEmployeeId} onValueChange={setTargetEmployeeId}>
+                <SelectTrigger data-testid="select-target-employee">
+                  <SelectValue placeholder="Select employee..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeEmployees.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>{e.firstName} {e.lastName} - {e.position}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {assignmentType === "department" && (
+            <div className="space-y-2">
+              <Label>Select Department</Label>
+              <Select value={targetDepartmentId} onValueChange={setTargetDepartmentId}>
+                <SelectTrigger data-testid="select-target-department">
+                  <SelectValue placeholder="Select department..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="space-y-2">
-            <Label>Task Template</Label>
-            <Select value={templateId} onValueChange={setTemplateId}>
-              <SelectTrigger data-testid="select-onboarding-template">
-                <SelectValue placeholder="Select template..." />
+            <Label>Use Template (Optional)</Label>
+            <Select value={templateId} onValueChange={(v) => { setTemplateId(v); if (v !== "none") { const t = templates.find(t => t.id === v); if (t && !title.trim()) setTitle(t.name); } }}>
+              <SelectTrigger data-testid="select-template">
+                <SelectValue placeholder="No template - custom tasks" />
               </SelectTrigger>
               <SelectContent>
-                {templates.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name} ({t.tasks.length} tasks)
-                  </SelectItem>
-                ))}
+                <SelectItem value="none">No template - custom tasks</SelectItem>
+                {templates.map((t) => {
+                  const items = parseItems(t.items);
+                  return <SelectItem key={t.id} value={t.id}>{t.name} ({items.length} items)</SelectItem>;
+                })}
               </SelectContent>
             </Select>
           </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task assignment title" data-testid="input-assignment-title" />
+            </div>
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger data-testid="select-priority">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Description (Optional)</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Additional context..." data-testid="input-assignment-description" />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Due Date (Optional)</Label>
+            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} data-testid="input-due-date" />
+          </div>
+
+          {templateId === "none" && (
+            <div className="border-t pt-4 space-y-3">
+              <h4 className="font-medium text-sm">Custom Checklist Items</h4>
+              <div className="flex items-end gap-2">
+                <div className="flex-1 space-y-1">
+                  <Input value={itemTitle} onChange={(e) => setItemTitle(e.target.value)} placeholder="Item title" data-testid="input-custom-item-title" />
+                </div>
+                <Button type="button" size="sm" onClick={addItem} disabled={!itemTitle.trim()} data-testid="button-add-custom-item">
+                  <Plus className="h-3 w-3 mr-1" /> Add
+                </Button>
+              </div>
+              {customItems.length > 0 && (
+                <div className="space-y-1">
+                  {customItems.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-md border text-sm">
+                      <span>{item.title}</span>
+                      <Button variant="ghost" size="icon" onClick={() => setCustomItems(customItems.filter((_, j) => j !== i))}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {templateId !== "none" && selectedTemplate && (
+            <div className="border-t pt-3">
+              <h4 className="font-medium text-sm mb-2">Template Items ({parseItems(selectedTemplate.items).length})</h4>
+              <div className="space-y-1">
+                {parseItems(selectedTemplate.items).map((item, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
+                    <span>{item.title}</span>
+                    {item.isRequired && <span className="text-xs text-destructive">*</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={handleAssign} disabled={!employeeId || !templateId} data-testid="button-confirm-assign">
-            Assign
+          <Button onClick={handleSubmit} disabled={!canSubmit() || createMutation.isPending} data-testid="button-confirm-assign">
+            {createMutation.isPending ? "Assigning..." : "Assign Tasks"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -90,124 +304,121 @@ function AssignOnboardingDialog() {
   );
 }
 
-function TaskCategoryBadge({ category }: { category: OnboardingTask["category"] }) {
-  const colorMap: Record<OnboardingTask["category"], string> = {
-    it_setup: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-    hr_paperwork: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-    training: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    team_introduction: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    compliance: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-    general: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
-  };
-  return <Badge variant="secondary" className={`text-xs ${colorMap[category]}`}>{categoryLabels[category]}</Badge>;
-}
+function AssignmentCard({ assignment, employees, departments }: {
+  assignment: TaskAssignment;
+  employees: Employee[];
+  departments: Department[];
+}) {
+  const { toast } = useToast();
+  const items = parseItems(assignment.items);
+  const { data: completions = [] } = useQuery<TaskCompletion[]>({
+    queryKey: ['/api/task-assignments', assignment.id, 'completions'],
+  });
 
-function AssignmentCard({ assignment }: { assignment: OnboardingAssignment }) {
-  const { getAssignmentProgress, toggleTask } = useOnboardingStore();
-  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
-  const [expanded, setExpanded] = useState(false);
-  const emp = employees.find((e) => e.id === assignment.employeeId);
-  const assignedByEmp = employees.find((e) => e.id === assignment.assignedBy);
-  const progress = getAssignmentProgress(assignment.id);
+  const targetEmployee = assignment.targetEmployeeId ? employees.find(e => e.id === assignment.targetEmployeeId) : null;
+  const targetDept = assignment.targetDepartmentId ? departments.find(d => d.id === assignment.targetDepartmentId) : null;
+  const assignedBy = employees.find(e => e.id === assignment.assignedById);
+  const AssignIcon = assignmentTypeIcons[assignment.assignmentType] || UserCheck;
 
-  if (!emp) return null;
+  const relevantEmployees = (() => {
+    switch (assignment.assignmentType) {
+      case "individual": return targetEmployee ? [targetEmployee] : [];
+      case "department": return employees.filter(e => e.departmentId === assignment.targetDepartmentId && e.status === "active");
+      case "managers": return employees.filter(e => e.role === "manager" && e.status === "active");
+      case "everyone": return employees.filter(e => e.status === "active");
+      default: return [];
+    }
+  })();
 
-  const tasksByCategory = assignment.tasks.reduce((acc, task) => {
-    if (!acc[task.category]) acc[task.category] = [];
-    acc[task.category].push(task);
-    return acc;
-  }, {} as Record<string, typeof assignment.tasks>);
+  const totalItems = items.length;
+  const completedCompletions = completions.filter(c => c.completed);
 
-  const overdueTasks = assignment.tasks.filter((t) => !t.isCompleted && new Date(t.dueDate) < new Date());
-  const statusColor = assignment.status === "completed"
-    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-    : overdueTasks.length > 0
-      ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-      : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+  let progressPercent = 0;
+  let progressLabel = "";
+  if (assignment.assignmentType === "individual") {
+    const completed = completedCompletions.length;
+    progressPercent = totalItems > 0 ? Math.round((completed / totalItems) * 100) : 0;
+    progressLabel = `${completed}/${totalItems} items`;
+  } else {
+    const totalPossible = relevantEmployees.length * totalItems;
+    const totalCompleted = completedCompletions.length;
+    progressPercent = totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0;
+    const fullyCompleted = relevantEmployees.filter(e => {
+      const empCompletions = completedCompletions.filter(c => c.employeeId === e.id);
+      return empCompletions.length >= totalItems;
+    }).length;
+    progressLabel = `${fullyCompleted}/${relevantEmployees.length} people completed`;
+  }
 
-  const statusLabel = assignment.status === "completed" ? "Completed" : overdueTasks.length > 0 ? "Has Overdue" : "In Progress";
+  const isOverdue = assignment.dueDate && new Date(assignment.dueDate) < new Date() && progressPercent < 100;
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => { await apiRequest("DELETE", `/api/task-assignments/${assignment.id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/task-assignments'] });
+      toast({ title: "Assignment deleted" });
+    },
+  });
 
   return (
     <Card data-testid={`card-assignment-${assignment.id}`}>
-      <CardHeader className="cursor-pointer" onClick={() => setExpanded(!expanded)}>
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3 min-w-0">
-            <Avatar className="h-9 w-9 shrink-0">
-              <AvatarFallback className="text-xs">{emp.firstName[0]}{emp.lastName[0]}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0">
-              <CardTitle className="text-base" data-testid={`text-onboarding-employee-${assignment.id}`}>
-                {emp.firstName} {emp.lastName}
-              </CardTitle>
-              <CardDescription className="truncate">{emp.position}</CardDescription>
-            </div>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <CardTitle className="text-base flex items-center gap-2 flex-wrap" data-testid={`text-assignment-title-${assignment.id}`}>
+              {assignment.title}
+              <Badge variant="secondary" className={`text-xs ${assignmentTypeColors[assignment.assignmentType]}`}>
+                <AssignIcon className="h-3 w-3 mr-1" />
+                {assignmentTypeLabels[assignment.assignmentType]}
+              </Badge>
+              <Badge variant="secondary" className={`text-xs ${priorityColors[assignment.priority]}`}>
+                {priorityLabels[assignment.priority]}
+              </Badge>
+              {isOverdue && (
+                <Badge variant="destructive" className="text-xs">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  Overdue
+                </Badge>
+              )}
+            </CardTitle>
+            <CardDescription className="mt-1">
+              {assignment.assignmentType === "individual" && targetEmployee && (
+                <span>Assigned to {targetEmployee.firstName} {targetEmployee.lastName}</span>
+              )}
+              {assignment.assignmentType === "department" && targetDept && (
+                <span>Assigned to {targetDept.name} department ({relevantEmployees.length} members)</span>
+              )}
+              {assignment.assignmentType === "managers" && (
+                <span>Assigned to all managers ({relevantEmployees.length})</span>
+              )}
+              {assignment.assignmentType === "everyone" && (
+                <span>Assigned to everyone ({relevantEmployees.length})</span>
+              )}
+            </CardDescription>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Badge variant="secondary" className={`text-xs ${statusColor}`}>{statusLabel}</Badge>
-            {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-          </div>
+          <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} data-testid={`button-delete-assignment-${assignment.id}`}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
         </div>
         <div className="space-y-2 mt-2">
           <div className="flex items-center justify-between gap-2 text-sm">
-            <span className="text-muted-foreground">Progress</span>
-            <span className="font-medium">{progress.completed}/{progress.total} ({progress.percentage}%)</span>
+            <span className="text-muted-foreground">{progressLabel}</span>
+            <span className="font-medium">{progressPercent}%</span>
           </div>
-          <Progress value={progress.percentage} className="h-2" />
+          <Progress value={progressPercent} className="h-2" />
         </div>
         <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground mt-1">
-          <span>Template: {assignment.templateName}</span>
-          <span>Started: {assignment.startDate.toLocaleDateString()}</span>
-          {assignedByEmp && <span>Assigned by: {assignedByEmp.firstName} {assignedByEmp.lastName}</span>}
+          {assignedBy && <span>Assigned by: {assignedBy.firstName} {assignedBy.lastName}</span>}
+          <span>Created: {format(new Date(assignment.createdAt!), "MMM d, yyyy")}</span>
+          {assignment.dueDate && (
+            <span className="flex items-center gap-1">
+              <CalendarDays className="h-3 w-3" />
+              Due: {format(new Date(assignment.dueDate), "MMM d, yyyy")}
+            </span>
+          )}
+          <span>{items.length} checklist items</span>
         </div>
       </CardHeader>
-      {expanded && (
-        <CardContent>
-          <div className="space-y-4">
-            {Object.entries(tasksByCategory).map(([cat, tasks]) => {
-              const completedInCat = tasks.filter((t) => t.isCompleted).length;
-              return (
-                <div key={cat}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <TaskCategoryBadge category={cat as OnboardingTask["category"]} />
-                    <span className="text-xs text-muted-foreground">{completedInCat}/{tasks.length}</span>
-                  </div>
-                  <div className="space-y-1 ml-1">
-                    {tasks.map((task) => {
-                      const isOverdue = !task.isCompleted && new Date(task.dueDate) < new Date();
-                      return (
-                        <div key={task.id} className="flex items-center gap-2 p-1.5 rounded-md">
-                          <Checkbox
-                            checked={task.isCompleted}
-                            onCheckedChange={() => toggleTask(assignment.id, task.id)}
-                            data-testid={`checkbox-task-${task.id}`}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <span className={`text-sm ${task.isCompleted ? "line-through text-muted-foreground" : ""}`}>
-                              {task.title}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            {task.isRequired && <Badge variant="outline" className="text-xs">Required</Badge>}
-                            {isOverdue && (
-                              <Badge variant="destructive" className="text-xs">
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Overdue
-                              </Badge>
-                            )}
-                            <span className="text-xs text-muted-foreground">
-                              Due {task.dueDate.toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      )}
     </Card>
   );
 }
@@ -215,72 +426,74 @@ function AssignmentCard({ assignment }: { assignment: OnboardingAssignment }) {
 export default function OnboardingTracker() {
   const { role } = useRole();
   const [, navigate] = useLocation();
-  const { assignments } = useOnboardingStore();
+  const { data: assignments = [], isLoading } = useQuery<TaskAssignment[]>({ queryKey: ['/api/task-assignments'] });
+  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
+  const [filter, setFilter] = useState("all");
 
   if (!canEditOrgSettings(role)) {
     navigate("/");
     return null;
   }
 
-  const activeAssignments = assignments.filter((a) => a.status !== "completed");
-  const completedAssignments = assignments.filter((a) => a.status === "completed");
-  const totalTasks = assignments.reduce((sum, a) => sum + a.tasks.length, 0);
-  const completedTasks = assignments.reduce((sum, a) => sum + a.tasks.filter((t) => t.isCompleted).length, 0);
-  const overdueTasks = assignments.reduce((sum, a) => sum + a.tasks.filter((t) => !t.isCompleted && new Date(t.dueDate) < new Date()).length, 0);
+  const filteredAssignments = assignments.filter(a => {
+    if (filter === "all") return true;
+    return a.assignmentType === filter;
+  });
 
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <Users className="h-6 w-6" />
+            <ClipboardList className="h-6 w-6" />
             <h1 className="text-2xl font-bold tracking-tight" data-testid="text-task-tracker-title">
               Task Tracker
             </h1>
           </div>
           <p className="text-muted-foreground">
-            Track and manage task progress for assignments
+            Assign and track task checklists across the organization
           </p>
         </div>
-        <AssignOnboardingDialog />
+        <AssignTaskDialog />
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <Card data-testid="card-stat-active">
+        <Card data-testid="card-stat-total">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30">
-                <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <ClipboardList className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{activeAssignments.length}</p>
-                <p className="text-xs text-muted-foreground">Active Assignments</p>
+                <p className="text-2xl font-bold">{assignments.length}</p>
+                <p className="text-xs text-muted-foreground">Total Assignments</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card data-testid="card-stat-completed">
+        <Card data-testid="card-stat-individual">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-purple-100 dark:bg-purple-900/30">
+                <UserCheck className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">{assignments.filter(a => a.assignmentType === "individual").length}</p>
+                <p className="text-xs text-muted-foreground">Individual</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card data-testid="card-stat-group">
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-green-100 dark:bg-green-900/30">
-                <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <Users className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{completedAssignments.length}</p>
-                <p className="text-xs text-muted-foreground">Completed</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card data-testid="card-stat-tasks">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/30">
-                <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{completedTasks}/{totalTasks}</p>
-                <p className="text-xs text-muted-foreground">Tasks Done</p>
+                <p className="text-2xl font-bold">{assignments.filter(a => a.assignmentType !== "individual").length}</p>
+                <p className="text-xs text-muted-foreground">Group/Company</p>
               </div>
             </div>
           </CardContent>
@@ -292,41 +505,48 @@ export default function OnboardingTracker() {
                 <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{overdueTasks}</p>
-                <p className="text-xs text-muted-foreground">Overdue Tasks</p>
+                <p className="text-2xl font-bold">{assignments.filter(a => a.dueDate && new Date(a.dueDate) < new Date()).length}</p>
+                <p className="text-xs text-muted-foreground">Past Due Date</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">Active Assignments</h2>
-        {activeAssignments.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Users className="h-12 w-12 text-muted-foreground/40 mb-4" />
-              <p className="text-muted-foreground text-sm">No active assignments</p>
-              <p className="text-muted-foreground text-xs mt-1">Assign a task checklist to get started</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {activeAssignments.map((a) => (
-              <AssignmentCard key={a.id} assignment={a} />
-            ))}
-          </div>
-        )}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Select value={filter} onValueChange={setFilter}>
+          <SelectTrigger className="w-[180px]" data-testid="filter-assignment-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="individual">Individual</SelectItem>
+            <SelectItem value="department">Department</SelectItem>
+            <SelectItem value="managers">All Managers</SelectItem>
+            <SelectItem value="everyone">Everyone</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      {completedAssignments.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Completed Assignments</h2>
-          <div className="space-y-3">
-            {completedAssignments.map((a) => (
-              <AssignmentCard key={a.id} assignment={a} />
-            ))}
-          </div>
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <Card key={i}><CardContent className="p-6"><Skeleton className="h-24 w-full" /></CardContent></Card>
+          ))}
+        </div>
+      ) : filteredAssignments.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <ClipboardList className="h-12 w-12 text-muted-foreground/40 mb-4" />
+            <p className="text-muted-foreground text-sm">No task assignments yet</p>
+            <p className="text-muted-foreground text-xs mt-1">Create a task assignment to get started</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {filteredAssignments.map((a) => (
+            <AssignmentCard key={a.id} assignment={a} employees={employees} departments={departments} />
+          ))}
         </div>
       )}
     </div>

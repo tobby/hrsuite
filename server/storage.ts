@@ -19,6 +19,9 @@ import {
   feedbackRatings, type FeedbackRating,
   cycleParticipants, type CycleParticipant,
   peerAssignments, type PeerAssignment,
+  taskTemplates, type TaskTemplate, type InsertTaskTemplate,
+  taskAssignments, type TaskAssignment, type InsertTaskAssignment,
+  taskCompletions, type TaskCompletion,
 } from "@shared/schema";
 import { randomUUID, randomBytes } from "crypto";
 
@@ -141,6 +144,24 @@ export interface IStorage {
   getPeerAssignmentsByReviewee(cycleId: string, revieweeId: string): Promise<PeerAssignment[]>;
   deletePeerAssignment(id: string): Promise<boolean>;
   deletePeerAssignmentsByCycle(cycleId: string): Promise<void>;
+
+  // Task Templates
+  createTaskTemplate(data: InsertTaskTemplate): Promise<TaskTemplate>;
+  getTaskTemplatesByCompany(companyId: string): Promise<TaskTemplate[]>;
+  getTaskTemplate(id: string): Promise<TaskTemplate | undefined>;
+  updateTaskTemplate(id: string, data: Partial<InsertTaskTemplate>): Promise<TaskTemplate | undefined>;
+  deleteTaskTemplate(id: string): Promise<boolean>;
+
+  // Task Assignments
+  createTaskAssignment(data: InsertTaskAssignment): Promise<TaskAssignment>;
+  getTaskAssignmentsByCompany(companyId: string): Promise<TaskAssignment[]>;
+  getTaskAssignment(id: string): Promise<TaskAssignment | undefined>;
+  deleteTaskAssignment(id: string): Promise<boolean>;
+
+  // Task Completions
+  getTaskCompletionsByAssignment(assignmentId: string): Promise<TaskCompletion[]>;
+  getTaskCompletionsByEmployee(employeeId: string): Promise<TaskCompletion[]>;
+  toggleTaskCompletion(assignmentId: string, employeeId: string, itemId: string): Promise<TaskCompletion>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -644,6 +665,92 @@ export class DatabaseStorage implements IStorage {
 
   async deletePeerAssignmentsByCycle(cycleId: string): Promise<void> {
     await db.delete(peerAssignments).where(eq(peerAssignments.cycleId, cycleId));
+  }
+
+  // ==================== TASK TEMPLATES ====================
+
+  async createTaskTemplate(data: InsertTaskTemplate): Promise<TaskTemplate> {
+    const [template] = await db.insert(taskTemplates).values(data).returning();
+    return template;
+  }
+
+  async getTaskTemplatesByCompany(companyId: string): Promise<TaskTemplate[]> {
+    return db.select().from(taskTemplates).where(eq(taskTemplates.companyId, companyId)).orderBy(desc(taskTemplates.createdAt));
+  }
+
+  async getTaskTemplate(id: string): Promise<TaskTemplate | undefined> {
+    const [template] = await db.select().from(taskTemplates).where(eq(taskTemplates.id, id));
+    return template;
+  }
+
+  async updateTaskTemplate(id: string, data: Partial<InsertTaskTemplate>): Promise<TaskTemplate | undefined> {
+    const [template] = await db.update(taskTemplates).set(data).where(eq(taskTemplates.id, id)).returning();
+    return template;
+  }
+
+  async deleteTaskTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(taskTemplates).where(eq(taskTemplates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== TASK ASSIGNMENTS ====================
+
+  async createTaskAssignment(data: InsertTaskAssignment): Promise<TaskAssignment> {
+    const [assignment] = await db.insert(taskAssignments).values(data).returning();
+    return assignment;
+  }
+
+  async getTaskAssignmentsByCompany(companyId: string): Promise<TaskAssignment[]> {
+    return db.select().from(taskAssignments).where(eq(taskAssignments.companyId, companyId)).orderBy(desc(taskAssignments.createdAt));
+  }
+
+  async getTaskAssignment(id: string): Promise<TaskAssignment | undefined> {
+    const [assignment] = await db.select().from(taskAssignments).where(eq(taskAssignments.id, id));
+    return assignment;
+  }
+
+  async deleteTaskAssignment(id: string): Promise<boolean> {
+    await db.delete(taskCompletions).where(eq(taskCompletions.assignmentId, id));
+    const result = await db.delete(taskAssignments).where(eq(taskAssignments.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== TASK COMPLETIONS ====================
+
+  async getTaskCompletionsByAssignment(assignmentId: string): Promise<TaskCompletion[]> {
+    return db.select().from(taskCompletions).where(eq(taskCompletions.assignmentId, assignmentId));
+  }
+
+  async getTaskCompletionsByEmployee(employeeId: string): Promise<TaskCompletion[]> {
+    return db.select().from(taskCompletions).where(eq(taskCompletions.employeeId, employeeId));
+  }
+
+  async toggleTaskCompletion(assignmentId: string, employeeId: string, itemId: string): Promise<TaskCompletion> {
+    const [existing] = await db.select().from(taskCompletions).where(
+      and(
+        eq(taskCompletions.assignmentId, assignmentId),
+        eq(taskCompletions.employeeId, employeeId),
+        eq(taskCompletions.itemId, itemId)
+      )
+    );
+
+    if (existing) {
+      const newCompleted = !existing.completed;
+      const [updated] = await db.update(taskCompletions).set({
+        completed: newCompleted,
+        completedAt: newCompleted ? new Date() : null,
+      }).where(eq(taskCompletions.id, existing.id)).returning();
+      return updated;
+    } else {
+      const [created] = await db.insert(taskCompletions).values({
+        assignmentId,
+        employeeId,
+        itemId,
+        completed: true,
+        completedAt: new Date(),
+      }).returning();
+      return created;
+    }
   }
 }
 

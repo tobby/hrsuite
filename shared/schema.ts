@@ -474,15 +474,19 @@ export const taskTemplates = pgTable("task_templates", {
   companyId: varchar("company_id").notNull(),
   name: text("name").notNull(),
   description: text("description"),
+  category: text("category").notNull().default("general"),
   departmentId: varchar("department_id"),
+  defaultAssignmentType: text("default_assignment_type").default("individual"),
   isDefault: boolean("is_default").notNull().default(false),
-  tasks: text("tasks").notNull(),
+  items: text("items").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertTaskTemplateSchema = createInsertSchema(taskTemplates).omit({ id: true, createdAt: true }).extend({
   name: z.string().min(1, "Template name is required"),
-  tasks: z.string().min(1, "Tasks are required"),
+  category: z.enum(["onboarding", "compliance", "training", "it_setup", "hr_paperwork", "general"]).default("general"),
+  defaultAssignmentType: z.enum(["individual", "department", "managers", "everyone"]).default("individual"),
+  items: z.string().min(1, "At least one task item is required"),
 });
 export type InsertTaskTemplate = z.infer<typeof insertTaskTemplateSchema>;
 export type TaskTemplate = typeof taskTemplates.$inferSelect;
@@ -490,15 +494,35 @@ export type TaskTemplate = typeof taskTemplates.$inferSelect;
 export const taskAssignments = pgTable("task_assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   companyId: varchar("company_id").notNull(),
-  employeeId: varchar("employee_id").notNull(),
-  templateId: varchar("template_id").notNull(),
-  templateName: text("template_name").notNull(),
+  templateId: varchar("template_id"),
+  title: text("title").notNull(),
+  description: text("description"),
+  assignmentType: text("assignment_type").notNull().default("individual"),
+  targetEmployeeId: varchar("target_employee_id"),
+  targetDepartmentId: varchar("target_department_id"),
   assignedById: varchar("assigned_by_id").notNull(),
-  status: text("status").notNull().default("in_progress"),
-  tasks: text("tasks").notNull(),
-  startDate: timestamp("start_date").notNull(),
-  completedAt: timestamp("completed_at"),
+  items: text("items").notNull(),
+  dueDate: timestamp("due_date"),
+  priority: text("priority").notNull().default("medium"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const insertTaskAssignmentSchema = createInsertSchema(taskAssignments).omit({ id: true, createdAt: true }).extend({
+  title: z.string().min(1, "Title is required"),
+  assignmentType: z.enum(["individual", "department", "managers", "everyone"]),
+  items: z.string().min(1, "At least one task item is required"),
+  priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
+});
+export type InsertTaskAssignment = z.infer<typeof insertTaskAssignmentSchema>;
 export type TaskAssignment = typeof taskAssignments.$inferSelect;
+
+export const taskCompletions = pgTable("task_completions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assignmentId: varchar("assignment_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  itemId: text("item_id").notNull(),
+  completed: boolean("completed").notNull().default(false),
+  completedAt: timestamp("completed_at"),
+});
+
+export type TaskCompletion = typeof taskCompletions.$inferSelect;

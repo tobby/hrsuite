@@ -1,65 +1,192 @@
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useRole } from "@/lib/role-context";
-import { useOnboardingStore, categoryLabels, type OnboardingTask } from "@/lib/onboarding-store";
-import { useQuery } from "@tanstack/react-query";
-import type { Employee } from "@shared/schema";
-import { ClipboardList, CheckCircle2, Clock, AlertTriangle, PartyPopper } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { TaskAssignment, TaskCompletion } from "@shared/schema";
+import { ClipboardList, CheckCircle2, Clock, AlertTriangle, UserCheck, Building2, Users, Globe, CalendarDays } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
-function TaskCategoryBadge({ category }: { category: OnboardingTask["category"] }) {
-  const colorMap: Record<OnboardingTask["category"], string> = {
-    it_setup: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-    hr_paperwork: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-    training: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    team_introduction: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    compliance: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-    general: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
-  };
-  return <Badge variant="secondary" className={`text-xs ${colorMap[category]}`}>{categoryLabels[category]}</Badge>;
+interface TaskItem {
+  id: string;
+  title: string;
+  description: string;
+  isRequired: boolean;
+}
+
+function parseItems(str: string): TaskItem[] {
+  try { return JSON.parse(str); } catch { return []; }
+}
+
+const assignmentTypeLabels: Record<string, string> = {
+  individual: "Personal",
+  department: "Department",
+  managers: "Managers",
+  everyone: "Company-wide",
+};
+
+const assignmentTypeColors: Record<string, string> = {
+  individual: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  department: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  managers: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  everyone: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+};
+
+const assignmentTypeIcons: Record<string, typeof Users> = {
+  individual: UserCheck,
+  department: Building2,
+  managers: Users,
+  everyone: Globe,
+};
+
+const priorityColors: Record<string, string> = {
+  low: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  medium: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  high: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  urgent: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+};
+
+function TaskAssignmentCard({ assignment, myCompletions }: {
+  assignment: TaskAssignment;
+  myCompletions: TaskCompletion[];
+}) {
+  const { toast } = useToast();
+  const items = parseItems(assignment.items);
+  const AssignIcon = assignmentTypeIcons[assignment.assignmentType] || UserCheck;
+
+  const myItemCompletions = myCompletions.filter(c => c.assignmentId === assignment.id && c.completed);
+  const completedCount = myItemCompletions.length;
+  const totalCount = items.length;
+  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const isFullyCompleted = completedCount >= totalCount;
+  const isOverdue = assignment.dueDate && new Date(assignment.dueDate) < new Date() && !isFullyCompleted;
+
+  const toggleMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      const res = await apiRequest("POST", `/api/task-assignments/${assignment.id}/toggle`, { itemId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/my-task-completions'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/task-assignments', assignment.id, 'completions'] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const isItemCompleted = (itemId: string) => myItemCompletions.some(c => c.itemId === itemId);
+
+  return (
+    <Card data-testid={`card-my-assignment-${assignment.id}`} className={isFullyCompleted ? "opacity-70" : ""}>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <CardTitle className="text-base flex items-center gap-2 flex-wrap" data-testid={`text-my-assignment-title-${assignment.id}`}>
+              {assignment.title}
+              <Badge variant="secondary" className={`text-xs ${assignmentTypeColors[assignment.assignmentType]}`}>
+                <AssignIcon className="h-3 w-3 mr-1" />
+                {assignmentTypeLabels[assignment.assignmentType]}
+              </Badge>
+              {isFullyCompleted && (
+                <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Complete
+                </Badge>
+              )}
+              {isOverdue && (
+                <Badge variant="destructive" className="text-xs">
+                  <AlertTriangle className="h-3 w-3 mr-1" />
+                  Overdue
+                </Badge>
+              )}
+            </CardTitle>
+            {assignment.description && (
+              <CardDescription className="mt-1">{assignment.description}</CardDescription>
+            )}
+          </div>
+          <Badge variant="secondary" className={`text-xs shrink-0 ${priorityColors[assignment.priority]}`}>
+            {assignment.priority}
+          </Badge>
+        </div>
+        <div className="space-y-2 mt-2">
+          <div className="flex items-center justify-between gap-2 text-sm">
+            <span className="text-muted-foreground">{completedCount}/{totalCount} items completed</span>
+            <span className="font-medium">{progressPercent}%</span>
+          </div>
+          <Progress value={progressPercent} className="h-2" />
+        </div>
+        {assignment.dueDate && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+            <CalendarDays className="h-3 w-3" />
+            Due: {format(new Date(assignment.dueDate), "MMM d, yyyy")}
+          </div>
+        )}
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-1">
+          {items.map((item) => {
+            const completed = isItemCompleted(item.id);
+            return (
+              <div key={item.id} className="flex items-center gap-2 p-2 rounded-md hover-elevate">
+                <Checkbox
+                  checked={completed}
+                  onCheckedChange={() => toggleMutation.mutate(item.id)}
+                  disabled={toggleMutation.isPending}
+                  data-testid={`checkbox-item-${item.id}`}
+                />
+                <div className="flex-1 min-w-0">
+                  <span className={`text-sm ${completed ? "line-through text-muted-foreground" : ""}`}>
+                    {item.title}
+                  </span>
+                  {item.description && (
+                    <p className={`text-xs ${completed ? "text-muted-foreground/60" : "text-muted-foreground"}`}>{item.description}</p>
+                  )}
+                </div>
+                {item.isRequired && !completed && (
+                  <Badge variant="outline" className="text-xs shrink-0">Required</Badge>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function MyOnboarding() {
-  const { currentUser } = useRole();
-  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
-  const { getAssignmentForEmployee, getAssignmentProgress, toggleTask } = useOnboardingStore();
-  const assignment = getAssignmentForEmployee(currentUser.id);
+  const { currentUser, role } = useRole();
+  const { data: allAssignments = [], isLoading: assignmentsLoading } = useQuery<TaskAssignment[]>({ queryKey: ['/api/my-task-assignments'] });
+  const { data: myCompletions = [], isLoading: completionsLoading } = useQuery<TaskCompletion[]>({ queryKey: ['/api/my-task-completions'] });
+  const [filter, setFilter] = useState("all");
 
-  if (!assignment) {
-    return (
-      <div className="space-y-6 p-6">
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <ClipboardList className="h-6 w-6" />
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-my-tasks-title">
-              My Tasks
-            </h1>
-          </div>
-          <p className="text-muted-foreground">Your assigned tasks and progress</p>
-        </div>
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <CheckCircle2 className="h-16 w-16 text-muted-foreground/30 mb-4" />
-            <p className="text-muted-foreground font-medium">No tasks assigned</p>
-            <p className="text-muted-foreground text-sm mt-1">You don't have any pending tasks</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const myAssignments = allAssignments;
 
-  const progress = getAssignmentProgress(assignment.id);
-  const assignedByEmp = employees.find((e) => e.id === assignment.assignedBy);
-  const overdueTasks = assignment.tasks.filter((t) => !t.isCompleted && new Date(t.dueDate) < new Date());
-  const upcomingTasks = assignment.tasks.filter((t) => !t.isCompleted && new Date(t.dueDate) >= new Date());
-  const completedTasks = assignment.tasks.filter((t) => t.isCompleted);
+  const filteredAssignments = myAssignments.filter(a => {
+    if (filter === "all") return true;
+    if (filter === "personal") return a.assignmentType === "individual";
+    if (filter === "department") return a.assignmentType === "department";
+    if (filter === "company") return a.assignmentType === "everyone" || a.assignmentType === "managers";
+    return true;
+  });
 
-  const tasksByCategory = assignment.tasks.reduce((acc, task) => {
-    if (!acc[task.category]) acc[task.category] = [];
-    acc[task.category].push(task);
-    return acc;
-  }, {} as Record<string, typeof assignment.tasks>);
+  const totalItems = myAssignments.reduce((sum, a) => sum + parseItems(a.items).length, 0);
+  const completedItems = myCompletions.filter(c => c.completed && myAssignments.some(a => a.id === c.assignmentId)).length;
+  const overdueCount = myAssignments.filter(a => {
+    if (!a.dueDate) return false;
+    const items = parseItems(a.items);
+    const completed = myCompletions.filter(c => c.assignmentId === a.id && c.completed).length;
+    return new Date(a.dueDate) < new Date() && completed < items.length;
+  }).length;
+
+  const isLoading = assignmentsLoading || completionsLoading;
 
   return (
     <div className="space-y-6 p-6">
@@ -70,145 +197,105 @@ export default function MyOnboarding() {
             My Tasks
           </h1>
         </div>
-        <p className="text-muted-foreground">Your assigned tasks and progress</p>
+        <p className="text-muted-foreground">Your assigned tasks and checklists</p>
       </div>
 
-      {progress.percentage === 100 && (
-        <Card className="border-green-200 dark:border-green-800">
-          <CardContent className="flex items-center gap-4 pt-6">
-            <PartyPopper className="h-10 w-10 text-green-600 dark:text-green-400 shrink-0" />
-            <div>
-              <p className="font-semibold text-green-700 dark:text-green-400">Onboarding Complete!</p>
-              <p className="text-sm text-muted-foreground">You've completed all your onboarding tasks. Welcome to the team!</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <div className="grid gap-4 md:grid-cols-4">
-        <Card data-testid="card-my-progress">
-          <CardContent className="pt-6">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Overall Progress</span>
-                <span className="text-sm font-bold">{progress.percentage}%</span>
-              </div>
-              <Progress value={progress.percentage} className="h-3" />
-              <p className="text-xs text-muted-foreground">{progress.completed} of {progress.total} tasks done</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card data-testid="card-my-pending">
+        <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-blue-100 dark:bg-blue-900/30">
-                <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <ClipboardList className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{upcomingTasks.length}</p>
-                <p className="text-xs text-muted-foreground">Pending Tasks</p>
+                <p className="text-2xl font-bold" data-testid="stat-active-assignments">{myAssignments.length}</p>
+                <p className="text-xs text-muted-foreground">Active Assignments</p>
               </div>
             </div>
           </CardContent>
         </Card>
-        <Card data-testid="card-my-overdue">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-red-100 dark:bg-red-900/30">
-                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{overdueTasks.length}</p>
-                <p className="text-xs text-muted-foreground">Overdue</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card data-testid="card-my-completed">
+        <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-green-100 dark:bg-green-900/30">
                 <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{completedTasks.length}</p>
-                <p className="text-xs text-muted-foreground">Completed</p>
+                <p className="text-2xl font-bold" data-testid="stat-completed-items">{completedItems}</p>
+                <p className="text-xs text-muted-foreground">Completed Items</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-900/30">
+                <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" data-testid="stat-tasks-done">{completedItems}/{totalItems}</p>
+                <p className="text-xs text-muted-foreground">Tasks Done</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-red-100 dark:bg-red-900/30">
+                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold" data-testid="stat-overdue">{overdueCount}</p>
+                <p className="text-xs text-muted-foreground">Overdue</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap text-sm text-muted-foreground">
-        <span>Template: <span className="font-medium text-foreground">{assignment.templateName}</span></span>
-        <span>Start Date: <span className="font-medium text-foreground">{assignment.startDate.toLocaleDateString()}</span></span>
-        {assignedByEmp && <span>Assigned by: <span className="font-medium text-foreground">{assignedByEmp.firstName} {assignedByEmp.lastName}</span></span>}
+      <div className="flex items-center gap-3 flex-wrap">
+        <Select value={filter} onValueChange={setFilter}>
+          <SelectTrigger className="w-[180px]" data-testid="filter-my-tasks">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Tasks</SelectItem>
+            <SelectItem value="personal">My Tasks</SelectItem>
+            <SelectItem value="department">Department Tasks</SelectItem>
+            <SelectItem value="company">Company Tasks</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
-      <div className="space-y-4">
-        {Object.entries(tasksByCategory).map(([cat, tasks]) => {
-          const catCompleted = tasks.filter((t) => t.isCompleted).length;
-          const catPercentage = Math.round((catCompleted / tasks.length) * 100);
-          return (
-            <Card key={cat} data-testid={`card-category-${cat}`}>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <TaskCategoryBadge category={cat as OnboardingTask["category"]} />
-                    <CardTitle className="text-base">{categoryLabels[cat as OnboardingTask["category"]]}</CardTitle>
-                  </div>
-                  <span className="text-sm text-muted-foreground">{catCompleted}/{tasks.length} ({catPercentage}%)</span>
-                </div>
-                <Progress value={catPercentage} className="h-1.5" />
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {tasks.map((task) => {
-                    const isOverdue = !task.isCompleted && new Date(task.dueDate) < new Date();
-                    return (
-                      <div
-                        key={task.id}
-                        className="flex items-start gap-3 p-3 rounded-md border"
-                        data-testid={`task-item-${task.id}`}
-                      >
-                        <Checkbox
-                          checked={task.isCompleted}
-                          onCheckedChange={() => toggleTask(assignment.id, task.id)}
-                          className="mt-0.5"
-                          data-testid={`checkbox-my-task-${task.id}`}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium ${task.isCompleted ? "line-through text-muted-foreground" : ""}`}>
-                            {task.title}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{task.description}</p>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className="text-xs text-muted-foreground">
-                              Due: {task.dueDate.toLocaleDateString()}
-                            </span>
-                            {task.isRequired && <Badge variant="outline" className="text-xs">Required</Badge>}
-                            {isOverdue && (
-                              <Badge variant="destructive" className="text-xs">
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                Overdue
-                              </Badge>
-                            )}
-                            {task.isCompleted && task.completedAt && (
-                              <span className="text-xs text-green-600 dark:text-green-400">
-                                Completed {task.completedAt.toLocaleDateString()}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2].map(i => (
+            <Card key={i}><CardContent className="p-6"><Skeleton className="h-32 w-full" /></CardContent></Card>
+          ))}
+        </div>
+      ) : filteredAssignments.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <CheckCircle2 className="h-16 w-16 text-muted-foreground/30 mb-4" />
+            <p className="text-muted-foreground font-medium">No tasks assigned</p>
+            <p className="text-muted-foreground text-sm mt-1">
+              {filter !== "all" ? "Try changing the filter to see more tasks" : "You don't have any pending tasks"}
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {filteredAssignments.map((assignment) => (
+            <TaskAssignmentCard
+              key={assignment.id}
+              assignment={assignment}
+              myCompletions={myCompletions}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

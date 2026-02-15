@@ -8,74 +8,114 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useLocation } from "wouter";
-import { useOnboardingStore, categoryLabels, type OnboardingTask, type OnboardingTemplate } from "@/lib/onboarding-store";
-import { useQuery } from "@tanstack/react-query";
-import type { Department } from "@shared/schema";
-import { Plus, FileText, Trash2, GripVertical, ClipboardList, Building2 } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Department, TaskTemplate } from "@shared/schema";
+import { Plus, FileText, Trash2, GripVertical, ClipboardList, Building2, Users, UserCheck, Globe } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
-function TaskCategoryBadge({ category }: { category: OnboardingTask["category"] }) {
-  const colorMap: Record<OnboardingTask["category"], string> = {
-    it_setup: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-    hr_paperwork: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
-    training: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    team_introduction: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    compliance: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-    general: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
-  };
-  return <Badge variant="secondary" className={`text-xs ${colorMap[category]}`}>{categoryLabels[category]}</Badge>;
+const categoryLabels: Record<string, string> = {
+  onboarding: "Onboarding",
+  compliance: "Compliance",
+  training: "Training",
+  it_setup: "IT Setup",
+  hr_paperwork: "HR Paperwork",
+  general: "General",
+};
+
+const categoryColors: Record<string, string> = {
+  onboarding: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  compliance: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  training: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
+  it_setup: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  hr_paperwork: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  general: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
+};
+
+const assignmentTypeLabels: Record<string, string> = {
+  individual: "Individual",
+  department: "Department",
+  managers: "All Managers",
+  everyone: "Everyone",
+};
+
+const assignmentTypeIcons: Record<string, typeof Users> = {
+  individual: UserCheck,
+  department: Building2,
+  managers: Users,
+  everyone: Globe,
+};
+
+interface TaskItem {
+  id: string;
+  title: string;
+  description: string;
+  isRequired: boolean;
 }
 
-function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
-  const { addTemplate } = useOnboardingStore();
+function parseItems(itemsStr: string): TaskItem[] {
+  try { return JSON.parse(itemsStr); } catch { return []; }
+}
+
+function CreateTemplateDialog() {
   const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
+  const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("general");
   const [departmentId, setDepartmentId] = useState<string>("none");
-  const [tasks, setTasks] = useState<Omit<OnboardingTask, "id">[]>([]);
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskDesc, setTaskDesc] = useState("");
-  const [taskCategory, setTaskCategory] = useState<OnboardingTask["category"]>("general");
-  const [taskRequired, setTaskRequired] = useState(true);
-  const [taskDueDays, setTaskDueDays] = useState("3");
+  const [defaultAssignmentType, setDefaultAssignmentType] = useState("individual");
+  const [items, setItems] = useState<Omit<TaskItem, "id">[]>([]);
+  const [itemTitle, setItemTitle] = useState("");
+  const [itemDesc, setItemDesc] = useState("");
+  const [itemRequired, setItemRequired] = useState(true);
 
-  const addTask = () => {
-    if (!taskTitle.trim()) return;
-    setTasks([...tasks, {
-      title: taskTitle.trim(),
-      description: taskDesc.trim(),
-      category: taskCategory,
-      isRequired: taskRequired,
-      dueOffsetDays: parseInt(taskDueDays) || 3,
-    }]);
-    setTaskTitle("");
-    setTaskDesc("");
-    setTaskCategory("general");
-    setTaskRequired(true);
-    setTaskDueDays("3");
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/task-templates", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/task-templates'] });
+      toast({ title: "Template created" });
+      resetForm();
+      setOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetForm = () => {
+    setName(""); setDescription(""); setCategory("general");
+    setDepartmentId("none"); setDefaultAssignmentType("individual");
+    setItems([]); setItemTitle(""); setItemDesc("");
   };
 
-  const removeTask = (index: number) => {
-    setTasks(tasks.filter((_, i) => i !== index));
+  const addItem = () => {
+    if (!itemTitle.trim()) return;
+    setItems([...items, { title: itemTitle.trim(), description: itemDesc.trim(), isRequired: itemRequired }]);
+    setItemTitle(""); setItemDesc(""); setItemRequired(true);
   };
+
+  const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index));
 
   const handleSubmit = () => {
-    if (!name.trim() || tasks.length === 0) return;
-    addTemplate({
+    if (!name.trim() || items.length === 0) return;
+    const itemsWithIds = items.map((item, i) => ({ ...item, id: `item-${Date.now()}-${i}` }));
+    createMutation.mutate({
       name: name.trim(),
-      description: description.trim(),
+      description: description.trim() || undefined,
+      category,
       departmentId: departmentId === "none" ? null : departmentId,
+      defaultAssignmentType,
       isDefault: false,
-      tasks: tasks.map((t, i) => ({ ...t, id: `task-new-${i}` })),
+      items: JSON.stringify(itemsWithIds),
     });
-    setName("");
-    setDescription("");
-    setDepartmentId("none");
-    setTasks([]);
-    setOpen(false);
-    onCreated();
   };
 
   return (
@@ -89,22 +129,35 @@ function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Task Template</DialogTitle>
-          <DialogDescription>Define a reusable task checklist</DialogDescription>
+          <DialogDescription>Define a reusable task checklist that can be assigned to employees, departments, or the whole company</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="template-name">Template Name</Label>
-              <Input
-                id="template-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g., Engineering Setup"
-                data-testid="input-template-name"
-              />
+              <Label>Template Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., New Hire Setup" data-testid="input-template-name" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="template-dept">Department (Optional)</Label>
+              <Label>Category</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger data-testid="select-template-category">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(categoryLabels).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe this template..." data-testid="input-template-description" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Department (Optional)</Label>
               <Select value={departmentId} onValueChange={setDepartmentId}>
                 <SelectTrigger data-testid="select-template-department">
                   <SelectValue placeholder="All Departments" />
@@ -117,73 +170,56 @@ function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="template-desc">Description</Label>
-            <Textarea
-              id="template-desc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe this task template..."
-              data-testid="input-template-description"
-            />
+            <div className="space-y-2">
+              <Label>Default Assignment Type</Label>
+              <Select value={defaultAssignmentType} onValueChange={setDefaultAssignmentType}>
+                <SelectTrigger data-testid="select-default-assignment-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="individual">Individual Employee</SelectItem>
+                  <SelectItem value="department">Entire Department</SelectItem>
+                  <SelectItem value="managers">All Managers</SelectItem>
+                  <SelectItem value="everyone">Everyone</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="border-t pt-4 space-y-3">
-            <h4 className="font-medium text-sm">Add Tasks</h4>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Task Title</Label>
-                <Input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="Task name" data-testid="input-task-title" />
-              </div>
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select value={taskCategory} onValueChange={(v) => setTaskCategory(v as OnboardingTask["category"])}>
-                  <SelectTrigger data-testid="select-task-category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(categoryLabels).map(([key, label]) => (
-                      <SelectItem key={key} value={key}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <h4 className="font-medium text-sm">Checklist Items</h4>
+            <div className="space-y-2">
+              <Label>Item Title</Label>
+              <Input value={itemTitle} onChange={(e) => setItemTitle(e.target.value)} placeholder="Task name" data-testid="input-item-title" />
             </div>
             <div className="space-y-2">
-              <Label>Task Description</Label>
-              <Input value={taskDesc} onChange={(e) => setTaskDesc(e.target.value)} placeholder="Brief description" data-testid="input-task-description" />
+              <Label>Item Description (Optional)</Label>
+              <Input value={itemDesc} onChange={(e) => setItemDesc(e.target.value)} placeholder="Brief description" data-testid="input-item-description" />
             </div>
             <div className="flex items-center gap-4 flex-wrap">
               <div className="flex items-center gap-2">
-                <Checkbox id="task-required" checked={taskRequired} onCheckedChange={(v) => setTaskRequired(!!v)} data-testid="checkbox-task-required" />
-                <Label htmlFor="task-required" className="text-sm">Required</Label>
+                <Checkbox id="item-required" checked={itemRequired} onCheckedChange={(v) => setItemRequired(!!v)} data-testid="checkbox-item-required" />
+                <Label htmlFor="item-required" className="text-sm">Required</Label>
               </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-sm">Due within</Label>
-                <Input className="w-20" type="number" value={taskDueDays} onChange={(e) => setTaskDueDays(e.target.value)} min="1" data-testid="input-task-due-days" />
-                <span className="text-sm text-muted-foreground">days</span>
-              </div>
-              <Button type="button" size="sm" onClick={addTask} disabled={!taskTitle.trim()} data-testid="button-add-task">
+              <Button type="button" size="sm" onClick={addItem} disabled={!itemTitle.trim()} data-testid="button-add-item">
                 <Plus className="h-3 w-3 mr-1" />
-                Add Task
+                Add Item
               </Button>
             </div>
           </div>
 
-          {tasks.length > 0 && (
+          {items.length > 0 && (
             <div className="space-y-2">
-              <h4 className="font-medium text-sm">Tasks ({tasks.length})</h4>
+              <h4 className="font-medium text-sm">Items ({items.length})</h4>
               <div className="space-y-1">
-                {tasks.map((task, i) => (
+                {items.map((item, i) => (
                   <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-md border">
                     <div className="flex items-center gap-2 min-w-0">
                       <GripVertical className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="text-sm truncate">{task.title}</span>
-                      <TaskCategoryBadge category={task.category} />
-                      {task.isRequired && <Badge variant="outline" className="text-xs shrink-0">Required</Badge>}
+                      <span className="text-sm truncate">{item.title}</span>
+                      {item.isRequired && <Badge variant="outline" className="text-xs shrink-0">Required</Badge>}
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => removeTask(i)} data-testid={`button-remove-task-${i}`}>
+                    <Button variant="ghost" size="icon" onClick={() => removeItem(i)} data-testid={`button-remove-item-${i}`}>
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
@@ -194,8 +230,8 @@ function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={!name.trim() || tasks.length === 0} data-testid="button-save-template">
-            Create Template
+          <Button onClick={handleSubmit} disabled={!name.trim() || items.length === 0 || createMutation.isPending} data-testid="button-save-template">
+            {createMutation.isPending ? "Creating..." : "Create Template"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -203,16 +239,25 @@ function CreateTemplateDialog({ onCreated }: { onCreated: () => void }) {
   );
 }
 
-function TemplateCard({ template }: { template: OnboardingTemplate }) {
-  const { deleteTemplate } = useOnboardingStore();
+function TemplateCard({ template }: { template: TaskTemplate }) {
   const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
+  const { toast } = useToast();
   const dept = template.departmentId ? departments.find((d) => d.id === template.departmentId) : null;
+  const items = parseItems(template.items);
+  const AssignIcon = assignmentTypeIcons[template.defaultAssignmentType || "individual"] || UserCheck;
 
-  const tasksByCategory = template.tasks.reduce((acc, task) => {
-    if (!acc[task.category]) acc[task.category] = [];
-    acc[task.category].push(task);
-    return acc;
-  }, {} as Record<string, OnboardingTask[]>);
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/task-templates/${template.id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/task-templates'] });
+      toast({ title: "Template deleted" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
 
   return (
     <Card data-testid={`card-template-${template.id}`}>
@@ -226,47 +271,35 @@ function TemplateCard({ template }: { template: OnboardingTemplate }) {
             <CardDescription className="mt-1">{template.description}</CardDescription>
           </div>
           {!template.isDefault && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => deleteTemplate(template.id)}
-              data-testid={`button-delete-template-${template.id}`}
-            >
+            <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} data-testid={`button-delete-template-${template.id}`}>
               <Trash2 className="h-4 w-4" />
             </Button>
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant="secondary" className={`text-xs ${categoryColors[template.category] || categoryColors.general}`}>
+            {categoryLabels[template.category] || template.category}
+          </Badge>
           {dept && (
             <Badge variant="outline" className="text-xs">
               <Building2 className="h-3 w-3 mr-1" />
               {dept.name}
             </Badge>
           )}
-          <Badge variant="secondary" className="text-xs">{template.tasks.length} tasks</Badge>
-          <Badge variant="secondary" className="text-xs">
-            {template.tasks.filter((t) => t.isRequired).length} required
+          <Badge variant="secondary" className="text-xs">{items.length} items</Badge>
+          <Badge variant="outline" className="text-xs">
+            <AssignIcon className="h-3 w-3 mr-1" />
+            {assignmentTypeLabels[template.defaultAssignmentType || "individual"]}
           </Badge>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="space-y-3">
-          {Object.entries(tasksByCategory).map(([cat, tasks]) => (
-            <div key={cat}>
-              <div className="flex items-center gap-2 mb-1">
-                <TaskCategoryBadge category={cat as OnboardingTask["category"]} />
-                <span className="text-xs text-muted-foreground">({tasks.length})</span>
-              </div>
-              <div className="space-y-1 ml-2">
-                {tasks.map((task) => (
-                  <div key={task.id} className="flex items-center gap-2 text-sm">
-                    <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
-                    <span className="text-muted-foreground">{task.title}</span>
-                    {task.isRequired && <span className="text-xs text-destructive">*</span>}
-                    <span className="text-xs text-muted-foreground ml-auto shrink-0">Day {task.dueOffsetDays}</span>
-                  </div>
-                ))}
-              </div>
+        <div className="space-y-1">
+          {items.map((item, i) => (
+            <div key={item.id || i} className="flex items-center gap-2 text-sm">
+              <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
+              <span className="text-muted-foreground truncate">{item.title}</span>
+              {item.isRequired && <span className="text-xs text-destructive">*</span>}
             </div>
           ))}
         </div>
@@ -278,8 +311,7 @@ function TemplateCard({ template }: { template: OnboardingTemplate }) {
 export default function OnboardingTemplates() {
   const { role } = useRole();
   const [, navigate] = useLocation();
-  const { templates } = useOnboardingStore();
-  const [, setRefresh] = useState(0);
+  const { data: templates = [], isLoading } = useQuery<TaskTemplate[]>({ queryKey: ['/api/task-templates'] });
 
   if (!canEditOrgSettings(role)) {
     navigate("/");
@@ -297,19 +329,19 @@ export default function OnboardingTemplates() {
             </h1>
           </div>
           <p className="text-muted-foreground">
-            Create and manage reusable task checklists
+            Create and manage reusable task checklists for employees, departments, or the whole company
           </p>
         </div>
-        <CreateTemplateDialog onCreated={() => setRefresh((r) => r + 1)} />
+        <CreateTemplateDialog />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {templates.map((template) => (
-          <TemplateCard key={template.id} template={template} />
-        ))}
-      </div>
-
-      {templates.length === 0 && (
+      {isLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[1, 2, 3].map(i => (
+            <Card key={i}><CardContent className="p-6"><Skeleton className="h-32 w-full" /></CardContent></Card>
+          ))}
+        </div>
+      ) : templates.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="h-12 w-12 text-muted-foreground/40 mb-4" />
@@ -317,6 +349,12 @@ export default function OnboardingTemplates() {
             <p className="text-muted-foreground text-xs mt-1">Create your first template to get started</p>
           </CardContent>
         </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {templates.map((template) => (
+            <TemplateCard key={template.id} template={template} />
+          ))}
+        </div>
       )}
     </div>
   );

@@ -1782,5 +1782,198 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== TASK MANAGEMENT ====================
+
+  // Task Templates CRUD
+  app.get("/api/task-templates", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const role = (req.session as any).role;
+      if (role !== "admin" && role !== "manager") return res.status(403).json({ message: "Only admins and managers can view templates" });
+      const templates = await storage.getTaskTemplatesByCompany(companyId);
+      return res.json(templates);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/task-templates", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can create templates" });
+
+      const { insertTaskTemplateSchema } = await import("@shared/schema");
+      const parsed = insertTaskTemplateSchema.safeParse({ ...req.body, companyId });
+      if (!parsed.success) return res.status(400).json({ message: "Validation error", errors: parsed.error.errors });
+
+      const template = await storage.createTaskTemplate(parsed.data);
+      return res.json(template);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/task-templates/:id", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can update templates" });
+
+      const template = await storage.getTaskTemplate(req.params.id);
+      if (!template || template.companyId !== companyId) return res.status(404).json({ message: "Template not found" });
+
+      const updated = await storage.updateTaskTemplate(req.params.id, req.body);
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/task-templates/:id", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can delete templates" });
+
+      const template = await storage.getTaskTemplate(req.params.id);
+      if (!template || template.companyId !== companyId) return res.status(404).json({ message: "Template not found" });
+
+      await storage.deleteTaskTemplate(req.params.id);
+      return res.json({ message: "Template deleted" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Task Assignments - admins/managers see all, employees see their own
+  app.get("/api/task-assignments", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin" && role !== "manager") return res.status(403).json({ message: "Only admins and managers can view all assignments" });
+      const assignments = await storage.getTaskAssignmentsByCompany(companyId);
+      return res.json(assignments);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/my-task-assignments", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const employeeId = (req.session as any).employeeId;
+      const role = (req.session as any).role;
+      if (!companyId || !employeeId) return res.status(401).json({ message: "Not authenticated" });
+
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee) return res.status(404).json({ message: "Employee not found" });
+      const departmentId = employee.departmentId;
+
+      const allAssignments = await storage.getTaskAssignmentsByCompany(companyId);
+      const myAssignments = allAssignments.filter((a: any) => {
+        if (a.assignmentType === "individual" && a.targetEmployeeId === employeeId) return true;
+        if (a.assignmentType === "department" && departmentId && a.targetDepartmentId === departmentId) return true;
+        if (a.assignmentType === "managers" && (role === "manager" || role === "admin")) return true;
+        if (a.assignmentType === "everyone") return true;
+        return false;
+      });
+
+      return res.json(myAssignments);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/task-assignments", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const employeeId = (req.session as any).employeeId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin" && role !== "manager") return res.status(403).json({ message: "Only admins and managers can assign tasks" });
+
+      const { insertTaskAssignmentSchema } = await import("@shared/schema");
+      const parsed = insertTaskAssignmentSchema.safeParse({ ...req.body, companyId, assignedById: employeeId });
+      if (!parsed.success) return res.status(400).json({ message: "Validation error", errors: parsed.error.errors });
+
+      if (parsed.data.assignmentType === "individual" && !parsed.data.targetEmployeeId) {
+        return res.status(400).json({ message: "Target employee is required for individual assignments" });
+      }
+      if (parsed.data.assignmentType === "department" && !parsed.data.targetDepartmentId) {
+        return res.status(400).json({ message: "Target department is required for department assignments" });
+      }
+
+      const assignment = await storage.createTaskAssignment(parsed.data);
+      return res.json(assignment);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/task-assignments/:id", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin" && role !== "manager") return res.status(403).json({ message: "Only admins and managers can delete assignments" });
+
+      const assignment = await storage.getTaskAssignment(req.params.id);
+      if (!assignment || assignment.companyId !== companyId) return res.status(404).json({ message: "Assignment not found" });
+
+      await storage.deleteTaskAssignment(req.params.id);
+      return res.json({ message: "Assignment deleted" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Task Completions
+  app.get("/api/task-assignments/:id/completions", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const completions = await storage.getTaskCompletionsByAssignment(req.params.id);
+      return res.json(completions);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/my-task-completions", async (req, res) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      if (!employeeId) return res.status(401).json({ message: "Not authenticated" });
+      const completions = await storage.getTaskCompletionsByEmployee(employeeId);
+      return res.json(completions);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/task-assignments/:id/toggle", async (req, res) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      if (!employeeId || !companyId) return res.status(401).json({ message: "Not authenticated" });
+
+      const { itemId } = req.body;
+      if (!itemId) return res.status(400).json({ message: "itemId is required" });
+
+      const assignment = await storage.getTaskAssignment(req.params.id);
+      if (!assignment || assignment.companyId !== companyId) return res.status(404).json({ message: "Assignment not found" });
+
+      const completion = await storage.toggleTaskCompletion(req.params.id, employeeId, itemId);
+      return res.json(completion);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   return httpServer;
 }
