@@ -7,9 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import type { Employee, Department, TaskAssignment } from "@shared/schema";
-import { useQueryStore } from "@/lib/query-store";
-import { useRecruitmentStore } from "@/lib/recruitment-store";
+import type { Employee, Department, TaskAssignment, JobPosting, Candidate, HrQuery } from "@shared/schema";
 import {
   PieChart,
   Users,
@@ -55,8 +53,9 @@ export default function Reports() {
   const [, navigate] = useLocation();
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const { data: taskAssignments = [] } = useQuery<TaskAssignment[]>({ queryKey: ['/api/task-assignments'] });
-  const queries = useQueryStore((s) => s.queries);
-  const { jobs, candidates } = useRecruitmentStore();
+  const { data: hrQueries = [] } = useQuery<HrQuery[]>({ queryKey: ['/api/hr-queries'] });
+  const { data: jobs = [] } = useQuery<JobPosting[]>({ queryKey: ['/api/job-postings'] });
+  const { data: candidates = [] } = useQuery<Candidate[]>({ queryKey: ['/api/candidates'] });
 
   const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
   const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
@@ -93,31 +92,33 @@ export default function Reports() {
     rejected: 0,
   };
 
-  const openJobs = jobs.filter((j) => j.status === "published").length;
+  const openJobs = jobs.filter((j) => j.status === "active").length;
   const totalCandidates = candidates.length;
   const pipelineStages = [
-    { name: "Applied", value: candidates.filter((c) => c.stage === "applied").length },
+    { name: "New", value: candidates.filter((c) => c.stage === "new").length },
     { name: "Screening", value: candidates.filter((c) => c.stage === "screening").length },
-    { name: "Interview", value: candidates.filter((c) => c.stage === "interview").length },
-    { name: "Assessment", value: candidates.filter((c) => c.stage === "assessment").length },
-    { name: "Offer", value: candidates.filter((c) => c.stage === "offer").length },
+    { name: "Manager Review", value: candidates.filter((c) => c.stage === "manager_review").length },
+    { name: "Phone", value: candidates.filter((c) => c.stage === "phone_interview").length },
+    { name: "Technical", value: candidates.filter((c) => c.stage === "technical_interview").length },
+    { name: "Final", value: candidates.filter((c) => c.stage === "final_interview").length },
+    { name: "Offer", value: candidates.filter((c) => c.stage === "offer_extended").length },
     { name: "Hired", value: candidates.filter((c) => c.stage === "hired").length },
   ];
 
   const queryStatusData = [
-    { name: "Open", value: queries.filter((q) => q.status === "open").length },
-    { name: "Awaiting", value: queries.filter((q) => q.status === "awaiting_response").length },
-    { name: "Responded", value: queries.filter((q) => q.status === "responded").length },
-    { name: "Resolved", value: queries.filter((q) => q.status === "resolved").length },
-    { name: "Closed", value: queries.filter((q) => q.status === "closed").length },
+    { name: "Open", value: hrQueries.filter((q) => q.status === "open").length },
+    { name: "Awaiting", value: hrQueries.filter((q) => q.status === "awaiting_response").length },
+    { name: "Responded", value: hrQueries.filter((q) => q.status === "responded").length },
+    { name: "Resolved", value: hrQueries.filter((q) => q.status === "resolved").length },
+    { name: "Closed", value: hrQueries.filter((q) => q.status === "closed").length },
   ].filter((d) => d.value > 0);
 
   const queryCategoryData = [
-    { name: "Attendance", value: queries.filter((q) => q.category === "attendance").length },
-    { name: "Conduct", value: queries.filter((q) => q.category === "conduct").length },
-    { name: "Performance", value: queries.filter((q) => q.category === "performance").length },
-    { name: "Policy", value: queries.filter((q) => q.category === "policy_violation").length },
-    { name: "Other", value: queries.filter((q) => q.category === "other").length },
+    { name: "Attendance", value: hrQueries.filter((q) => q.category === "attendance").length },
+    { name: "Conduct", value: hrQueries.filter((q) => q.category === "conduct").length },
+    { name: "Performance", value: hrQueries.filter((q) => q.category === "performance").length },
+    { name: "Policy", value: hrQueries.filter((q) => q.category === "policy_violation").length },
+    { name: "Other", value: hrQueries.filter((q) => q.category === "other").length },
   ].filter((d) => d.value > 0);
 
   const totalTaskAssignments = taskAssignments.length;
@@ -469,7 +470,7 @@ export default function Reports() {
                     <HelpCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                   </div>
                   <div>
-                    <p className="text-2xl font-bold">{queries.length}</p>
+                    <p className="text-2xl font-bold">{hrQueries.length}</p>
                     <p className="text-xs text-muted-foreground">Total Queries</p>
                   </div>
                 </div>
@@ -483,7 +484,7 @@ export default function Reports() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold">
-                      {queries.filter((q) => q.status === "open" || q.status === "awaiting_response").length}
+                      {hrQueries.filter((q) => q.status === "open" || q.status === "awaiting_response").length}
                     </p>
                     <p className="text-xs text-muted-foreground">Open / Awaiting</p>
                   </div>
@@ -498,7 +499,7 @@ export default function Reports() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold">
-                      {queries.filter((q) => q.status === "resolved" || q.status === "closed").length}
+                      {hrQueries.filter((q) => q.status === "resolved" || q.status === "closed").length}
                     </p>
                     <p className="text-xs text-muted-foreground">Resolved / Closed</p>
                   </div>

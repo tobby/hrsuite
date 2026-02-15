@@ -257,22 +257,38 @@ export const jobPostings = pgTable("job_postings", {
   companyId: varchar("company_id").notNull(),
   title: text("title").notNull(),
   description: text("description").notNull(),
+  requirements: text("requirements"),
+  responsibilities: text("responsibilities"),
   departmentId: varchar("department_id").notNull(),
+  assignedManagerId: varchar("assigned_manager_id"),
   location: text("location").notNull(),
+  locationType: text("location_type").notNull().default("on-site"),
   employmentType: text("employment_type").notNull(),
   experienceYears: integer("experience_years").notNull().default(0),
-  status: text("status").notNull().default("open"),
+  salaryMin: integer("salary_min"),
+  salaryMax: integer("salary_max"),
+  numberOfOpenings: integer("number_of_openings").notNull().default(1),
+  applicationDeadline: date("application_deadline"),
+  status: text("status").notNull().default("draft"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const insertJobPostingSchema = createInsertSchema(jobPostings).omit({ id: true, createdAt: true }).extend({
   title: z.string().min(1, "Title is required"),
   description: z.string().min(1, "Description is required"),
+  requirements: z.string().optional().nullable(),
+  responsibilities: z.string().optional().nullable(),
   departmentId: z.string().min(1, "Department is required"),
+  assignedManagerId: z.string().optional().nullable(),
   location: z.string().min(1, "Location is required"),
-  employmentType: z.enum(["full-time", "contract", "intern"]),
+  locationType: z.enum(["on-site", "remote", "hybrid"]).optional(),
+  employmentType: z.enum(["full-time", "part-time", "contract", "internship"]),
   experienceYears: z.number().min(0),
-  status: z.enum(["open", "closed", "draft"]).optional(),
+  salaryMin: z.number().min(0).optional().nullable(),
+  salaryMax: z.number().min(0).optional().nullable(),
+  numberOfOpenings: z.number().min(1).optional(),
+  applicationDeadline: z.string().optional().nullable(),
+  status: z.enum(["draft", "active", "on-hold", "closed"]).optional(),
 });
 export type InsertJobPosting = z.infer<typeof insertJobPostingSchema>;
 export type JobPosting = typeof jobPostings.$inferSelect;
@@ -288,21 +304,35 @@ export const candidates = pgTable("candidates", {
   location: text("location"),
   linkedinUrl: text("linkedin_url"),
   gender: text("gender"),
+  coverLetter: text("cover_letter"),
+  source: text("source").notNull().default("website"),
   resumeFileName: text("resume_file_name"),
-  stage: text("stage").notNull().default("applied"),
+  assignedManagerId: varchar("assigned_manager_id"),
+  stage: text("stage").notNull().default("new"),
+  rejectionReason: text("rejection_reason"),
   appliedAt: timestamp("applied_at").defaultNow(),
 });
+
+export const PIPELINE_STAGES = [
+  "new", "screening", "manager_review", "phone_interview",
+  "technical_interview", "final_interview", "offer_extended",
+  "hired", "rejected", "withdrawn"
+] as const;
 
 export const insertCandidateSchema = createInsertSchema(candidates).omit({ id: true, appliedAt: true }).extend({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
-  phone: z.string().optional(),
-  location: z.string().optional(),
-  linkedinUrl: z.string().optional(),
-  gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
-  resumeFileName: z.string().optional(),
-  stage: z.enum(["applied", "screening", "interview", "offer", "hired", "rejected"]).optional(),
+  phone: z.string().optional().nullable(),
+  location: z.string().optional().nullable(),
+  linkedinUrl: z.string().optional().nullable(),
+  gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional().nullable(),
+  coverLetter: z.string().optional().nullable(),
+  source: z.enum(["website", "referral", "linkedin", "job_board", "agency", "direct", "other"]).optional(),
+  resumeFileName: z.string().optional().nullable(),
+  assignedManagerId: z.string().optional().nullable(),
+  stage: z.enum(PIPELINE_STAGES).optional(),
+  rejectionReason: z.string().optional().nullable(),
 });
 export type InsertCandidate = z.infer<typeof insertCandidateSchema>;
 export type Candidate = typeof candidates.$inferSelect;
@@ -349,12 +379,42 @@ export const candidateInterviews = pgTable("candidate_interviews", {
   scheduledAt: timestamp("scheduled_at").notNull(),
   duration: integer("duration").notNull().default(60),
   type: text("type").notNull(),
+  round: text("round"),
   status: text("status").notNull().default("scheduled"),
+  meetingLink: text("meeting_link"),
+  meetingLocation: text("meeting_location"),
   notes: text("notes"),
+  rating: integer("rating"),
+  strengths: text("strengths"),
+  weaknesses: text("weaknesses"),
+  recommendation: text("recommendation"),
+  decision: text("decision"),
+  feedbackSubmittedAt: timestamp("feedback_submitted_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const insertInterviewSchema = createInsertSchema(candidateInterviews).omit({ id: true, createdAt: true, feedbackSubmittedAt: true }).extend({
+  candidateId: z.string().min(1),
+  interviewerId: z.string().min(1),
+  scheduledAt: z.string().min(1),
+  duration: z.number().min(15).optional(),
+  type: z.enum(["screening", "phone", "technical", "hr", "final", "panel"]),
+  round: z.string().optional().nullable(),
+  meetingLink: z.string().optional().nullable(),
+  meetingLocation: z.string().optional().nullable(),
+});
+export type InsertInterview = z.infer<typeof insertInterviewSchema>;
 export type CandidateInterview = typeof candidateInterviews.$inferSelect;
+
+export const interviewFeedbackSchema = z.object({
+  rating: z.number().min(1).max(5),
+  strengths: z.string().optional(),
+  weaknesses: z.string().optional(),
+  recommendation: z.enum(["strong_yes", "yes", "maybe", "no"]),
+  decision: z.enum(["move_forward", "reject", "hold"]),
+  notes: z.string().optional(),
+});
+export type InterviewFeedback = z.infer<typeof interviewFeedbackSchema>;
 
 export const candidateCommunications = pgTable("candidate_communications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

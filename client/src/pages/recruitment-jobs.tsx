@@ -3,9 +3,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Redirect } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import type { Department } from "@shared/schema";
-import { useRecruitmentStore } from "@/lib/recruitment-store";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { format } from "date-fns";
+import type { JobPosting, Candidate, Department, Employee } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,29 +20,49 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Briefcase, Plus, LayoutGrid, List, MapPin, Clock, Users, Copy, MoreHorizontal, Pencil, Trash2, ExternalLink, Inbox } from "lucide-react";
+import { Briefcase, Plus, LayoutGrid, List, MapPin, Clock, Users, Copy, MoreHorizontal, Pencil, Trash2, ExternalLink, Inbox, Loader2, DollarSign, Calendar, Building2 } from "lucide-react";
 
 const jobFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().min(1, "Description is required"),
+  requirements: z.string().optional(),
+  responsibilities: z.string().optional(),
   departmentId: z.string().min(1, "Department is required"),
+  assignedManagerId: z.string().optional(),
   location: z.string().min(1, "Location is required"),
-  employmentType: z.enum(["full-time", "contract", "intern"]),
+  locationType: z.enum(["on-site", "remote", "hybrid"]),
+  employmentType: z.enum(["full-time", "part-time", "contract", "internship"]),
   experienceYears: z.coerce.number().min(0),
-  status: z.enum(["open", "closed", "draft"]),
+  salaryMin: z.coerce.number().min(0).optional(),
+  salaryMax: z.coerce.number().min(0).optional(),
+  numberOfOpenings: z.coerce.number().min(1),
+  applicationDeadline: z.string().optional(),
+  status: z.enum(["draft", "active", "on-hold", "closed"]),
 });
 
 type JobFormData = z.infer<typeof jobFormSchema>;
 
 export default function RecruitmentJobs() {
-  const { role } = useRole();
+  const { role, currentUser } = useRole();
   const { toast } = useToast();
-  const { jobs, addJob, updateJob, deleteJob, getCandidatesByJob } = useRecruitmentStore();
-  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
+  const isAdmin = canEditOrgSettings(role);
 
-  if (!canEditOrgSettings(role)) {
+  const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobPosting[]>({ queryKey: ['/api/job-postings'] });
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
+  const { data: candidates = [] } = useQuery<Candidate[]>({ queryKey: ['/api/candidates'] });
+  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
+
+  if (role !== "admin" && role !== "manager") {
     return <Redirect to="/" />;
   }
+
+  const managers = employees.filter((e) => e.role === "manager" || e.role === "admin");
+
+  const candidateCountByJob = candidates.reduce<Record<string, number>>((acc, c) => {
+    acc[c.jobId] = (acc[c.jobId] || 0) + 1;
+    return acc;
+  }, {});
+
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<string | null>(null);
@@ -53,11 +74,62 @@ export default function RecruitmentJobs() {
     defaultValues: {
       title: "",
       description: "",
+      requirements: "",
+      responsibilities: "",
       departmentId: "",
+      assignedManagerId: "",
       location: "",
+      locationType: "on-site",
       employmentType: "full-time",
       experienceYears: 0,
-      status: "open",
+      salaryMin: undefined,
+      salaryMax: undefined,
+      numberOfOpenings: 1,
+      applicationDeadline: "",
+      status: "draft",
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/job-postings", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/job-postings'] });
+      toast({ title: "Job Created", description: "The job posting has been created." });
+      setIsDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await apiRequest("PATCH", `/api/job-postings/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/job-postings'] });
+      toast({ title: "Job Updated", description: "The job posting has been updated." });
+      setIsDialogOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/job-postings/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/job-postings'] });
+      toast({ title: "Job Deleted", description: "The job posting has been deleted." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -66,19 +138,36 @@ export default function RecruitmentJobs() {
   const getEmploymentTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
       "full-time": "Full-time",
+      "part-time": "Part-time",
       "contract": "Contract",
-      "intern": "Intern",
+      "internship": "Internship",
+    };
+    return labels[type] || type;
+  };
+
+  const getLocationTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      "on-site": "On-site",
+      "remote": "Remote",
+      "hybrid": "Hybrid",
     };
     return labels[type] || type;
   };
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "outline"> = {
-      open: "default",
-      closed: "secondary",
       draft: "outline",
+      active: "default",
+      "on-hold": "secondary",
+      closed: "secondary",
     };
-    return <Badge variant={variants[status] || "outline"}>{status.charAt(0).toUpperCase() + status.slice(1)}</Badge>;
+    const labels: Record<string, string> = {
+      draft: "Draft",
+      active: "Active",
+      "on-hold": "On Hold",
+      closed: "Closed",
+    };
+    return <Badge variant={variants[status] || "outline"} data-testid={`badge-status-${status}`}>{labels[status] || status}</Badge>;
   };
 
   const handleOpenDialog = (jobId?: string) => {
@@ -88,11 +177,19 @@ export default function RecruitmentJobs() {
         form.reset({
           title: job.title,
           description: job.description,
+          requirements: job.requirements || "",
+          responsibilities: job.responsibilities || "",
           departmentId: job.departmentId,
+          assignedManagerId: job.assignedManagerId || "",
           location: job.location,
-          employmentType: job.employmentType as "full-time" | "contract" | "intern",
+          locationType: (job.locationType as "on-site" | "remote" | "hybrid") || "on-site",
+          employmentType: job.employmentType as "full-time" | "part-time" | "contract" | "internship",
           experienceYears: job.experienceYears,
-          status: job.status as "open" | "closed" | "draft",
+          salaryMin: job.salaryMin ?? undefined,
+          salaryMax: job.salaryMax ?? undefined,
+          numberOfOpenings: job.numberOfOpenings ?? 1,
+          applicationDeadline: job.applicationDeadline || "",
+          status: (job.status as "draft" | "active" | "on-hold" | "closed") || "draft",
         });
         setEditingJob(jobId);
       }
@@ -100,11 +197,19 @@ export default function RecruitmentJobs() {
       form.reset({
         title: "",
         description: "",
+        requirements: "",
+        responsibilities: "",
         departmentId: "",
+        assignedManagerId: "",
         location: "",
+        locationType: "on-site",
         employmentType: "full-time",
         experienceYears: 0,
-        status: "open",
+        salaryMin: undefined,
+        salaryMax: undefined,
+        numberOfOpenings: 1,
+        applicationDeadline: "",
+        status: "draft",
       });
       setEditingJob(null);
     }
@@ -112,20 +217,25 @@ export default function RecruitmentJobs() {
   };
 
   const handleSubmit = (data: JobFormData) => {
+    const payload = {
+      ...data,
+      companyId: currentUser.companyId,
+      requirements: data.requirements || null,
+      responsibilities: data.responsibilities || null,
+      assignedManagerId: data.assignedManagerId || null,
+      salaryMin: data.salaryMin || null,
+      salaryMax: data.salaryMax || null,
+      applicationDeadline: data.applicationDeadline || null,
+    };
     if (editingJob) {
-      updateJob(editingJob, data);
-      toast({ title: "Job Updated", description: "The job posting has been updated." });
+      updateMutation.mutate({ id: editingJob, data: payload });
     } else {
-      addJob({ ...data, companyId: "" });
-      toast({ title: "Job Created", description: "The job posting has been created." });
+      createMutation.mutate(payload);
     }
-    setIsDialogOpen(false);
-    form.reset();
   };
 
   const handleDelete = (jobId: string) => {
-    deleteJob(jobId);
-    toast({ title: "Job Deleted", description: "The job posting has been deleted." });
+    deleteMutation.mutate(jobId);
   };
 
   const copyShareableLink = (jobId: string) => {
@@ -138,9 +248,26 @@ export default function RecruitmentJobs() {
     window.open(`/careers?job=${jobId}`, "_blank");
   };
 
+  const formatSalary = (min?: number | null, max?: number | null) => {
+    if (!min && !max) return null;
+    if (min && max) return `$${min.toLocaleString()} - $${max.toLocaleString()}`;
+    if (min) return `From $${min.toLocaleString()}`;
+    return `Up to $${max!.toLocaleString()}`;
+  };
+
+  if (jobsLoading) {
+    return (
+      <div className="flex items-center justify-center h-64" data-testid="loading-spinner">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const isMutating = createMutation.isPending || updateMutation.isPending;
+
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-page-title">Job Postings</h1>
           <p className="text-muted-foreground">Manage your open positions and job listings</p>
@@ -164,10 +291,12 @@ export default function RecruitmentJobs() {
               <List className="h-4 w-4" />
             </Button>
           </div>
-          <Button onClick={() => handleOpenDialog()} data-testid="button-create-job">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Job
-          </Button>
+          {isAdmin && (
+            <Button onClick={() => handleOpenDialog()} data-testid="button-create-job">
+              <Plus className="h-4 w-4 mr-2" />
+              Create Job
+            </Button>
+          )}
         </div>
       </div>
 
@@ -175,12 +304,15 @@ export default function RecruitmentJobs() {
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Inbox className="h-12 w-12 text-muted-foreground/50 mb-4" />
           <h3 className="text-lg font-medium text-muted-foreground">No job postings yet</h3>
-          <p className="text-sm text-muted-foreground mt-1 max-w-md">Create your first job posting to start attracting candidates.</p>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md">
+            {isAdmin ? "Create your first job posting to start attracting candidates." : "No job postings available for your department."}
+          </p>
         </div>
       ) : viewMode === "card" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {jobs.map((job) => {
-            const candidateCount = getCandidatesByJob(job.id).length;
+            const candidateCount = candidateCountByJob[job.id] || 0;
+            const salary = formatSalary(job.salaryMin, job.salaryMax);
             return (
               <Card key={job.id} className="hover-elevate" data-testid={`card-job-${job.id}`}>
                 <CardHeader className="pb-2">
@@ -189,51 +321,66 @@ export default function RecruitmentJobs() {
                       <CardTitle className="text-lg">{job.title}</CardTitle>
                       <CardDescription>{getDepartmentName(job.departmentId)}</CardDescription>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" data-testid={`button-job-menu-${job.id}`}>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleOpenDialog(job.id)}>
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => copyShareableLink(job.id)}>
-                          <Copy className="h-4 w-4 mr-2" />
-                          Copy Link
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openJobPreview(job.id)}>
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Preview
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDelete(job.id)} className="text-destructive">
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    {isAdmin && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" data-testid={`button-job-menu-${job.id}`}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleOpenDialog(job.id)} data-testid={`button-edit-job-${job.id}`}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => copyShareableLink(job.id)} data-testid={`button-copy-link-${job.id}`}>
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copy Link
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openJobPreview(job.id)} data-testid={`button-preview-job-${job.id}`}>
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            Preview
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleDelete(job.id)} className="text-destructive" data-testid={`button-delete-job-${job.id}`}>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex flex-wrap gap-2">
                     {getStatusBadge(job.status)}
                     <Badge variant="outline">{getEmploymentTypeLabel(job.employmentType)}</Badge>
+                    <Badge variant="outline">{getLocationTypeLabel(job.locationType)}</Badge>
                   </div>
                   <div className="space-y-1 text-sm text-muted-foreground">
                     <div className="flex items-center gap-2">
-                      <MapPin className="h-3 w-3" />
+                      <MapPin className="h-3 w-3 shrink-0" />
                       <span>{job.location}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Clock className="h-3 w-3" />
+                      <Clock className="h-3 w-3 shrink-0" />
                       <span>{job.experienceYears}+ years experience</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Users className="h-3 w-3" />
-                      <span>{candidateCount} applicants</span>
+                      <Users className="h-3 w-3 shrink-0" />
+                      <span>{candidateCount} applicant{candidateCount !== 1 ? "s" : ""} / {job.numberOfOpenings} opening{job.numberOfOpenings !== 1 ? "s" : ""}</span>
                     </div>
+                    {salary && (
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="h-3 w-3 shrink-0" />
+                        <span>{salary}</span>
+                      </div>
+                    )}
+                    {job.applicationDeadline && (
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span>Deadline: {format(new Date(job.applicationDeadline), "MMM d, yyyy")}</span>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -250,14 +397,18 @@ export default function RecruitmentJobs() {
                 <TableHead>Location</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Experience</TableHead>
+                <TableHead>Openings</TableHead>
                 <TableHead>Applicants</TableHead>
+                <TableHead>Salary</TableHead>
+                <TableHead>Deadline</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="w-[80px]">Actions</TableHead>
+                {isAdmin && <TableHead className="w-[80px]">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedJobs.map((job) => {
-                const candidateCount = getCandidatesByJob(job.id).length;
+                const candidateCount = candidateCountByJob[job.id] || 0;
+                const salary = formatSalary(job.salaryMin, job.salaryMax);
                 return (
                   <TableRow key={job.id} data-testid={`row-job-${job.id}`}>
                     <TableCell className="font-medium">{job.title}</TableCell>
@@ -265,31 +416,36 @@ export default function RecruitmentJobs() {
                     <TableCell>{job.location}</TableCell>
                     <TableCell>{getEmploymentTypeLabel(job.employmentType)}</TableCell>
                     <TableCell>{job.experienceYears}+ years</TableCell>
+                    <TableCell>{job.numberOfOpenings}</TableCell>
                     <TableCell>{candidateCount}</TableCell>
+                    <TableCell>{salary || "—"}</TableCell>
+                    <TableCell>{job.applicationDeadline ? format(new Date(job.applicationDeadline), "MMM d, yyyy") : "—"}</TableCell>
                     <TableCell>{getStatusBadge(job.status)}</TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleOpenDialog(job.id)}>
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => copyShareableLink(job.id)}>
-                            <Copy className="h-4 w-4 mr-2" />
-                            Copy Link
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleDelete(job.id)} className="text-destructive">
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                    {isAdmin && (
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" data-testid={`button-table-job-menu-${job.id}`}>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => handleOpenDialog(job.id)} data-testid={`button-table-edit-job-${job.id}`}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => copyShareableLink(job.id)} data-testid={`button-table-copy-link-${job.id}`}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Copy Link
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleDelete(job.id)} className="text-destructive" data-testid={`button-table-delete-job-${job.id}`}>
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
@@ -306,7 +462,7 @@ export default function RecruitmentJobs() {
       )}
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingJob ? "Edit Job" : "Create Job"}</DialogTitle>
             <DialogDescription>
@@ -357,6 +513,34 @@ export default function RecruitmentJobs() {
 
                 <FormField
                   control={form.control}
+                  name="assignedManagerId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Assigned Manager</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-assigned-manager">
+                            <SelectValue placeholder="Select manager (optional)" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">None</SelectItem>
+                          {managers.map((mgr) => (
+                            <SelectItem key={mgr.id} value={mgr.id}>
+                              {mgr.firstName} {mgr.lastName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
                   name="location"
                   render={({ field }) => (
                     <FormItem>
@@ -364,6 +548,29 @@ export default function RecruitmentJobs() {
                       <FormControl>
                         <Input placeholder="e.g., San Francisco, CA" {...field} data-testid="input-location" />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="locationType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Location Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-location-type">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="on-site">On-site</SelectItem>
+                          <SelectItem value="remote">Remote</SelectItem>
+                          <SelectItem value="hybrid">Hybrid</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -385,8 +592,9 @@ export default function RecruitmentJobs() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="full-time">Full-time</SelectItem>
+                          <SelectItem value="part-time">Part-time</SelectItem>
                           <SelectItem value="contract">Contract</SelectItem>
-                          <SelectItem value="intern">Intern</SelectItem>
+                          <SelectItem value="internship">Internship</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -421,9 +629,10 @@ export default function RecruitmentJobs() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="open">Open</SelectItem>
-                          <SelectItem value="closed">Closed</SelectItem>
                           <SelectItem value="draft">Draft</SelectItem>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="on-hold">On Hold</SelectItem>
+                          <SelectItem value="closed">Closed</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -431,6 +640,64 @@ export default function RecruitmentJobs() {
                   )}
                 />
               </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <FormField
+                  control={form.control}
+                  name="salaryMin"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Min Salary</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={0} placeholder="e.g., 50000" {...field} value={field.value ?? ""} data-testid="input-salary-min" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="salaryMax"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Max Salary</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={0} placeholder="e.g., 100000" {...field} value={field.value ?? ""} data-testid="input-salary-max" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="numberOfOpenings"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Openings</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={1} {...field} data-testid="input-number-of-openings" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="applicationDeadline"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Application Deadline</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} value={field.value ?? ""} data-testid="input-application-deadline" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}
@@ -440,8 +707,8 @@ export default function RecruitmentJobs() {
                     <FormLabel>Description</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="Describe the role, requirements, and responsibilities..."
-                        className="min-h-[150px]"
+                        placeholder="Describe the role..."
+                        className="min-h-[100px]"
                         {...field}
                         data-testid="input-description"
                       />
@@ -451,11 +718,50 @@ export default function RecruitmentJobs() {
                 )}
               />
 
+              <FormField
+                control={form.control}
+                name="requirements"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Requirements</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="List the requirements..."
+                        className="min-h-[80px]"
+                        {...field}
+                        data-testid="input-requirements"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="responsibilities"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Responsibilities</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="List the responsibilities..."
+                        className="min-h-[80px]"
+                        {...field}
+                        data-testid="input-responsibilities"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} data-testid="button-cancel">
                   Cancel
                 </Button>
-                <Button type="submit" data-testid="button-save-job">
+                <Button type="submit" disabled={isMutating} data-testid="button-save-job">
+                  {isMutating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   {editingJob ? "Update Job" : "Create Job"}
                 </Button>
               </DialogFooter>

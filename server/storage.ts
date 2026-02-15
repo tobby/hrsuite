@@ -22,6 +22,15 @@ import {
   taskTemplates, type TaskTemplate, type InsertTaskTemplate,
   taskAssignments, type TaskAssignment, type InsertTaskAssignment,
   taskCompletions, type TaskCompletion,
+  jobPostings, type JobPosting, type InsertJobPosting,
+  candidates, type Candidate, type InsertCandidate,
+  candidateActivities, type CandidateActivity,
+  candidateNotes, type CandidateNote,
+  candidateAssessments, type CandidateAssessment,
+  candidateInterviews, type CandidateInterview,
+  candidateCommunications, type CandidateCommunication,
+  emailTemplates, type EmailTemplate, type InsertEmailTemplate,
+  recruitmentSettings, type RecruitmentSetting,
 } from "@shared/schema";
 import { randomUUID, randomBytes } from "crypto";
 
@@ -162,6 +171,60 @@ export interface IStorage {
   getTaskCompletionsByAssignment(assignmentId: string): Promise<TaskCompletion[]>;
   getTaskCompletionsByEmployee(employeeId: string): Promise<TaskCompletion[]>;
   toggleTaskCompletion(assignmentId: string, employeeId: string, itemId: string): Promise<TaskCompletion>;
+
+  // Job Postings
+  createJobPosting(data: InsertJobPosting): Promise<JobPosting>;
+  getJobPostingsByCompany(companyId: string): Promise<JobPosting[]>;
+  getJobPosting(id: string): Promise<JobPosting | undefined>;
+  updateJobPosting(id: string, data: Partial<InsertJobPosting>): Promise<JobPosting | undefined>;
+  deleteJobPosting(id: string): Promise<boolean>;
+  getActiveJobPostingsByCompany(companyId: string): Promise<JobPosting[]>;
+  getAllActiveJobPostings(): Promise<JobPosting[]>;
+
+  // Candidates
+  createCandidate(data: InsertCandidate): Promise<Candidate>;
+  getCandidatesByCompany(companyId: string): Promise<Candidate[]>;
+  getCandidatesByJob(jobId: string): Promise<Candidate[]>;
+  getCandidate(id: string): Promise<Candidate | undefined>;
+  updateCandidate(id: string, data: Partial<InsertCandidate>): Promise<Candidate | undefined>;
+  deleteCandidate(id: string): Promise<boolean>;
+
+  // Candidate Activities
+  createCandidateActivity(data: { candidateId: string; type: string; description: string; metadata?: string; createdBy?: string }): Promise<CandidateActivity>;
+  getCandidateActivities(candidateId: string): Promise<CandidateActivity[]>;
+
+  // Candidate Notes
+  createCandidateNote(data: { candidateId: string; content: string; category?: string; createdBy: string }): Promise<CandidateNote>;
+  getCandidateNotes(candidateId: string): Promise<CandidateNote[]>;
+  deleteCandidateNote(id: string): Promise<boolean>;
+
+  // Candidate Assessments
+  createCandidateAssessment(data: { candidateId: string; assessorId: string; category: string; score: number; comments?: string }): Promise<CandidateAssessment>;
+  getCandidateAssessments(candidateId: string): Promise<CandidateAssessment[]>;
+
+  // Candidate Interviews
+  createCandidateInterview(data: any): Promise<CandidateInterview>;
+  getCandidateInterviews(candidateId: string): Promise<CandidateInterview[]>;
+  getInterviewsByCompany(companyId: string): Promise<(CandidateInterview & { candidate?: Candidate })[]>;
+  getInterviewsByInterviewer(interviewerId: string): Promise<CandidateInterview[]>;
+  getCandidateInterview(id: string): Promise<CandidateInterview | undefined>;
+  updateCandidateInterview(id: string, data: Partial<CandidateInterview>): Promise<CandidateInterview | undefined>;
+  deleteCandidateInterview(id: string): Promise<boolean>;
+
+  // Candidate Communications
+  createCandidateCommunication(data: { candidateId: string; direction: string; subject: string; body: string; sentBy?: string }): Promise<CandidateCommunication>;
+  getCandidateCommunications(candidateId: string): Promise<CandidateCommunication[]>;
+
+  // Email Templates
+  createEmailTemplate(data: InsertEmailTemplate): Promise<EmailTemplate>;
+  getEmailTemplatesByCompany(companyId: string): Promise<EmailTemplate[]>;
+  getEmailTemplate(id: string): Promise<EmailTemplate | undefined>;
+  updateEmailTemplate(id: string, data: Partial<InsertEmailTemplate>): Promise<EmailTemplate | undefined>;
+  deleteEmailTemplate(id: string): Promise<boolean>;
+
+  // Recruitment Settings
+  getRecruitmentSettings(companyId: string): Promise<RecruitmentSetting[]>;
+  upsertRecruitmentSetting(companyId: string, key: string, value: string): Promise<RecruitmentSetting>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -751,6 +814,200 @@ export class DatabaseStorage implements IStorage {
       }).returning();
       return created;
     }
+  }
+
+  // ==================== JOB POSTINGS ====================
+
+  async createJobPosting(data: InsertJobPosting): Promise<JobPosting> {
+    const [posting] = await db.insert(jobPostings).values(data).returning();
+    return posting;
+  }
+
+  async getJobPostingsByCompany(companyId: string): Promise<JobPosting[]> {
+    return db.select().from(jobPostings).where(eq(jobPostings.companyId, companyId)).orderBy(desc(jobPostings.createdAt));
+  }
+
+  async getActiveJobPostingsByCompany(companyId: string): Promise<JobPosting[]> {
+    return db.select().from(jobPostings).where(and(eq(jobPostings.companyId, companyId), eq(jobPostings.status, "active"))).orderBy(desc(jobPostings.createdAt));
+  }
+
+  async getAllActiveJobPostings(): Promise<JobPosting[]> {
+    return db.select().from(jobPostings).where(eq(jobPostings.status, "active")).orderBy(desc(jobPostings.createdAt));
+  }
+
+  async getJobPosting(id: string): Promise<JobPosting | undefined> {
+    const [posting] = await db.select().from(jobPostings).where(eq(jobPostings.id, id));
+    return posting;
+  }
+
+  async updateJobPosting(id: string, data: Partial<InsertJobPosting>): Promise<JobPosting | undefined> {
+    const [posting] = await db.update(jobPostings).set(data).where(eq(jobPostings.id, id)).returning();
+    return posting;
+  }
+
+  async deleteJobPosting(id: string): Promise<boolean> {
+    const result = await db.delete(jobPostings).where(eq(jobPostings.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== CANDIDATES ====================
+
+  async createCandidate(data: InsertCandidate): Promise<Candidate> {
+    const [candidate] = await db.insert(candidates).values(data).returning();
+    return candidate;
+  }
+
+  async getCandidatesByCompany(companyId: string): Promise<Candidate[]> {
+    return db.select().from(candidates).where(eq(candidates.companyId, companyId)).orderBy(desc(candidates.appliedAt));
+  }
+
+  async getCandidatesByJob(jobId: string): Promise<Candidate[]> {
+    return db.select().from(candidates).where(eq(candidates.jobId, jobId)).orderBy(desc(candidates.appliedAt));
+  }
+
+  async getCandidate(id: string): Promise<Candidate | undefined> {
+    const [candidate] = await db.select().from(candidates).where(eq(candidates.id, id));
+    return candidate;
+  }
+
+  async updateCandidate(id: string, data: Partial<InsertCandidate>): Promise<Candidate | undefined> {
+    const [candidate] = await db.update(candidates).set(data).where(eq(candidates.id, id)).returning();
+    return candidate;
+  }
+
+  async deleteCandidate(id: string): Promise<boolean> {
+    const result = await db.delete(candidates).where(eq(candidates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== CANDIDATE ACTIVITIES ====================
+
+  async createCandidateActivity(data: { candidateId: string; type: string; description: string; metadata?: string; createdBy?: string }): Promise<CandidateActivity> {
+    const [activity] = await db.insert(candidateActivities).values(data).returning();
+    return activity;
+  }
+
+  async getCandidateActivities(candidateId: string): Promise<CandidateActivity[]> {
+    return db.select().from(candidateActivities).where(eq(candidateActivities.candidateId, candidateId)).orderBy(desc(candidateActivities.createdAt));
+  }
+
+  // ==================== CANDIDATE NOTES ====================
+
+  async createCandidateNote(data: { candidateId: string; content: string; category?: string; createdBy: string }): Promise<CandidateNote> {
+    const [note] = await db.insert(candidateNotes).values({ ...data, category: data.category || "general" }).returning();
+    return note;
+  }
+
+  async getCandidateNotes(candidateId: string): Promise<CandidateNote[]> {
+    return db.select().from(candidateNotes).where(eq(candidateNotes.candidateId, candidateId)).orderBy(desc(candidateNotes.createdAt));
+  }
+
+  async deleteCandidateNote(id: string): Promise<boolean> {
+    const result = await db.delete(candidateNotes).where(eq(candidateNotes.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== CANDIDATE ASSESSMENTS ====================
+
+  async createCandidateAssessment(data: { candidateId: string; assessorId: string; category: string; score: number; comments?: string }): Promise<CandidateAssessment> {
+    const [assessment] = await db.insert(candidateAssessments).values(data).returning();
+    return assessment;
+  }
+
+  async getCandidateAssessments(candidateId: string): Promise<CandidateAssessment[]> {
+    return db.select().from(candidateAssessments).where(eq(candidateAssessments.candidateId, candidateId)).orderBy(desc(candidateAssessments.createdAt));
+  }
+
+  // ==================== CANDIDATE INTERVIEWS ====================
+
+  async createCandidateInterview(data: any): Promise<CandidateInterview> {
+    const [interview] = await db.insert(candidateInterviews).values(data).returning();
+    return interview;
+  }
+
+  async getCandidateInterviews(candidateId: string): Promise<CandidateInterview[]> {
+    return db.select().from(candidateInterviews).where(eq(candidateInterviews.candidateId, candidateId)).orderBy(desc(candidateInterviews.scheduledAt));
+  }
+
+  async getInterviewsByCompany(companyId: string): Promise<(CandidateInterview & { candidate?: Candidate })[]> {
+    const allCandidates = await db.select().from(candidates).where(eq(candidates.companyId, companyId));
+    const candidateIds = allCandidates.map(c => c.id);
+    if (candidateIds.length === 0) return [];
+    const allInterviews = await db.select().from(candidateInterviews).orderBy(desc(candidateInterviews.scheduledAt));
+    const filtered = allInterviews.filter(i => candidateIds.includes(i.candidateId));
+    return filtered.map(i => ({ ...i, candidate: allCandidates.find(c => c.id === i.candidateId) }));
+  }
+
+  async getInterviewsByInterviewer(interviewerId: string): Promise<CandidateInterview[]> {
+    return db.select().from(candidateInterviews).where(eq(candidateInterviews.interviewerId, interviewerId)).orderBy(desc(candidateInterviews.scheduledAt));
+  }
+
+  async getCandidateInterview(id: string): Promise<CandidateInterview | undefined> {
+    const [interview] = await db.select().from(candidateInterviews).where(eq(candidateInterviews.id, id));
+    return interview;
+  }
+
+  async updateCandidateInterview(id: string, data: Partial<CandidateInterview>): Promise<CandidateInterview | undefined> {
+    const [interview] = await db.update(candidateInterviews).set(data).where(eq(candidateInterviews.id, id)).returning();
+    return interview;
+  }
+
+  async deleteCandidateInterview(id: string): Promise<boolean> {
+    const result = await db.delete(candidateInterviews).where(eq(candidateInterviews.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== CANDIDATE COMMUNICATIONS ====================
+
+  async createCandidateCommunication(data: { candidateId: string; direction: string; subject: string; body: string; sentBy?: string }): Promise<CandidateCommunication> {
+    const [comm] = await db.insert(candidateCommunications).values(data).returning();
+    return comm;
+  }
+
+  async getCandidateCommunications(candidateId: string): Promise<CandidateCommunication[]> {
+    return db.select().from(candidateCommunications).where(eq(candidateCommunications.candidateId, candidateId)).orderBy(desc(candidateCommunications.sentAt));
+  }
+
+  // ==================== EMAIL TEMPLATES ====================
+
+  async createEmailTemplate(data: InsertEmailTemplate): Promise<EmailTemplate> {
+    const [template] = await db.insert(emailTemplates).values(data).returning();
+    return template;
+  }
+
+  async getEmailTemplatesByCompany(companyId: string): Promise<EmailTemplate[]> {
+    return db.select().from(emailTemplates).where(eq(emailTemplates.companyId, companyId)).orderBy(desc(emailTemplates.createdAt));
+  }
+
+  async getEmailTemplate(id: string): Promise<EmailTemplate | undefined> {
+    const [template] = await db.select().from(emailTemplates).where(eq(emailTemplates.id, id));
+    return template;
+  }
+
+  async updateEmailTemplate(id: string, data: Partial<InsertEmailTemplate>): Promise<EmailTemplate | undefined> {
+    const [template] = await db.update(emailTemplates).set(data).where(eq(emailTemplates.id, id)).returning();
+    return template;
+  }
+
+  async deleteEmailTemplate(id: string): Promise<boolean> {
+    const result = await db.delete(emailTemplates).where(eq(emailTemplates.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== RECRUITMENT SETTINGS ====================
+
+  async getRecruitmentSettings(companyId: string): Promise<RecruitmentSetting[]> {
+    return db.select().from(recruitmentSettings).where(eq(recruitmentSettings.companyId, companyId));
+  }
+
+  async upsertRecruitmentSetting(companyId: string, key: string, value: string): Promise<RecruitmentSetting> {
+    const [existing] = await db.select().from(recruitmentSettings).where(and(eq(recruitmentSettings.companyId, companyId), eq(recruitmentSettings.key, key)));
+    if (existing) {
+      const [updated] = await db.update(recruitmentSettings).set({ value }).where(eq(recruitmentSettings.id, existing.id)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(recruitmentSettings).values({ companyId, key, value }).returning();
+    return created;
   }
 }
 

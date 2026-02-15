@@ -1,75 +1,130 @@
 import { useState } from "react";
 import { Link, Redirect } from "wouter";
-import { useQuery } from "@tanstack/react-query";
-import type { Employee } from "@shared/schema";
-import { useRecruitmentStore, CandidateStage } from "@/lib/recruitment-store";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { format } from "date-fns";
+import type { Candidate, JobPosting } from "@shared/schema";
+import { PIPELINE_STAGES } from "@shared/schema";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useRole, canEditOrgSettings } from "@/lib/role-context";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRole } from "@/lib/role-context";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { LayoutGrid, List, Search, MoreHorizontal, Eye, ChevronRight, ChevronLeft, GripVertical, Inbox } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { LayoutGrid, List, Search, MoreHorizontal, Eye, GripVertical, Inbox, Plus } from "lucide-react";
 
-const PIPELINE_STAGES: { key: CandidateStage; label: string; color: string }[] = [
-  { key: "applied", label: "Applied", color: "bg-gray-100 dark:bg-gray-800" },
-  { key: "screening", label: "Screening", color: "bg-blue-100 dark:bg-blue-900/30" },
-  { key: "interview", label: "Interview", color: "bg-purple-100 dark:bg-purple-900/30" },
-  { key: "offer", label: "Offer", color: "bg-amber-100 dark:bg-amber-900/30" },
-  { key: "hired", label: "Hired", color: "bg-green-100 dark:bg-green-900/30" },
-  { key: "rejected", label: "Rejected", color: "bg-red-100 dark:bg-red-900/30" },
-];
+const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
+  new: { label: "New Application", color: "bg-gray-100 dark:bg-gray-800" },
+  screening: { label: "Screening", color: "bg-blue-100 dark:bg-blue-900/30" },
+  manager_review: { label: "Manager Review", color: "bg-indigo-100 dark:bg-indigo-900/30" },
+  phone_interview: { label: "Phone Interview", color: "bg-purple-100 dark:bg-purple-900/30" },
+  technical_interview: { label: "Technical Interview", color: "bg-violet-100 dark:bg-violet-900/30" },
+  final_interview: { label: "Final Interview", color: "bg-pink-100 dark:bg-pink-900/30" },
+  offer_extended: { label: "Offer Extended", color: "bg-amber-100 dark:bg-amber-900/30" },
+  hired: { label: "Hired", color: "bg-green-100 dark:bg-green-900/30" },
+  rejected: { label: "Rejected", color: "bg-red-100 dark:bg-red-900/30" },
+  withdrawn: { label: "Withdrawn", color: "bg-gray-100 dark:bg-gray-800" },
+};
+
+const STAGE_BADGE_VARIANTS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
+  new: "secondary",
+  screening: "default",
+  manager_review: "default",
+  phone_interview: "default",
+  technical_interview: "default",
+  final_interview: "default",
+  offer_extended: "default",
+  hired: "default",
+  rejected: "destructive",
+  withdrawn: "outline",
+};
+
+const SOURCE_OPTIONS = ["website", "referral", "linkedin", "job_board", "agency", "direct", "other"] as const;
 
 export default function RecruitmentCandidates() {
-  const { role } = useRole();
+  const { role, currentUser } = useRole();
   const { toast } = useToast();
-  const { candidates, jobs, updateCandidateStage } = useRecruitmentStore();
-  const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
 
-  if (!canEditOrgSettings(role)) {
+  if (role !== "admin" && role !== "manager") {
     return <Redirect to="/" />;
   }
+
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [searchTerm, setSearchTerm] = useState("");
   const [jobFilter, setJobFilter] = useState<string>("all");
+  const [stageFilter, setStageFilter] = useState<string>("all");
   const [draggedCandidate, setDraggedCandidate] = useState<string | null>(null);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newCandidate, setNewCandidate] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+    jobId: "",
+    source: "website",
+    location: "",
+  });
 
-  const getJobTitle = (jobId: string) => jobs.find((j) => j.id === jobId)?.title || "Unknown";
+  const { data: candidates = [], isLoading: candidatesLoading } = useQuery<Candidate[]>({
+    queryKey: ["/api/candidates"],
+  });
+
+  const { data: jobPostings = [], isLoading: jobsLoading } = useQuery<JobPosting[]>({
+    queryKey: ["/api/job-postings"],
+  });
+
+  const stageMutation = useMutation({
+    mutationFn: async ({ id, stage }: { id: string; stage: string }) => {
+      await apiRequest("PATCH", `/api/candidates/${id}`, { stage });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+    },
+  });
+
+  const addCandidateMutation = useMutation({
+    mutationFn: async (data: typeof newCandidate) => {
+      await apiRequest("POST", "/api/candidates", {
+        ...data,
+        companyId: currentUser.companyId,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/candidates"] });
+      setAddDialogOpen(false);
+      setNewCandidate({ firstName: "", lastName: "", email: "", phone: "", jobId: "", source: "website", location: "" });
+      toast({ title: "Candidate Added", description: "New candidate has been added successfully." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const isLoading = candidatesLoading || jobsLoading;
+
+  const getJobTitle = (jobId: string) => jobPostings.find((j) => j.id === jobId)?.title || "Unknown";
 
   const filteredCandidates = candidates.filter((c) => {
     const matchesSearch =
       `${c.firstName} ${c.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesJob = jobFilter === "all" || c.jobId === jobFilter;
-    return matchesSearch && matchesJob;
+    const matchesStage = stageFilter === "all" || c.stage === stageFilter;
+    return matchesSearch && matchesJob && matchesStage;
   });
 
   const { currentPage, totalPages, paginatedItems: paginatedCandidates, setCurrentPage, totalItems, pageSize } = usePagination(filteredCandidates, 10);
 
-  const getCandidatesByStage = (stage: CandidateStage) =>
+  const getCandidatesByStage = (stage: string) =>
     filteredCandidates.filter((c) => c.stage === stage);
-
-  const getStageBadge = (stage: string) => {
-    const stageInfo = PIPELINE_STAGES.find((s) => s.key === stage);
-    const variants: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-      applied: "secondary",
-      screening: "default",
-      interview: "default",
-      offer: "default",
-      hired: "default",
-      rejected: "destructive",
-    };
-    return (
-      <Badge variant={variants[stage] || "outline"}>
-        {stageInfo?.label || stage}
-      </Badge>
-    );
-  };
 
   const handleDragStart = (candidateId: string) => {
     setDraggedCandidate(candidateId);
@@ -79,46 +134,209 @@ export default function RecruitmentCandidates() {
     e.preventDefault();
   };
 
-  const handleDrop = (e: React.DragEvent, stage: CandidateStage) => {
+  const handleDrop = (e: React.DragEvent, stage: string) => {
     e.preventDefault();
-    if (draggedCandidate) {
-      const candidate = candidates.find((c) => c.id === draggedCandidate);
-      if (candidate && candidate.stage !== stage) {
-        updateCandidateStage(draggedCandidate, stage);
-        toast({
-          title: "Candidate Moved",
-          description: `${candidate.firstName} ${candidate.lastName} moved to ${PIPELINE_STAGES.find((s) => s.key === stage)?.label}`,
-        });
-      }
+    if (!draggedCandidate) return;
+
+    const candidate = candidates.find((c) => c.id === draggedCandidate);
+    if (!candidate || candidate.stage === stage) {
+      setDraggedCandidate(null);
+      return;
     }
+
+    if ((stage === "offer_extended" || stage === "hired") && role !== "admin") {
+      toast({ title: "Permission Denied", description: "Only admins can move candidates to this stage.", variant: "destructive" });
+      setDraggedCandidate(null);
+      return;
+    }
+
+    stageMutation.mutate(
+      { id: draggedCandidate, stage },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Candidate Moved",
+            description: `${candidate.firstName} ${candidate.lastName} moved to ${STAGE_CONFIG[stage]?.label}`,
+          });
+        },
+      }
+    );
     setDraggedCandidate(null);
   };
 
-  const handleMoveCandidate = (candidateId: string, direction: "next" | "prev") => {
-    const candidate = candidates.find((c) => c.id === candidateId);
-    if (!candidate) return;
-
-    const currentIndex = PIPELINE_STAGES.findIndex((s) => s.key === candidate.stage);
-    let newIndex = direction === "next" ? currentIndex + 1 : currentIndex - 1;
-
-    if (newIndex >= 0 && newIndex < PIPELINE_STAGES.length) {
-      const newStage = PIPELINE_STAGES[newIndex].key;
-      updateCandidateStage(candidateId, newStage);
-      toast({
-        title: "Candidate Moved",
-        description: `${candidate.firstName} ${candidate.lastName} moved to ${PIPELINE_STAGES[newIndex].label}`,
-      });
+  const handleStageChange = (candidateId: string, newStage: string) => {
+    if ((newStage === "offer_extended" || newStage === "hired") && role !== "admin") {
+      toast({ title: "Permission Denied", description: "Only admins can move candidates to this stage.", variant: "destructive" });
+      return;
     }
+
+    const candidate = candidates.find((c) => c.id === candidateId);
+    stageMutation.mutate(
+      { id: candidateId, stage: newStage },
+      {
+        onSuccess: () => {
+          toast({
+            title: "Stage Updated",
+            description: `${candidate?.firstName} ${candidate?.lastName} moved to ${STAGE_CONFIG[newStage]?.label}`,
+          });
+        },
+      }
+    );
   };
+
+  const handleAddCandidate = () => {
+    if (!newCandidate.firstName || !newCandidate.lastName || !newCandidate.email || !newCandidate.jobId) {
+      toast({ title: "Validation Error", description: "Please fill in all required fields.", variant: "destructive" });
+      return;
+    }
+    addCandidateMutation.mutate(newCandidate);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-48 mb-2" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+        </div>
+        <div className="flex gap-4">
+          <Skeleton className="h-9 flex-1" />
+          <Skeleton className="h-9 w-[250px]" />
+        </div>
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex-shrink-0 w-72">
+              <Skeleton className="h-[500px] rounded-lg" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-2xl font-bold" data-testid="text-page-title">Candidate Pipeline</h1>
           <p className="text-muted-foreground">Track and manage your candidates through the hiring process</p>
         </div>
         <div className="flex items-center gap-2">
+          {role === "admin" && (
+            <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-candidate">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Candidate
+                </Button>
+              </DialogTrigger>
+              <DialogContent data-testid="dialog-add-candidate">
+                <DialogHeader>
+                  <DialogTitle>Add Candidate</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="firstName">First Name *</Label>
+                      <Input
+                        id="firstName"
+                        value={newCandidate.firstName}
+                        onChange={(e) => setNewCandidate((prev) => ({ ...prev, firstName: e.target.value }))}
+                        data-testid="input-candidate-first-name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="lastName">Last Name *</Label>
+                      <Input
+                        id="lastName"
+                        value={newCandidate.lastName}
+                        onChange={(e) => setNewCandidate((prev) => ({ ...prev, lastName: e.target.value }))}
+                        data-testid="input-candidate-last-name"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={newCandidate.email}
+                      onChange={(e) => setNewCandidate((prev) => ({ ...prev, email: e.target.value }))}
+                      data-testid="input-candidate-email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone</Label>
+                    <Input
+                      id="phone"
+                      value={newCandidate.phone}
+                      onChange={(e) => setNewCandidate((prev) => ({ ...prev, phone: e.target.value }))}
+                      data-testid="input-candidate-phone"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="jobId">Job Posting *</Label>
+                    <Select
+                      value={newCandidate.jobId}
+                      onValueChange={(val) => setNewCandidate((prev) => ({ ...prev, jobId: val }))}
+                    >
+                      <SelectTrigger data-testid="select-candidate-job">
+                        <SelectValue placeholder="Select a job posting" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {jobPostings.map((job) => (
+                          <SelectItem key={job.id} value={job.id}>
+                            {job.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="source">Source</Label>
+                    <Select
+                      value={newCandidate.source}
+                      onValueChange={(val) => setNewCandidate((prev) => ({ ...prev, source: val }))}
+                    >
+                      <SelectTrigger data-testid="select-candidate-source">
+                        <SelectValue placeholder="Select source" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SOURCE_OPTIONS.map((src) => (
+                          <SelectItem key={src} value={src}>
+                            {src.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Location</Label>
+                    <Input
+                      id="location"
+                      value={newCandidate.location}
+                      onChange={(e) => setNewCandidate((prev) => ({ ...prev, location: e.target.value }))}
+                      data-testid="input-candidate-location"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setAddDialogOpen(false)} data-testid="button-cancel-add-candidate">
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleAddCandidate}
+                    disabled={addCandidateMutation.isPending}
+                    data-testid="button-submit-add-candidate"
+                  >
+                    {addCandidateMutation.isPending ? "Adding..." : "Add Candidate"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
           <div className="flex items-center border rounded-md">
             <Button
               variant={viewMode === "kanban" ? "secondary" : "ghost"}
@@ -157,39 +375,54 @@ export default function RecruitmentCandidates() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Jobs</SelectItem>
-            {jobs.map((job) => (
+            {jobPostings.map((job) => (
               <SelectItem key={job.id} value={job.id}>
                 {job.title}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        {viewMode === "table" && (
+          <Select value={stageFilter} onValueChange={setStageFilter}>
+            <SelectTrigger className="w-full md:w-[200px]" data-testid="select-stage-filter">
+              <SelectValue placeholder="Filter by stage" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Stages</SelectItem>
+              {PIPELINE_STAGES.map((stage) => (
+                <SelectItem key={stage} value={stage}>
+                  {STAGE_CONFIG[stage]?.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {candidates.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Inbox className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-medium text-muted-foreground">No candidates yet</h3>
+          <h3 className="text-lg font-medium text-muted-foreground" data-testid="text-no-candidates">No candidates yet</h3>
           <p className="text-sm text-muted-foreground mt-1 max-w-md">Candidates will appear here once they apply to your job postings.</p>
         </div>
       ) : viewMode === "kanban" ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
           {PIPELINE_STAGES.map((stage) => {
-            const stageCandidates = getCandidatesByStage(stage.key);
+            const stageCandidates = getCandidatesByStage(stage);
+            const config = STAGE_CONFIG[stage];
             return (
               <div
-                key={stage.key}
-                className={`flex-shrink-0 w-72 rounded-lg ${stage.color}`}
+                key={stage}
+                className={`flex-shrink-0 w-72 rounded-lg ${config.color}`}
                 onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, stage.key)}
-                data-testid={`column-${stage.key}`}
+                onDrop={(e) => handleDrop(e, stage)}
+                data-testid={`column-${stage}`}
               >
                 <div className="p-3 border-b border-border/50">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-medium">{stage.label}</h3>
-                    <Badge variant="outline" className="text-xs">
-                      {stageCandidates.length}
-                    </Badge>
+                  <div className="flex items-center justify-between gap-1">
+                    <h3 className="font-medium text-sm" data-testid={`text-stage-label-${stage}`}>
+                      {config.label} ({stageCandidates.length})
+                    </h3>
                   </div>
                 </div>
                 <div className="p-2 space-y-2 min-h-[400px]">
@@ -211,50 +444,48 @@ export default function RecruitmentCandidates() {
                                   {candidate.firstName[0]}{candidate.lastName[0]}
                                 </AvatarFallback>
                               </Avatar>
-                              <span className="font-medium text-sm truncate">
-                                {candidate.firstName} {candidate.lastName}
-                              </span>
+                              <Link href={`/recruitment/candidates/${candidate.id}`}>
+                                <span className="font-medium text-sm truncate hover:underline cursor-pointer" data-testid={`link-candidate-${candidate.id}`}>
+                                  {candidate.firstName} {candidate.lastName}
+                                </span>
+                              </Link>
                             </div>
-                            <p className="text-xs text-muted-foreground truncate mb-2">
+                            <p className="text-xs text-muted-foreground truncate mb-1" data-testid={`text-job-title-${candidate.id}`}>
                               {getJobTitle(candidate.jobId)}
                             </p>
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <Badge variant="outline" className="text-xs" data-testid={`badge-source-${candidate.id}`}>
+                                {candidate.source}
+                              </Badge>
+                              {candidate.appliedAt && (
+                                <span className="text-xs text-muted-foreground" data-testid={`text-applied-date-${candidate.id}`}>
+                                  {format(new Date(candidate.appliedAt), "MMM d, yyyy")}
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1">
                               <Link href={`/recruitment/candidates/${candidate.id}`}>
-                                <Button variant="ghost" size="sm" className="h-7 px-2">
+                                <Button variant="ghost" size="sm" data-testid={`button-view-candidate-${candidate.id}`}>
                                   <Eye className="h-3 w-3 mr-1" />
                                   View
                                 </Button>
                               </Link>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <Button variant="ghost" size="icon" data-testid={`button-candidate-actions-${candidate.id}`}>
                                     <MoreHorizontal className="h-3 w-3" />
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  {stage.key !== "applied" && (
-                                    <DropdownMenuItem onClick={() => handleMoveCandidate(candidate.id, "prev")}>
-                                      <ChevronLeft className="h-4 w-4 mr-2" />
-                                      Move Back
-                                    </DropdownMenuItem>
-                                  )}
-                                  {stage.key !== "rejected" && stage.key !== "hired" && (
-                                    <DropdownMenuItem onClick={() => handleMoveCandidate(candidate.id, "next")}>
-                                      <ChevronRight className="h-4 w-4 mr-2" />
-                                      Move Forward
-                                    </DropdownMenuItem>
-                                  )}
-                                  {stage.key !== "rejected" && (
-                                    <DropdownMenuItem 
-                                      onClick={() => {
-                                        updateCandidateStage(candidate.id, "rejected");
-                                        toast({ title: "Candidate Rejected" });
-                                      }}
-                                      className="text-destructive"
+                                  {PIPELINE_STAGES.filter((s) => s !== candidate.stage).map((s) => (
+                                    <DropdownMenuItem
+                                      key={s}
+                                      onClick={() => handleStageChange(candidate.id, s)}
+                                      data-testid={`menu-move-${candidate.id}-${s}`}
                                     >
-                                      Reject
+                                      Move to {STAGE_CONFIG[s]?.label}
                                     </DropdownMenuItem>
-                                  )}
+                                  ))}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
@@ -276,6 +507,7 @@ export default function RecruitmentCandidates() {
                 <TableHead>Candidate</TableHead>
                 <TableHead>Job</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Source</TableHead>
                 <TableHead>Stage</TableHead>
                 <TableHead>Applied</TableHead>
                 <TableHead className="w-[80px]">Actions</TableHead>
@@ -291,45 +523,51 @@ export default function RecruitmentCandidates() {
                           {candidate.firstName[0]}{candidate.lastName[0]}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="font-medium">
-                        {candidate.firstName} {candidate.lastName}
-                      </span>
+                      <Link href={`/recruitment/candidates/${candidate.id}`}>
+                        <span className="font-medium hover:underline cursor-pointer" data-testid={`link-candidate-table-${candidate.id}`}>
+                          {candidate.firstName} {candidate.lastName}
+                        </span>
+                      </Link>
                     </div>
                   </TableCell>
-                  <TableCell>{getJobTitle(candidate.jobId)}</TableCell>
-                  <TableCell>{candidate.email}</TableCell>
-                  <TableCell>{getStageBadge(candidate.stage)}</TableCell>
+                  <TableCell data-testid={`text-job-${candidate.id}`}>{getJobTitle(candidate.jobId)}</TableCell>
+                  <TableCell data-testid={`text-email-${candidate.id}`}>{candidate.email}</TableCell>
                   <TableCell>
+                    <Badge variant="outline" data-testid={`badge-source-table-${candidate.id}`}>
+                      {candidate.source}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={STAGE_BADGE_VARIANTS[candidate.stage] || "outline"} data-testid={`badge-stage-${candidate.id}`}>
+                      {STAGE_CONFIG[candidate.stage]?.label || candidate.stage}
+                    </Badge>
+                  </TableCell>
+                  <TableCell data-testid={`text-applied-${candidate.id}`}>
                     {candidate.appliedAt
-                      ? new Date(candidate.appliedAt).toLocaleDateString()
+                      ? format(new Date(candidate.appliedAt), "MMM d, yyyy")
                       : "-"}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
                       <Link href={`/recruitment/candidates/${candidate.id}`}>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" data-testid={`button-view-table-${candidate.id}`}>
                           <Eye className="h-4 w-4" />
                         </Button>
                       </Link>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" data-testid={`button-actions-table-${candidate.id}`}>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          {PIPELINE_STAGES.filter((s) => s.key !== candidate.stage).map((stage) => (
+                          {PIPELINE_STAGES.filter((s) => s !== candidate.stage).map((s) => (
                             <DropdownMenuItem
-                              key={stage.key}
-                              onClick={() => {
-                                updateCandidateStage(candidate.id, stage.key);
-                                toast({
-                                  title: "Stage Updated",
-                                  description: `Moved to ${stage.label}`,
-                                });
-                              }}
+                              key={s}
+                              onClick={() => handleStageChange(candidate.id, s)}
+                              data-testid={`menu-move-table-${candidate.id}-${s}`}
                             >
-                              Move to {stage.label}
+                              Move to {STAGE_CONFIG[s]?.label}
                             </DropdownMenuItem>
                           ))}
                         </DropdownMenuContent>

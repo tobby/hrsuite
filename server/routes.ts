@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCompanySchema, insertDepartmentSchema, insertEmployeeSchema, insertLeaveTypeSchema, insertLeaveRequestSchema, insertHrQuerySchema, insertAppraisalCycleSchema } from "@shared/schema";
+import { insertCompanySchema, insertDepartmentSchema, insertEmployeeSchema, insertLeaveTypeSchema, insertLeaveRequestSchema, insertHrQuerySchema, insertAppraisalCycleSchema, insertJobPostingSchema, insertCandidateSchema, insertEmailTemplateSchema, insertInterviewSchema, interviewFeedbackSchema, PIPELINE_STAGES } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
@@ -1970,6 +1970,598 @@ export async function registerRoutes(
 
       const completion = await storage.toggleTaskCompletion(req.params.id, employeeId, itemId);
       return res.json(completion);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== RECRUITMENT - JOB POSTINGS ====================
+
+  app.get("/api/job-postings", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const employeeId = (req.session as any).employeeId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+
+      let postings = await storage.getJobPostingsByCompany(companyId);
+
+      if (role === "manager") {
+        const employee = await storage.getEmployee(employeeId);
+        if (employee) {
+          postings = postings.filter(p => p.departmentId === employee.departmentId || p.assignedManagerId === employeeId);
+        }
+      }
+
+      return res.json(postings);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/job-postings/active", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const postings = await storage.getActiveJobPostingsByCompany(companyId);
+      return res.json(postings);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/job-postings/public", async (req, res) => {
+    try {
+      const allJobs = await storage.getAllActiveJobPostings();
+      return res.json(allJobs);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/job-postings/public/:companyId", async (req, res) => {
+    try {
+      const postings = await storage.getActiveJobPostingsByCompany(req.params.companyId);
+      return res.json(postings);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/job-postings/:id", async (req, res) => {
+    try {
+      const posting = await storage.getJobPosting(req.params.id);
+      if (!posting) return res.status(404).json({ message: "Job posting not found" });
+      return res.json(posting);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/job-postings", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can create job postings" });
+
+      const parsed = insertJobPostingSchema.safeParse({ ...req.body, companyId });
+      if (!parsed.success) return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+
+      const posting = await storage.createJobPosting(parsed.data);
+      return res.status(201).json(posting);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/job-postings/:id", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can edit job postings" });
+
+      const existing = await storage.getJobPosting(req.params.id);
+      if (!existing || existing.companyId !== companyId) return res.status(404).json({ message: "Job posting not found" });
+
+      const posting = await storage.updateJobPosting(req.params.id, req.body);
+      return res.json(posting);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/job-postings/:id", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can delete job postings" });
+
+      const existing = await storage.getJobPosting(req.params.id);
+      if (!existing || existing.companyId !== companyId) return res.status(404).json({ message: "Job posting not found" });
+
+      await storage.deleteJobPosting(req.params.id);
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== RECRUITMENT - CANDIDATES ====================
+
+  app.get("/api/candidates", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const employeeId = (req.session as any).employeeId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+
+      let cands = await storage.getCandidatesByCompany(companyId);
+
+      if (role === "manager") {
+        const employee = await storage.getEmployee(employeeId);
+        const postings = await storage.getJobPostingsByCompany(companyId);
+        const deptJobIds = postings.filter(p => p.departmentId === employee?.departmentId || p.assignedManagerId === employeeId).map(p => p.id);
+        cands = cands.filter(c => deptJobIds.includes(c.jobId) || c.assignedManagerId === employeeId);
+      }
+
+      return res.json(cands);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/candidates/:id", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const candidate = await storage.getCandidate(req.params.id);
+      if (!candidate || candidate.companyId !== companyId) return res.status(404).json({ message: "Candidate not found" });
+      return res.json(candidate);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/candidates", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can add candidates" });
+
+      const parsed = insertCandidateSchema.safeParse({ ...req.body, companyId });
+      if (!parsed.success) return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+
+      const candidate = await storage.createCandidate(parsed.data);
+      await storage.createCandidateActivity({
+        candidateId: candidate.id,
+        type: "application",
+        description: "Candidate added manually",
+        createdBy: (req.session as any).employeeId,
+      });
+      return res.status(201).json(candidate);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/candidates/apply", async (req, res) => {
+    try {
+      const { jobId, firstName, lastName, email, phone, location, linkedinUrl, gender, coverLetter, source, resumeFileName } = req.body;
+      const posting = await storage.getJobPosting(jobId);
+      if (!posting) return res.status(404).json({ message: "Job posting not found" });
+      if (posting.status !== "active") return res.status(400).json({ message: "This position is no longer accepting applications" });
+
+      const parsed = insertCandidateSchema.safeParse({
+        companyId: posting.companyId,
+        jobId,
+        firstName,
+        lastName,
+        email,
+        phone,
+        location,
+        linkedinUrl,
+        gender,
+        coverLetter,
+        source: source || "website",
+        resumeFileName,
+      });
+      if (!parsed.success) return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+
+      const candidate = await storage.createCandidate(parsed.data);
+      await storage.createCandidateActivity({
+        candidateId: candidate.id,
+        type: "application",
+        description: `Applied via ${source || "website"}`,
+      });
+      return res.status(201).json(candidate);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/candidates/:id", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const employeeId = (req.session as any).employeeId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+
+      const existing = await storage.getCandidate(req.params.id);
+      if (!existing || existing.companyId !== companyId) return res.status(404).json({ message: "Candidate not found" });
+
+      if (req.body.stage) {
+        const offerStages = ["offer_extended", "hired"];
+        if (offerStages.includes(req.body.stage) && role !== "admin") {
+          return res.status(403).json({ message: "Only admins can move candidates to offer/hired stage" });
+        }
+      }
+
+      const candidate = await storage.updateCandidate(req.params.id, req.body);
+
+      if (req.body.stage && req.body.stage !== existing.stage) {
+        await storage.createCandidateActivity({
+          candidateId: req.params.id,
+          type: "stage_change",
+          description: `Stage changed from ${existing.stage} to ${req.body.stage}`,
+          createdBy: employeeId,
+        });
+      }
+
+      if (req.body.assignedManagerId && req.body.assignedManagerId !== existing.assignedManagerId) {
+        await storage.createCandidateActivity({
+          candidateId: req.params.id,
+          type: "assignment",
+          description: "Assigned to manager for review",
+          createdBy: employeeId,
+        });
+      }
+
+      return res.json(candidate);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/candidates/:id", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can delete candidates" });
+
+      const existing = await storage.getCandidate(req.params.id);
+      if (!existing || existing.companyId !== companyId) return res.status(404).json({ message: "Candidate not found" });
+
+      await storage.deleteCandidate(req.params.id);
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== CANDIDATE ACTIVITIES ====================
+
+  app.get("/api/candidates/:id/activities", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const activities = await storage.getCandidateActivities(req.params.id);
+      return res.json(activities);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== CANDIDATE NOTES ====================
+
+  app.get("/api/candidates/:id/notes", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const notes = await storage.getCandidateNotes(req.params.id);
+      return res.json(notes);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/candidates/:id/notes", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const employeeId = (req.session as any).employeeId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+
+      const { content, category } = req.body;
+      if (!content) return res.status(400).json({ message: "Content is required" });
+
+      const note = await storage.createCandidateNote({
+        candidateId: req.params.id,
+        content,
+        category,
+        createdBy: employeeId,
+      });
+
+      await storage.createCandidateActivity({
+        candidateId: req.params.id,
+        type: "note",
+        description: "Note added",
+        createdBy: employeeId,
+      });
+
+      return res.status(201).json(note);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== CANDIDATE ASSESSMENTS ====================
+
+  app.get("/api/candidates/:id/assessments", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const assessments = await storage.getCandidateAssessments(req.params.id);
+      return res.json(assessments);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/candidates/:id/assessments", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const employeeId = (req.session as any).employeeId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+
+      const { category, score, comments } = req.body;
+      if (!category || score === undefined) return res.status(400).json({ message: "Category and score are required" });
+
+      const assessment = await storage.createCandidateAssessment({
+        candidateId: req.params.id,
+        assessorId: employeeId,
+        category,
+        score,
+        comments,
+      });
+      return res.status(201).json(assessment);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== CANDIDATE INTERVIEWS ====================
+
+  app.get("/api/interviews", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const employeeId = (req.session as any).employeeId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+
+      if (role === "admin") {
+        const interviews = await storage.getInterviewsByCompany(companyId);
+        return res.json(interviews);
+      } else {
+        const interviews = await storage.getInterviewsByInterviewer(employeeId);
+        return res.json(interviews);
+      }
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/candidates/:id/interviews", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const interviews = await storage.getCandidateInterviews(req.params.id);
+      return res.json(interviews);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/candidates/:id/interviews", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const employeeId = (req.session as any).employeeId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can schedule interviews" });
+
+      const parsed = insertInterviewSchema.safeParse({ ...req.body, candidateId: req.params.id });
+      if (!parsed.success) return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+
+      const interview = await storage.createCandidateInterview({
+        ...parsed.data,
+        scheduledAt: new Date(parsed.data.scheduledAt),
+      });
+
+      await storage.createCandidateActivity({
+        candidateId: req.params.id,
+        type: "interview_scheduled",
+        description: `${parsed.data.type} interview scheduled`,
+        createdBy: employeeId,
+      });
+
+      return res.status(201).json(interview);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/interviews/:id/feedback", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const employeeId = (req.session as any).employeeId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+
+      const interview = await storage.getCandidateInterview(req.params.id);
+      if (!interview) return res.status(404).json({ message: "Interview not found" });
+
+      const role = (req.session as any).role;
+      if (interview.interviewerId !== employeeId && role !== "admin") {
+        return res.status(403).json({ message: "Only the interviewer or admin can submit feedback" });
+      }
+
+      const parsed = interviewFeedbackSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+
+      const updated = await storage.updateCandidateInterview(req.params.id, {
+        ...parsed.data,
+        status: "completed",
+        feedbackSubmittedAt: new Date(),
+      });
+
+      await storage.createCandidateActivity({
+        candidateId: interview.candidateId,
+        type: "interview_feedback",
+        description: `Interview feedback submitted: ${parsed.data.recommendation}`,
+        createdBy: employeeId,
+      });
+
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/interviews/:id", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can delete interviews" });
+
+      await storage.deleteCandidateInterview(req.params.id);
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== CANDIDATE COMMUNICATIONS ====================
+
+  app.get("/api/candidates/:id/communications", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const comms = await storage.getCandidateCommunications(req.params.id);
+      return res.json(comms);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/candidates/:id/communications", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const employeeId = (req.session as any).employeeId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+
+      const { subject, body, direction } = req.body;
+      if (!subject || !body) return res.status(400).json({ message: "Subject and body are required" });
+
+      const comm = await storage.createCandidateCommunication({
+        candidateId: req.params.id,
+        direction: direction || "outbound",
+        subject,
+        body,
+        sentBy: employeeId,
+      });
+
+      await storage.createCandidateActivity({
+        candidateId: req.params.id,
+        type: "communication",
+        description: `Email sent: ${subject}`,
+        createdBy: employeeId,
+      });
+
+      return res.status(201).json(comm);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== EMAIL TEMPLATES ====================
+
+  app.get("/api/email-templates", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const templates = await storage.getEmailTemplatesByCompany(companyId);
+      return res.json(templates);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/email-templates", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can create email templates" });
+
+      const parsed = insertEmailTemplateSchema.safeParse({ ...req.body, companyId });
+      if (!parsed.success) return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+
+      const template = await storage.createEmailTemplate(parsed.data);
+      return res.status(201).json(template);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/email-templates/:id", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can edit email templates" });
+
+      const existing = await storage.getEmailTemplate(req.params.id);
+      if (!existing || existing.companyId !== companyId) return res.status(404).json({ message: "Template not found" });
+
+      const template = await storage.updateEmailTemplate(req.params.id, req.body);
+      return res.json(template);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/email-templates/:id", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can delete email templates" });
+
+      const existing = await storage.getEmailTemplate(req.params.id);
+      if (!existing || existing.companyId !== companyId) return res.status(404).json({ message: "Template not found" });
+
+      await storage.deleteEmailTemplate(req.params.id);
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== RESUME UPLOAD ====================
+
+  app.post("/api/upload/resume", upload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      return res.json({
+        fileName: req.file.originalname,
+        fileUrl: `/uploads/${req.file.filename}`,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+      });
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
