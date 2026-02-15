@@ -1,0 +1,123 @@
+User Stories
+Core Assignment Stories
+As an HR Admin/Manager, I want to:
+
+Assign tasks to specific employees so I can track individual responsibilities
+Assign tasks to entire departments so all members can see and complete department-wide initiatives
+Assign tasks to all managers so leadership can complete management-specific tasks
+Assign tasks to everyone in the organization so I can roll out company-wide compliance or onboarding tasks
+
+As an Employee, I want to:
+
+See all tasks assigned to me individually
+See all tasks assigned to my department
+See all tasks assigned to everyone in the company
+Clearly distinguish between task types so I know which are my personal responsibility vs. shared
+
+As a Manager, I want to:
+
+See tasks assigned to me as an individual
+See tasks assigned to me as a manager (role-based)
+See tasks assigned to my department
+Track completion rates for department-wide tasks
+
+Template Stories
+As an HR Admin, I want to:
+
+Create task templates that can be assigned to specific departments by default
+Create templates for company-wide tasks (like onboarding checklists)
+Create role-specific templates (manager onboarding vs. employee onboarding)
+
+Requirements
+Functional Requirements
+Assignment Types:
+
+Individual Assignment
+
+Select specific employee from dropdown
+Task appears only in that employee's task list
+Only that employee can mark as complete
+
+
+Department Assignment
+
+Select department from dropdown
+Task appears in all current department members' task lists
+Options: Either each person completes individually OR one completion marks for all
+Track who completed it (if individual completion)
+
+
+Manager Assignment
+
+Checkbox/option for "All Managers"
+Task appears for anyone with "Manager" role
+Individual completion tracking
+
+
+Everyone Assignment
+
+Checkbox/option for "Everyone"
+Task appears for all active employees
+Individual completion tracking
+Progress shown as "X/Y completed"
+
+
+
+Visibility & Permissions:
+
+Employees can only see tasks assigned to them (individually, via department, role, or everyone)
+Managers can see their own tasks + their department's tasks + subordinates' individual tasks
+Admins can see all tasks across the organization
+
+Dashboard Metrics Updates:
+
+Active Assignments: Count tasks assigned to user (any type)
+Completed: Count user's completed tasks
+Tasks Done: Show personal completion (e.g., "12/15" if 12 out of 15 personal tasks done)
+Overdue Tasks: Tasks past due date that user hasn't completed
+
+Template Configuration:
+
+Template can specify default assignment type
+Template can be department-specific or universal
+When assigning template, can override default assignment type
+
+Non-Functional Requirements
+Performance:
+
+Task list should load quickly even for "Everyone" assignments
+Efficient queries to avoid N+1 problems when showing department/everyone tasks
+
+User Experience:
+
+Clear visual indication of assignment type (icon/badge: personal, department, company-wide)
+Filters to show "My Tasks", "Department Tasks", "All Tasks"
+Progress bars for shared tasks
+
+Acceptance Criteria
+Assignment Modal:
+
+ "Assign To" dropdown with options: Employee, Department, All Managers, Everyone
+ Dynamic second dropdown based on selection (employee list or department list)
+ Validation: Cannot assign without selecting target
+ Success message shows who task was assigned to
+
+Task Tracker View:
+
+ Shows all tasks relevant to logged-in user
+ Visual indicators for assignment type
+ Filter by: My Tasks, Department Tasks, Company Tasks
+ Correct counts in dashboard cards
+
+Completion Logic:
+
+ Individual tasks: Only assignee can complete
+ Department/Everyone tasks: Each person completes independently
+ Completion tracked per person
+ Progress shown for multi-person assignments
+
+Notifications (Future):
+
+ Email/in-app notification when task assigned
+ Reminder for overdue tasks
+ Summary of pending tasks
