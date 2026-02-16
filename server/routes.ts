@@ -1267,7 +1267,7 @@ export async function registerRoutes(
 
   // ==================== APPRAISAL TEMPLATES ====================
 
-  app.get("/api/appraisal-templates", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  app.get("/api/appraisal-templates", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = (req.session as any).companyId;
       const templates = await storage.getAppraisalTemplatesByCompany(companyId);
