@@ -213,7 +213,20 @@ export async function registerRoutes(
 
       const existingEmployee = await storage.getEmployeeByEmail(email);
       if (existingEmployee) {
-        return res.status(400).json({ message: "An account with this email already exists" });
+        const passwordValid = existingEmployee.passwordHash
+          ? await bcrypt.compare(password, existingEmployee.passwordHash)
+          : false;
+        if (passwordValid) {
+          const existingCompany = await storage.getCompany(existingEmployee.companyId);
+          (req.session as any).employeeId = existingEmployee.id;
+          (req.session as any).companyId = existingEmployee.companyId;
+          (req.session as any).role = existingEmployee.role;
+          return res.status(200).json({
+            company: existingCompany || { id: existingEmployee.companyId, name: companyName },
+            message: "Company already set up. Logged in successfully.",
+          });
+        }
+        return res.status(400).json({ message: "An account with this email already exists. Please use the login page instead." });
       }
 
       const company = await storage.createCompany({ name: companyName });

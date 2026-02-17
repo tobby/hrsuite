@@ -276,7 +276,7 @@ export class DatabaseStorage implements IStorage {
   async generateEmployeeId(companyId: string): Promise<string> {
     const existing = await db.select({ employeeId: employees.employeeId })
       .from(employees)
-      .where(and(eq(employees.companyId, companyId), like(employees.employeeId, 'DOJ-%')))
+      .where(like(employees.employeeId, 'DOJ-%'))
       .orderBy(desc(employees.employeeId));
 
     let maxNum = 0;
