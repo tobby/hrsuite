@@ -236,7 +236,8 @@ export async function registerRoutes(
       (req.session as any).role = "admin";
 
       return res.status(201).json({ company, message: "Company created successfully" });
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Setup error:", error?.message || error);
       return res.status(500).json({ message: "Internal server error" });
     }
   });
