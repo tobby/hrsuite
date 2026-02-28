@@ -2581,5 +2581,79 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== DEV SEED ROUTE ====================
+
+  app.post("/api/dev/seed", async (_req: Request, res: Response) => {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(403).json({ message: "Not available in production" });
+    }
+
+    try {
+      const existingAdmin = await storage.getEmployeeByEmail("admin@test.com");
+      if (existingAdmin) {
+        return res.json({ message: "Test accounts already exist", seeded: false });
+      }
+
+      const company = await storage.createCompany({ name: "Test Corp" });
+      const department = await storage.createDepartment({ companyId: company.id, name: "Engineering" });
+
+      const passwordHash = await bcrypt.hash("password123", 10);
+
+      const testAccounts = [
+        { firstName: "Test", lastName: "Admin", email: "admin@test.com", role: "admin" as const, position: "HR Administrator" },
+        { firstName: "Test", lastName: "Manager", email: "manager@test.com", role: "manager" as const, position: "Engineering Manager" },
+        { firstName: "Test", lastName: "Employee", email: "employee@test.com", role: "employee" as const, position: "Software Engineer" },
+        { firstName: "Test", lastName: "Contractor", email: "contract@test.com", role: "contract" as const, position: "Contract Developer" },
+      ];
+
+      const created = [];
+      for (const account of testAccounts) {
+        const emp = await storage.createEmployee({
+          companyId: company.id,
+          departmentId: department.id,
+          firstName: account.firstName,
+          lastName: account.lastName,
+          email: account.email,
+          role: account.role,
+          position: account.position,
+          status: "active",
+        });
+        await storage.updateEmployee(emp.id, { passwordHash });
+        created.push({ email: account.email, role: account.role, employeeId: emp.employeeId });
+      }
+
+      return res.json({ message: "Test accounts created", seeded: true, accounts: created });
+    } catch (error: any) {
+      console.error("Dev seed error:", error?.message || error);
+      return res.status(500).json({ message: "Failed to seed test accounts" });
+    }
+  });
+
+  if (process.env.NODE_ENV !== "production") {
+    (async () => {
+      try {
+        const existingAdmin = await storage.getEmployeeByEmail("admin@test.com");
+        if (!existingAdmin) {
+          const company = await storage.createCompany({ name: "Test Corp" });
+          const department = await storage.createDepartment({ companyId: company.id, name: "Engineering" });
+          const hash = await bcrypt.hash("password123", 10);
+          const accounts = [
+            { firstName: "Test", lastName: "Admin", email: "admin@test.com", role: "admin" as const, position: "HR Administrator" },
+            { firstName: "Test", lastName: "Manager", email: "manager@test.com", role: "manager" as const, position: "Engineering Manager" },
+            { firstName: "Test", lastName: "Employee", email: "employee@test.com", role: "employee" as const, position: "Software Engineer" },
+            { firstName: "Test", lastName: "Contractor", email: "contract@test.com", role: "contract" as const, position: "Contract Developer" },
+          ];
+          for (const a of accounts) {
+            const emp = await storage.createEmployee({ companyId: company.id, departmentId: department.id, ...a, status: "active" });
+            await storage.updateEmployee(emp.id, { passwordHash: hash });
+          }
+          console.log("Auto-seed: Test accounts created");
+        }
+      } catch (e: any) {
+        console.log("Auto-seed skipped:", e?.message || e);
+      }
+    })();
+  }
+
   return httpServer;
 }
