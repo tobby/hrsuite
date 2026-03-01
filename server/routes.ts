@@ -1651,10 +1651,28 @@ export async function registerRoutes(
       const feedbackWithRatings = [];
       for (const fb of feedback) {
         const ratings = await storage.getFeedbackRatings(fb.id);
-        feedbackWithRatings.push({ ...fb, ratings });
+        const reviewer = await storage.getEmployee(fb.reviewerId);
+        feedbackWithRatings.push({
+          feedback: fb,
+          ratings,
+          reviewer: reviewer ? { id: reviewer.id, firstName: reviewer.firstName, lastName: reviewer.lastName } : null,
+        });
       }
 
-      return res.json({ ...appraisal, feedback: feedbackWithRatings });
+      const cycle = await storage.getAppraisalCycle(appraisal.cycleId);
+      const employee = await storage.getEmployee(appraisal.employeeId);
+      let questions: any[] = [];
+      if (cycle && cycle.templateId) {
+        questions = await storage.getTemplateQuestions(cycle.templateId);
+      }
+
+      return res.json({
+        appraisal,
+        cycle: cycle ? { id: cycle.id, name: cycle.name, type: cycle.type, selfWeight: cycle.selfWeight, peerWeight: cycle.peerWeight, managerWeight: cycle.managerWeight } : null,
+        feedbacks: feedbackWithRatings,
+        questions,
+        employee: employee ? { id: employee.id, firstName: employee.firstName, lastName: employee.lastName } : null,
+      });
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
@@ -1718,14 +1736,24 @@ export async function registerRoutes(
       const ratings = await storage.getFeedbackRatings(feedback.id);
       const appraisal = await storage.getAppraisal(feedback.appraisalId);
       let questions: any[] = [];
+      let cycle: any = null;
+      let employee: any = null;
       if (appraisal) {
-        const cycle = await storage.getAppraisalCycle(appraisal.cycleId);
+        cycle = await storage.getAppraisalCycle(appraisal.cycleId);
         if (cycle && cycle.templateId) {
           questions = await storage.getTemplateQuestions(cycle.templateId);
         }
+        employee = await storage.getEmployee(appraisal.employeeId);
       }
 
-      return res.json({ ...feedback, ratings, questions });
+      return res.json({
+        feedback,
+        appraisal,
+        cycle: cycle ? { id: cycle.id, name: cycle.name, type: cycle.type } : null,
+        questions,
+        ratings,
+        employee: employee ? { id: employee.id, firstName: employee.firstName, lastName: employee.lastName } : null,
+      });
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }

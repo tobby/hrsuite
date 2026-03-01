@@ -218,10 +218,10 @@ export default function AppraisalReview() {
     );
   }
 
-  const isSubmitted = data.feedback.status === "submitted";
-  const sortedQuestions = [...data.questions].sort((a, b) => a.order - b.order);
-  const employeeName = `${data.employee.firstName} ${data.employee.lastName}`;
-  const reviewerTypeLabel = reviewerTypeLabels[data.feedback.reviewerType] || data.feedback.reviewerType;
+  const isSubmitted = data.feedback?.status === "submitted";
+  const sortedQuestions = [...(data.questions || [])].sort((a, b) => a.order - b.order);
+  const employeeName = data.employee ? `${data.employee.firstName} ${data.employee.lastName}` : "Unknown";
+  const reviewerTypeLabel = reviewerTypeLabels[data.feedback?.reviewerType] || data.feedback?.reviewerType || "Review";
 
   return (
     <div className="space-y-6 p-6">

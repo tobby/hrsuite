@@ -170,22 +170,23 @@ export default function AppraisalResults() {
     );
   }
 
-  const employeeName = `${data.employee.firstName} ${data.employee.lastName}`;
-  const isCompleted = data.appraisal.status === "completed";
-  const sortedQuestions = [...data.questions].sort((a, b) => a.order - b.order);
-  const submittedFeedbacks = data.feedbacks.filter(
+  const employeeName = data.employee ? `${data.employee.firstName} ${data.employee.lastName}` : "Unknown";
+  const isCompleted = data.appraisal?.status === "completed";
+  const sortedQuestions = [...(data.questions || [])].sort((a, b) => a.order - b.order);
+  const feedbacks = data.feedbacks || [];
+  const submittedFeedbacks = feedbacks.filter(
     (f) => f.feedback.status === "submitted"
   );
-  const totalFeedbacks = data.feedbacks.length;
+  const totalFeedbacks = feedbacks.length;
   const submittedCount = submittedFeedbacks.length;
 
-  const selfFeedbacks = data.feedbacks.filter(
+  const selfFeedbacks = feedbacks.filter(
     (f) => f.feedback.reviewerType === "self" && f.feedback.status === "submitted"
   );
-  const managerFeedbacks = data.feedbacks.filter(
+  const managerFeedbacks = feedbacks.filter(
     (f) => f.feedback.reviewerType === "manager" && f.feedback.status === "submitted"
   );
-  const peerFeedbacks = data.feedbacks.filter(
+  const peerFeedbacks = feedbacks.filter(
     (f) => f.feedback.reviewerType === "peer" && f.feedback.status === "submitted"
   );
 
@@ -300,7 +301,7 @@ export default function AppraisalResults() {
           Feedback Breakdown
         </h2>
 
-        {data.feedbacks
+        {feedbacks
           .filter((f) => f.feedback.status === "submitted")
           .sort((a, b) => {
             const order: Record<string, number> = { self: 0, manager: 1, peer: 2 };
