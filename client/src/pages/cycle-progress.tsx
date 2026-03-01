@@ -400,7 +400,7 @@ export default function CycleProgress() {
               <h2 className="text-lg font-semibold" data-testid="text-participants-heading">Participants</h2>
               <Badge variant="secondary" data-testid="badge-participant-count">{participants.length}</Badge>
             </div>
-            {isAdmin && isDraft && (
+            {isAdmin && (
               <Button
                 variant="outline"
                 onClick={() => {
@@ -425,7 +425,7 @@ export default function CycleProgress() {
             <div className="flex flex-col items-center py-8 text-center">
               <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
               <p className="text-sm text-muted-foreground" data-testid="text-no-participants">No participants added yet</p>
-              {isAdmin && isDraft && (
+              {isAdmin && (
                 <p className="text-xs text-muted-foreground mt-1">Add employees to this cycle to get started</p>
               )}
             </div>
@@ -480,7 +480,7 @@ export default function CycleProgress() {
                           Awaiting activation
                         </Badge>
                       )}
-                      {isAdmin && isDraft && (
+                      {isAdmin && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -500,7 +500,7 @@ export default function CycleProgress() {
         </CardContent>
       </Card>
 
-      {is360 && isDraft && isAdmin && (
+      {is360 && isAdmin && (
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between gap-4 mb-4 flex-wrap">
@@ -719,7 +719,6 @@ export default function CycleProgress() {
             <DialogTitle>Activate Review Cycle</DialogTitle>
             <DialogDescription>
               Are you sure you want to activate this cycle? This will create appraisals for all {participants.length} participants.
-              Once activated, you cannot modify participants or peer assignments.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
