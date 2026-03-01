@@ -7,13 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { AppraisalTemplate, TemplateQuestion } from "@shared/schema";
+import type { AppraisalTemplate, TemplateQuestion, TemplateSection, Competency, CompetencyQuestion } from "@shared/schema";
 import {
   FileText,
   Plus,
@@ -30,7 +32,75 @@ import {
   Inbox,
   Shield,
   Layers,
+  Import,
+  Users,
+  User,
+  UserCheck,
 } from "lucide-react";
+
+const REVIEWER_TYPES = [
+  { value: "self", label: "Self", icon: User },
+  { value: "peer", label: "Peer", icon: Users },
+  { value: "manager", label: "Manager", icon: UserCheck },
+] as const;
+
+function ReviewerTypeBadges({ types }: { types: string[] }) {
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {REVIEWER_TYPES.map(rt => {
+        const active = types.includes(rt.value);
+        if (!active) return null;
+        const Icon = rt.icon;
+        return (
+          <Badge
+            key={rt.value}
+            variant="secondary"
+            className="text-[10px] gap-1"
+            data-testid={`badge-reviewer-${rt.value}`}
+          >
+            <Icon className="h-2.5 w-2.5" />
+            {rt.label}
+          </Badge>
+        );
+      })}
+    </div>
+  );
+}
+
+function ReviewerTypeCheckboxes({
+  selected,
+  onChange,
+  testIdPrefix,
+}: {
+  selected: string[];
+  onChange: (types: string[]) => void;
+  testIdPrefix: string;
+}) {
+  function toggle(value: string) {
+    if (selected.includes(value)) {
+      if (selected.length > 1) {
+        onChange(selected.filter(v => v !== value));
+      }
+    } else {
+      onChange([...selected, value]);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      {REVIEWER_TYPES.map(rt => (
+        <label key={rt.value} className="flex items-center gap-1.5 cursor-pointer text-sm">
+          <Checkbox
+            checked={selected.includes(rt.value)}
+            onCheckedChange={() => toggle(rt.value)}
+            data-testid={`${testIdPrefix}-${rt.value}`}
+          />
+          {rt.label}
+        </label>
+      ))}
+    </div>
+  );
+}
 
 export default function AppraisalTemplates() {
   const { role } = useRole();
@@ -48,15 +118,28 @@ export default function AppraisalTemplates() {
 
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
   const [deleteQuestionId, setDeleteQuestionId] = useState<string | null>(null);
+  const [deleteSectionId, setDeleteSectionId] = useState<string | null>(null);
 
+  const [addSectionName, setAddSectionName] = useState("");
+  const [editingSectionId, setEditingSectionId] = useState<string | null>(null);
+  const [editSectionName, setEditSectionName] = useState("");
+
+  const [addQuestionSectionId, setAddQuestionSectionId] = useState<string | null>(null);
   const [addQuestionText, setAddQuestionText] = useState("");
   const [addQuestionType, setAddQuestionType] = useState("rating");
-  const [addQuestionSection, setAddQuestionSection] = useState("");
+  const [addQuestionReviewerTypes, setAddQuestionReviewerTypes] = useState<string[]>(["self", "peer", "manager"]);
 
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [editQuestionText, setEditQuestionText] = useState("");
   const [editQuestionType, setEditQuestionType] = useState("rating");
-  const [editQuestionSection, setEditQuestionSection] = useState("");
+  const [editQuestionReviewerTypes, setEditQuestionReviewerTypes] = useState<string[]>(["self", "peer", "manager"]);
+
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [importTargetSectionId, setImportTargetSectionId] = useState<string | null>(null);
+  const [selectedCompetencyId, setSelectedCompetencyId] = useState<string | null>(null);
+  const [selectedCompetencyQuestions, setSelectedCompetencyQuestions] = useState<Set<string>>(new Set());
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<AppraisalTemplate[]>({
     queryKey: ["/api/appraisal-templates"],
@@ -65,6 +148,21 @@ export default function AppraisalTemplates() {
   const { data: questions = [], isLoading: questionsLoading } = useQuery<TemplateQuestion[]>({
     queryKey: ["/api/appraisal-templates", selectedTemplateId, "questions"],
     enabled: !!selectedTemplateId,
+  });
+
+  const { data: sections = [], isLoading: sectionsLoading } = useQuery<TemplateSection[]>({
+    queryKey: ["/api/appraisal-templates", selectedTemplateId, "sections"],
+    enabled: !!selectedTemplateId,
+  });
+
+  const { data: competencies = [] } = useQuery<Competency[]>({
+    queryKey: ["/api/competencies"],
+    enabled: importDialogOpen,
+  });
+
+  const { data: competencyQuestions = [] } = useQuery<CompetencyQuestion[]>({
+    queryKey: ["/api/competencies", selectedCompetencyId, "questions"],
+    enabled: !!selectedCompetencyId,
   });
 
   const createTemplateMutation = useMutation({
@@ -116,13 +214,67 @@ export default function AppraisalTemplates() {
     },
   });
 
+  const createSectionMutation = useMutation({
+    mutationFn: async (data: { name: string; order: number }) => {
+      const res = await apiRequest("POST", `/api/appraisal-templates/${selectedTemplateId}/sections`, data);
+      return res.json();
+    },
+    onSuccess: (newSection: TemplateSection) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-templates", selectedTemplateId, "sections"] });
+      toast({ title: "Section created", description: "New section has been added." });
+      setAddSectionName("");
+      setExpandedSections(prev => new Set(prev).add(newSection.id));
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateSectionMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { name?: string; order?: number } }) => {
+      const res = await apiRequest("PATCH", `/api/template-sections/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-templates", selectedTemplateId, "sections"] });
+      toast({ title: "Section updated" });
+      setEditingSectionId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteSectionMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/template-sections/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-templates", selectedTemplateId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-templates", selectedTemplateId, "questions"] });
+      toast({ title: "Section deleted" });
+      setDeleteSectionId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const addQuestionMutation = useMutation({
-    mutationFn: async (data: { templateId: string; questionText: string; questionType: string; order: number; section?: string }) => {
+    mutationFn: async (data: {
+      templateId: string;
+      questionText: string;
+      questionType: string;
+      order: number;
+      sectionId?: string | null;
+      reviewerTypes: string[];
+    }) => {
       const res = await apiRequest("POST", `/api/appraisal-templates/${data.templateId}/questions`, {
         questionText: data.questionText,
         questionType: data.questionType,
         order: data.order,
-        section: data.section || null,
+        sectionId: data.sectionId || null,
+        reviewerTypes: data.reviewerTypes,
       });
       return res.json();
     },
@@ -132,7 +284,8 @@ export default function AppraisalTemplates() {
       toast({ title: "Question added", description: "The question has been added to the template." });
       setAddQuestionText("");
       setAddQuestionType("rating");
-      setAddQuestionSection("");
+      setAddQuestionReviewerTypes(["self", "peer", "manager"]);
+      setAddQuestionSectionId(null);
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -140,7 +293,7 @@ export default function AppraisalTemplates() {
   });
 
   const updateQuestionMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { questionText?: string; questionType?: string; section?: string | null } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { questionText?: string; questionType?: string; reviewerTypes?: string[] } }) => {
       const res = await apiRequest("PATCH", `/api/template-questions/${id}`, data);
       return res.json();
     },
@@ -163,6 +316,29 @@ export default function AppraisalTemplates() {
       queryClient.invalidateQueries({ queryKey: ["/api/appraisal-templates"] });
       toast({ title: "Question deleted", description: "The question has been removed." });
       setDeleteQuestionId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const importQuestionsMutation = useMutation({
+    mutationFn: async (questionsToImport: { questionText: string; questionType: string; order: number; sectionId: string | null; competencyId: string; reviewerTypes: string[] }[]) => {
+      const results = [];
+      for (const q of questionsToImport) {
+        const res = await apiRequest("POST", `/api/appraisal-templates/${selectedTemplateId}/questions`, q);
+        results.push(await res.json());
+      }
+      return results;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-templates", selectedTemplateId, "questions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-templates"] });
+      toast({ title: "Questions imported", description: "Competency questions have been added to the template." });
+      setImportDialogOpen(false);
+      setSelectedCompetencyId(null);
+      setSelectedCompetencyQuestions(new Set());
+      setImportTargetSectionId(null);
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -206,18 +382,42 @@ export default function AppraisalTemplates() {
     setEditDescription(template.description || "");
   }
 
-  function handleAddQuestion() {
+  function handleAddSection() {
+    if (!addSectionName.trim() || !selectedTemplateId) {
+      toast({ title: "Validation Error", description: "Please enter a section name.", variant: "destructive" });
+      return;
+    }
+    const nextOrder = sections.length;
+    createSectionMutation.mutate({ name: addSectionName.trim(), order: nextOrder });
+  }
+
+  function handleStartEditSection(section: TemplateSection) {
+    setEditingSectionId(section.id);
+    setEditSectionName(section.name);
+  }
+
+  function handleSaveSectionEdit(id: string) {
+    if (!editSectionName.trim()) {
+      toast({ title: "Validation Error", description: "Section name cannot be empty.", variant: "destructive" });
+      return;
+    }
+    updateSectionMutation.mutate({ id, data: { name: editSectionName.trim() } });
+  }
+
+  function handleAddQuestion(sectionId: string | null) {
     if (!addQuestionText.trim() || !selectedTemplateId) {
       toast({ title: "Validation Error", description: "Please enter the question text.", variant: "destructive" });
       return;
     }
-    const nextOrder = questions.length + 1;
+    const sectionQuestions = questions.filter(q => (q.sectionId || null) === sectionId);
+    const nextOrder = sectionQuestions.length + 1;
     addQuestionMutation.mutate({
       templateId: selectedTemplateId,
       questionText: addQuestionText.trim(),
       questionType: addQuestionType,
       order: nextOrder,
-      section: addQuestionSection.trim() || undefined,
+      sectionId,
+      reviewerTypes: addQuestionReviewerTypes,
     });
   }
 
@@ -225,7 +425,7 @@ export default function AppraisalTemplates() {
     setEditingQuestionId(question.id);
     setEditQuestionText(question.questionText);
     setEditQuestionType(question.questionType);
-    setEditQuestionSection(question.section || "");
+    setEditQuestionReviewerTypes(question.reviewerTypes || ["self", "peer", "manager"]);
   }
 
   function handleSaveQuestionEdit(id: string) {
@@ -233,7 +433,14 @@ export default function AppraisalTemplates() {
       toast({ title: "Validation Error", description: "Question text cannot be empty.", variant: "destructive" });
       return;
     }
-    updateQuestionMutation.mutate({ id, data: { questionText: editQuestionText.trim(), questionType: editQuestionType, section: editQuestionSection.trim() || null } });
+    updateQuestionMutation.mutate({
+      id,
+      data: {
+        questionText: editQuestionText.trim(),
+        questionType: editQuestionType,
+        reviewerTypes: editQuestionReviewerTypes,
+      },
+    });
   }
 
   function toggleTemplate(id: string) {
@@ -241,20 +448,368 @@ export default function AppraisalTemplates() {
     setEditingQuestionId(null);
     setAddQuestionText("");
     setAddQuestionType("rating");
-    setAddQuestionSection("");
+    setAddQuestionReviewerTypes(["self", "peer", "manager"]);
+    setAddQuestionSectionId(null);
+    setExpandedSections(new Set());
   }
 
+  function toggleSectionExpanded(sectionId: string) {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) {
+        next.delete(sectionId);
+      } else {
+        next.add(sectionId);
+      }
+      return next;
+    });
+  }
+
+  function handleOpenImportDialog(sectionId: string | null) {
+    setImportTargetSectionId(sectionId);
+    setSelectedCompetencyId(null);
+    setSelectedCompetencyQuestions(new Set());
+    setImportDialogOpen(true);
+  }
+
+  function handleImportQuestions() {
+    if (!selectedCompetencyId || selectedCompetencyQuestions.size === 0) return;
+    const toImport = competencyQuestions
+      .filter(cq => selectedCompetencyQuestions.has(cq.id))
+      .map((cq, idx) => ({
+        questionText: cq.questionText,
+        questionType: cq.questionType,
+        order: questions.filter(q => (q.sectionId || null) === importTargetSectionId).length + idx + 1,
+        sectionId: importTargetSectionId,
+        competencyId: selectedCompetencyId,
+        reviewerTypes: ["self", "peer", "manager"],
+      }));
+    importQuestionsMutation.mutate(toImport);
+  }
+
+  function toggleCompetencyQuestion(id: string) {
+    setSelectedCompetencyQuestions(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function selectAllCompetencyQuestions() {
+    if (selectedCompetencyQuestions.size === competencyQuestions.length) {
+      setSelectedCompetencyQuestions(new Set());
+    } else {
+      setSelectedCompetencyQuestions(new Set(competencyQuestions.map(q => q.id)));
+    }
+  }
+
+  const sortedSections = [...sections].sort((a, b) => a.order - b.order);
   const sortedQuestions = [...questions].sort((a, b) => a.order - b.order);
+  const unsectionedQuestions = sortedQuestions.filter(q => !q.sectionId);
   const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
 
-  const groupedQuestions = sortedQuestions.reduce<Record<string, TemplateQuestion[]>>((acc, q) => {
-    const sectionName = q.section || "General";
-    if (!acc[sectionName]) acc[sectionName] = [];
-    acc[sectionName].push(q);
-    return acc;
-  }, {});
-  const sectionNames = Object.keys(groupedQuestions);
-  const existingSections = Array.from(new Set(sortedQuestions.map(q => q.section).filter(Boolean))) as string[];
+  function getQuestionsForSection(sectionId: string) {
+    return sortedQuestions.filter(q => q.sectionId === sectionId);
+  }
+
+  function renderQuestionRow(question: TemplateQuestion) {
+    const isEditingQ = editingQuestionId === question.id;
+
+    return (
+      <div
+        key={question.id}
+        className="flex items-start gap-3 p-2 rounded-md bg-muted/50"
+        data-testid={`question-row-${question.id}`}
+      >
+        <span className="text-xs text-muted-foreground w-6 text-center flex-shrink-0 flex items-center justify-center mt-1">
+          <GripVertical className="h-3 w-3 inline mr-0.5" />
+          {question.order}
+        </span>
+
+        {isEditingQ ? (
+          <div className="flex-1 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Input
+                value={editQuestionText}
+                onChange={e => setEditQuestionText(e.target.value)}
+                className="flex-1 min-w-[200px]"
+                data-testid={`input-edit-question-text-${question.id}`}
+              />
+              <Select value={editQuestionType} onValueChange={setEditQuestionType}>
+                <SelectTrigger className="w-[120px]" data-testid={`select-edit-question-type-${question.id}`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rating">Rating</SelectItem>
+                  <SelectItem value="text">Text</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => handleSaveQuestionEdit(question.id)}
+                disabled={updateQuestionMutation.isPending}
+                data-testid={`button-save-question-${question.id}`}
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setEditingQuestionId(null)}
+                data-testid={`button-cancel-edit-question-${question.id}`}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground mb-1 block">Visible to:</Label>
+              <ReviewerTypeCheckboxes
+                selected={editQuestionReviewerTypes}
+                onChange={setEditQuestionReviewerTypes}
+                testIdPrefix={`checkbox-edit-reviewer-${question.id}`}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-start gap-2 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <span className="text-sm" data-testid={`text-question-${question.id}`}>
+                {question.questionText}
+              </span>
+              <div className="mt-1">
+                <ReviewerTypeBadges types={question.reviewerTypes || ["self", "peer", "manager"]} />
+              </div>
+            </div>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <Badge variant="outline" data-testid={`badge-question-type-${question.id}`}>
+                {question.questionType === "rating" ? (
+                  <Star className="h-3 w-3 mr-1" />
+                ) : (
+                  <AlignLeft className="h-3 w-3 mr-1" />
+                )}
+                {question.questionType === "rating" ? "Rating" : "Text"}
+              </Badge>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => handleStartEditQuestion(question)}
+                data-testid={`button-edit-question-${question.id}`}
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => setDeleteQuestionId(question.id)}
+                data-testid={`button-delete-question-${question.id}`}
+              >
+                <Trash2 className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function renderAddQuestionForm(sectionId: string | null) {
+    const isActive = addQuestionSectionId === sectionId;
+
+    if (!isActive) {
+      return (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setAddQuestionSectionId(sectionId);
+              setAddQuestionText("");
+              setAddQuestionType("rating");
+              setAddQuestionReviewerTypes(["self", "peer", "manager"]);
+            }}
+            data-testid={`button-start-add-question-${sectionId || "general"}`}
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            Add Question
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleOpenImportDialog(sectionId)}
+            data-testid={`button-import-competency-${sectionId || "general"}`}
+          >
+            <Import className="h-3 w-3 mr-1" />
+            Import from Competencies
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3 p-3 border rounded-md bg-muted/30">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            value={addQuestionText}
+            onChange={e => setAddQuestionText(e.target.value)}
+            placeholder="Enter question text..."
+            className="flex-1 min-w-[200px]"
+            data-testid="input-add-question-text"
+          />
+          <Select value={addQuestionType} onValueChange={setAddQuestionType}>
+            <SelectTrigger className="w-[120px]" data-testid="select-add-question-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="rating">Rating</SelectItem>
+              <SelectItem value="text">Text</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground mb-1 block">Visible to:</Label>
+          <ReviewerTypeCheckboxes
+            selected={addQuestionReviewerTypes}
+            onChange={setAddQuestionReviewerTypes}
+            testIdPrefix="checkbox-add-reviewer"
+          />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            size="sm"
+            onClick={() => handleAddQuestion(sectionId)}
+            disabled={addQuestionMutation.isPending}
+            data-testid="button-add-question"
+          >
+            <Plus className="h-3 w-3 mr-1" />
+            {addQuestionMutation.isPending ? "Adding..." : "Add Question"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setAddQuestionSectionId(null)}
+            data-testid="button-cancel-add-question"
+          >
+            Cancel
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderSectionBlock(section: TemplateSection) {
+    const sectionQuestions = getQuestionsForSection(section.id);
+    const isExpanded = expandedSections.has(section.id);
+    const isEditingSec = editingSectionId === section.id;
+
+    return (
+      <div
+        key={section.id}
+        className="border rounded-md overflow-visible"
+        data-testid={`section-block-${section.id}`}
+      >
+        <div
+          className="flex items-center justify-between gap-2 p-3 cursor-pointer flex-wrap"
+          onClick={() => !isEditingSec && toggleSectionExpanded(section.id)}
+          data-testid={`button-toggle-section-${section.id}`}
+        >
+          <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+            <Layers className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+            {isEditingSec ? (
+              <div className="flex items-center gap-2 flex-wrap" onClick={e => e.stopPropagation()}>
+                <Input
+                  value={editSectionName}
+                  onChange={e => setEditSectionName(e.target.value)}
+                  className="w-[200px]"
+                  data-testid={`input-edit-section-name-${section.id}`}
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => handleSaveSectionEdit(section.id)}
+                  disabled={updateSectionMutation.isPending}
+                  data-testid={`button-save-section-${section.id}`}
+                >
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setEditingSectionId(null)}
+                  data-testid={`button-cancel-edit-section-${section.id}`}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <span className="font-medium text-sm" data-testid={`text-section-name-${section.id}`}>
+                  {section.name}
+                </span>
+                <Badge variant="secondary" className="text-[10px]">
+                  {sectionQuestions.length}
+                </Badge>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {!isEditingSec && (
+              <>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={e => {
+                    e.stopPropagation();
+                    handleStartEditSection(section);
+                  }}
+                  data-testid={`button-edit-section-${section.id}`}
+                >
+                  <Pencil className="h-3 w-3" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={e => {
+                    e.stopPropagation();
+                    setDeleteSectionId(section.id);
+                  }}
+                  data-testid={`button-delete-section-${section.id}`}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+                {isExpanded ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div className="p-3 pt-0 space-y-2">
+            <div className="border-t pt-3 space-y-2">
+              {sectionQuestions.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-1">
+                  No questions in this section yet.
+                </p>
+              ) : (
+                sectionQuestions.map(q => renderQuestionRow(q))
+              )}
+              <div className="pt-2">
+                {renderAddQuestionForm(section.id)}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -424,11 +979,11 @@ export default function AppraisalTemplates() {
                     <div className="mt-4 pt-4 border-t space-y-4">
                       <div className="flex items-center justify-between gap-4 flex-wrap">
                         <h3 className="text-sm font-semibold" data-testid="text-questions-heading">
-                          Questions ({sortedQuestions.length})
+                          Sections & Questions ({sortedQuestions.length} questions)
                         </h3>
                       </div>
 
-                      {questionsLoading ? (
+                      {(questionsLoading || sectionsLoading) ? (
                         <div className="space-y-2">
                           {[1, 2].map(i => (
                             <div key={i} className="flex items-center gap-3">
@@ -438,161 +993,78 @@ export default function AppraisalTemplates() {
                             </div>
                           ))}
                         </div>
-                      ) : sortedQuestions.length === 0 ? (
-                        <p className="text-sm text-muted-foreground py-2">
-                          No questions yet. Add your first question below.
-                        </p>
                       ) : (
-                        <div className="space-y-4">
-                          {sectionNames.map(sectionName => (
-                            <div key={sectionName} data-testid={`section-group-${sectionName}`}>
-                              <div className="flex items-center gap-2 mb-2">
-                                <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-                                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" data-testid={`text-section-header-${sectionName}`}>
-                                  {sectionName}
-                                </span>
-                                <Badge variant="secondary" className="text-[10px]">{groupedQuestions[sectionName].length}</Badge>
+                        <div className="space-y-3">
+                          {sortedSections.map(section => renderSectionBlock(section))}
+
+                          {unsectionedQuestions.length > 0 && (
+                            <div
+                              className="border rounded-md overflow-visible"
+                              data-testid="section-block-general"
+                            >
+                              <div
+                                className="flex items-center justify-between gap-2 p-3 cursor-pointer flex-wrap"
+                                onClick={() => toggleSectionExpanded("__general__")}
+                                data-testid="button-toggle-section-general"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Layers className="h-4 w-4 text-muted-foreground" />
+                                  <span className="font-medium text-sm" data-testid="text-section-name-general">
+                                    General
+                                  </span>
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    {unsectionedQuestions.length}
+                                  </Badge>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  {expandedSections.has("__general__") ? (
+                                    <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                                  ) : (
+                                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                  )}
+                                </div>
                               </div>
-                              <div className="space-y-2">
-                                {groupedQuestions[sectionName].map(question => {
-                                  const isEditingQ = editingQuestionId === question.id;
-
-                                  return (
-                                    <div
-                                      key={question.id}
-                                      className="flex items-center gap-3 p-2 rounded-md bg-muted/50"
-                                      data-testid={`question-row-${question.id}`}
-                                    >
-                                      <span className="text-xs text-muted-foreground w-6 text-center flex-shrink-0 flex items-center justify-center">
-                                        <GripVertical className="h-3 w-3 inline mr-0.5" />
-                                        {question.order}
-                                      </span>
-
-                                      {isEditingQ ? (
-                                        <div className="flex-1 flex items-center gap-2 flex-wrap">
-                                          <Input
-                                            value={editQuestionText}
-                                            onChange={e => setEditQuestionText(e.target.value)}
-                                            className="flex-1 min-w-[200px]"
-                                            data-testid={`input-edit-question-text-${question.id}`}
-                                          />
-                                          <Select value={editQuestionType} onValueChange={setEditQuestionType}>
-                                            <SelectTrigger className="w-[120px]" data-testid={`select-edit-question-type-${question.id}`}>
-                                              <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="rating">Rating</SelectItem>
-                                              <SelectItem value="text">Text</SelectItem>
-                                            </SelectContent>
-                                          </Select>
-                                          <Input
-                                            value={editQuestionSection}
-                                            onChange={e => setEditQuestionSection(e.target.value)}
-                                            placeholder="Section (optional)"
-                                            className="w-[160px]"
-                                            data-testid={`input-edit-question-section-${question.id}`}
-                                          />
-                                          <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            onClick={() => handleSaveQuestionEdit(question.id)}
-                                            disabled={updateQuestionMutation.isPending}
-                                            data-testid={`button-save-question-${question.id}`}
-                                          >
-                                            <Check className="h-4 w-4" />
-                                          </Button>
-                                          <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            onClick={() => setEditingQuestionId(null)}
-                                            data-testid={`button-cancel-edit-question-${question.id}`}
-                                          >
-                                            <X className="h-4 w-4" />
-                                          </Button>
-                                        </div>
-                                      ) : (
-                                        <>
-                                          <span className="flex-1 text-sm" data-testid={`text-question-${question.id}`}>
-                                            {question.questionText}
-                                          </span>
-                                          <Badge variant="outline" data-testid={`badge-question-type-${question.id}`}>
-                                            {question.questionType === "rating" ? (
-                                              <Star className="h-3 w-3 mr-1" />
-                                            ) : (
-                                              <AlignLeft className="h-3 w-3 mr-1" />
-                                            )}
-                                            {question.questionType === "rating" ? "Rating" : "Text"}
-                                          </Badge>
-                                          <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            onClick={() => handleStartEditQuestion(question)}
-                                            data-testid={`button-edit-question-${question.id}`}
-                                          >
-                                            <Pencil className="h-3 w-3" />
-                                          </Button>
-                                          <Button
-                                            size="icon"
-                                            variant="ghost"
-                                            onClick={() => setDeleteQuestionId(question.id)}
-                                            data-testid={`button-delete-question-${question.id}`}
-                                          >
-                                            <Trash2 className="h-3 w-3" />
-                                          </Button>
-                                        </>
-                                      )}
+                              {expandedSections.has("__general__") && (
+                                <div className="p-3 pt-0 space-y-2">
+                                  <div className="border-t pt-3 space-y-2">
+                                    {unsectionedQuestions.map(q => renderQuestionRow(q))}
+                                    <div className="pt-2">
+                                      {renderAddQuestionForm(null)}
                                     </div>
-                                  );
-                                })}
-                              </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          ))}
+                          )}
+
+                          {unsectionedQuestions.length === 0 && sortedSections.length === 0 && (
+                            <p className="text-sm text-muted-foreground py-2">
+                              No sections or questions yet. Add a section to get started.
+                            </p>
+                          )}
+
+                          <div className="pt-2 border-t">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Input
+                                value={addSectionName}
+                                onChange={e => setAddSectionName(e.target.value)}
+                                placeholder="New section name..."
+                                className="w-[240px]"
+                                data-testid="input-add-section-name"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={handleAddSection}
+                                disabled={createSectionMutation.isPending}
+                                data-testid="button-add-section"
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                {createSectionMutation.isPending ? "Adding..." : "Add Section"}
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       )}
-
-                      <div className="pt-2 border-t">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Input
-                            value={addQuestionText}
-                            onChange={e => setAddQuestionText(e.target.value)}
-                            placeholder="Enter question text..."
-                            className="flex-1 min-w-[200px]"
-                            data-testid="input-add-question-text"
-                          />
-                          <Select value={addQuestionType} onValueChange={setAddQuestionType}>
-                            <SelectTrigger className="w-[120px]" data-testid="select-add-question-type">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="rating">Rating</SelectItem>
-                              <SelectItem value="text">Text</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            value={addQuestionSection}
-                            onChange={e => setAddQuestionSection(e.target.value)}
-                            placeholder="Section (optional)"
-                            className="w-[160px]"
-                            list="existing-sections"
-                            data-testid="input-add-question-section"
-                          />
-                          {existingSections.length > 0 && (
-                            <datalist id="existing-sections">
-                              {existingSections.map(s => (
-                                <option key={s} value={s} />
-                              ))}
-                            </datalist>
-                          )}
-                          <Button
-                            onClick={handleAddQuestion}
-                            disabled={addQuestionMutation.isPending}
-                            data-testid="button-add-question"
-                          >
-                            <Plus className="h-4 w-4 mr-1" />
-                            {addQuestionMutation.isPending ? "Adding..." : "Add"}
-                          </Button>
-                        </div>
-                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -691,6 +1163,134 @@ export default function AppraisalTemplates() {
               data-testid="button-confirm-delete-question"
             >
               {deleteQuestionMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteSectionId} onOpenChange={() => setDeleteSectionId(null)}>
+        <DialogContent className="sm:max-w-[400px]" data-testid="dialog-delete-section">
+          <DialogHeader>
+            <DialogTitle>Delete Section</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this section? Questions in this section will become unsectioned. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteSectionId(null)} data-testid="button-cancel-delete-section">
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteSectionId && deleteSectionMutation.mutate(deleteSectionId)}
+              disabled={deleteSectionMutation.isPending}
+              data-testid="button-confirm-delete-section"
+            >
+              {deleteSectionMutation.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent className="sm:max-w-[550px]" data-testid="dialog-import-competency">
+          <DialogHeader>
+            <DialogTitle>Import from Competency Library</DialogTitle>
+            <DialogDescription>
+              Select a competency and choose which questions to import into {importTargetSectionId ? sections.find(s => s.id === importTargetSectionId)?.name || "this section" : "the General section"}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[400px] overflow-y-auto">
+            {competencies.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No competencies available. Create competencies in the Competency Library first.
+              </p>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>Select Competency</Label>
+                  <Select
+                    value={selectedCompetencyId || ""}
+                    onValueChange={val => {
+                      setSelectedCompetencyId(val);
+                      setSelectedCompetencyQuestions(new Set());
+                    }}
+                  >
+                    <SelectTrigger data-testid="select-import-competency">
+                      <SelectValue placeholder="Choose a competency..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {competencies.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} ({c.category})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedCompetencyId && competencyQuestions.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <Label>Questions</Label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={selectAllCompetencyQuestions}
+                        data-testid="button-select-all-competency-questions"
+                      >
+                        {selectedCompetencyQuestions.size === competencyQuestions.length ? "Deselect All" : "Select All"}
+                      </Button>
+                    </div>
+                    <div className="space-y-1">
+                      {competencyQuestions.map(cq => (
+                        <label
+                          key={cq.id}
+                          className="flex items-start gap-2 p-2 rounded-md cursor-pointer bg-muted/30"
+                          data-testid={`import-question-row-${cq.id}`}
+                        >
+                          <Checkbox
+                            checked={selectedCompetencyQuestions.has(cq.id)}
+                            onCheckedChange={() => toggleCompetencyQuestion(cq.id)}
+                            className="mt-0.5"
+                            data-testid={`checkbox-import-question-${cq.id}`}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <span className="text-sm">{cq.questionText}</span>
+                            <Badge variant="outline" className="ml-2 text-[10px]">
+                              {cq.questionType === "rating" ? "Rating" : "Text"}
+                            </Badge>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedCompetencyId && competencyQuestions.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    This competency has no questions yet.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setImportDialogOpen(false)}
+              data-testid="button-cancel-import"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImportQuestions}
+              disabled={importQuestionsMutation.isPending || selectedCompetencyQuestions.size === 0}
+              data-testid="button-confirm-import"
+            >
+              {importQuestionsMutation.isPending
+                ? "Importing..."
+                : `Import ${selectedCompetencyQuestions.size} Question${selectedCompetencyQuestions.size !== 1 ? "s" : ""}`}
             </Button>
           </DialogFooter>
         </DialogContent>

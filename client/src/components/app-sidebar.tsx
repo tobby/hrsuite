@@ -17,6 +17,7 @@ import {
   UserPlus,
   HelpCircle,
   ClipboardList,
+  BookOpen,
   PieChart,
   LogOut,
   Shield,
@@ -318,6 +319,18 @@ export function AppSidebar() {
                             <Link href="/appraisals/templates" data-testid="nav-appraisal-templates">
                               <FileText className="h-3 w-3" />
                               <span>Templates</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/appraisals/competencies"}
+                            className="transition-all duration-150"
+                          >
+                            <Link href="/appraisals/competencies" data-testid="nav-competency-library">
+                              <BookOpen className="h-3 w-3" />
+                              <span>Competencies</span>
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>

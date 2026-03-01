@@ -35,6 +35,7 @@ import QueryDetail from "@/pages/query-detail";
 import OnboardingTemplates from "@/pages/onboarding-templates";
 import OnboardingTracker from "@/pages/onboarding-tracker";
 import MyOnboarding from "@/pages/my-onboarding";
+import CompetencyLibrary from "@/pages/competency-library";
 import Reports from "@/pages/reports";
 import Careers from "@/pages/careers";
 import JobDetails from "@/pages/job-details";
@@ -72,6 +73,7 @@ function PrivateRouter() {
       <Route path="/appraisals/review/:id" component={AppraisalReview} />
       <Route path="/appraisals/results/:id" component={AppraisalResults} />
       <Route path="/appraisals/templates" component={AppraisalTemplates} />
+      <Route path="/appraisals/competencies" component={CompetencyLibrary} />
       <Route path="/appraisals/cycles" component={AppraisalCycles} />
       <Route path="/appraisals/cycles/:id" component={CycleProgress} />
       <Route path="/recruitment/jobs" component={RecruitmentJobs} />

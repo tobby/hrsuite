@@ -1370,7 +1370,7 @@ export async function registerRoutes(
 
   app.post("/api/appraisal-templates/:id/questions", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { questionText, questionType, order, competencyId, section } = req.body;
+      const { questionText, questionType, order, competencyId, section, sectionId, reviewerTypes } = req.body;
       if (!questionText || !questionType) {
         return res.status(400).json({ message: "questionText and questionType are required" });
       }
@@ -1381,6 +1381,8 @@ export async function registerRoutes(
         order,
         competencyId,
         section: section || null,
+        sectionId: sectionId || null,
+        reviewerTypes: reviewerTypes || ["self", "peer", "manager"],
       });
       return res.status(201).json(question);
     } catch (error) {
@@ -1390,6 +1392,15 @@ export async function registerRoutes(
 
   app.patch("/api/template-questions/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
+      const validReviewerTypes = ["self", "peer", "manager"];
+      if (req.body.reviewerTypes) {
+        if (!Array.isArray(req.body.reviewerTypes) || req.body.reviewerTypes.length === 0) {
+          return res.status(400).json({ message: "reviewerTypes must be a non-empty array" });
+        }
+        if (!req.body.reviewerTypes.every((t: string) => validReviewerTypes.includes(t))) {
+          return res.status(400).json({ message: "reviewerTypes must contain only: self, peer, manager" });
+        }
+      }
       const question = await storage.updateTemplateQuestion(req.params.id, req.body);
       if (!question) return res.status(404).json({ message: "Question not found" });
       return res.json(question);
@@ -1401,6 +1412,164 @@ export async function registerRoutes(
   app.delete("/api/template-questions/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
       const deleted = await storage.deleteTemplateQuestion(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Question not found" });
+      return res.json({ message: "Question deleted" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== TEMPLATE SECTIONS ====================
+
+  app.get("/api/appraisal-templates/:id/sections", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const sections = await storage.getTemplateSections(req.params.id);
+      return res.json(sections);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/appraisal-templates/:id/sections", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { name, order } = req.body;
+      if (!name) {
+        return res.status(400).json({ message: "Section name is required" });
+      }
+      const section = await storage.createTemplateSection({
+        templateId: req.params.id,
+        name,
+        order: order || 0,
+      });
+      return res.status(201).json(section);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/template-sections/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const section = await storage.updateTemplateSection(req.params.id, req.body);
+      if (!section) return res.status(404).json({ message: "Section not found" });
+      return res.json(section);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/template-sections/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const deleted = await storage.deleteTemplateSection(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Section not found" });
+      return res.json({ message: "Section deleted" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== COMPETENCIES ====================
+
+  app.get("/api/competencies", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const comps = await storage.getCompetenciesByCompany(companyId);
+      return res.json(comps);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/competencies", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const { name, description, category } = req.body;
+      if (!name || !category) {
+        return res.status(400).json({ message: "name and category are required" });
+      }
+      const competency = await storage.createCompetency({
+        companyId,
+        name,
+        description: description || "",
+        category,
+      });
+      return res.status(201).json(competency);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/competencies/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const competency = await storage.getCompetency(req.params.id);
+      if (!competency) return res.status(404).json({ message: "Competency not found" });
+      return res.json(competency);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/competencies/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const competency = await storage.updateCompetency(req.params.id, req.body);
+      if (!competency) return res.status(404).json({ message: "Competency not found" });
+      return res.json(competency);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/competencies/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const deleted = await storage.deleteCompetency(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Competency not found" });
+      return res.json({ message: "Competency deleted" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== COMPETENCY QUESTIONS ====================
+
+  app.get("/api/competencies/:id/questions", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const questions = await storage.getCompetencyQuestions(req.params.id);
+      return res.json(questions);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/competencies/:id/questions", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { questionText, questionType, order } = req.body;
+      if (!questionText) {
+        return res.status(400).json({ message: "questionText is required" });
+      }
+      const question = await storage.createCompetencyQuestion({
+        competencyId: req.params.id,
+        questionText,
+        questionType: questionType || "rating",
+        order: order || 0,
+      });
+      return res.status(201).json(question);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/competency-questions/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const question = await storage.updateCompetencyQuestion(req.params.id, req.body);
+      if (!question) return res.status(404).json({ message: "Question not found" });
+      return res.json(question);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/competency-questions/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const deleted = await storage.deleteCompetencyQuestion(req.params.id);
       if (!deleted) return res.status(404).json({ message: "Question not found" });
       return res.json({ message: "Question deleted" });
     } catch (error) {
@@ -1697,8 +1866,10 @@ export async function registerRoutes(
       const cycle = await storage.getAppraisalCycle(appraisal.cycleId);
       const employee = await storage.getEmployee(appraisal.employeeId);
       let questions: any[] = [];
+      let sections: any[] = [];
       if (cycle && cycle.templateId) {
         questions = await storage.getTemplateQuestions(cycle.templateId);
+        sections = await storage.getTemplateSections(cycle.templateId);
       }
 
       return res.json({
@@ -1706,6 +1877,7 @@ export async function registerRoutes(
         cycle: cycle ? { id: cycle.id, name: cycle.name, type: cycle.type, selfWeight: cycle.selfWeight, peerWeight: cycle.peerWeight, managerWeight: cycle.managerWeight } : null,
         feedbacks: feedbackWithRatings,
         questions,
+        sections,
         employee: employee ? { id: employee.id, firstName: employee.firstName, lastName: employee.lastName } : null,
       });
     } catch (error) {
@@ -1771,12 +1943,14 @@ export async function registerRoutes(
       const ratings = await storage.getFeedbackRatings(feedback.id);
       const appraisal = await storage.getAppraisal(feedback.appraisalId);
       let questions: any[] = [];
+      let sections: any[] = [];
       let cycle: any = null;
       let employee: any = null;
       if (appraisal) {
         cycle = await storage.getAppraisalCycle(appraisal.cycleId);
         if (cycle && cycle.templateId) {
           questions = await storage.getTemplateQuestions(cycle.templateId);
+          sections = await storage.getTemplateSections(cycle.templateId);
         }
         employee = await storage.getEmployee(appraisal.employeeId);
       }
@@ -1786,6 +1960,7 @@ export async function registerRoutes(
         appraisal,
         cycle: cycle ? { id: cycle.id, name: cycle.name, type: cycle.type } : null,
         questions,
+        sections,
         ratings,
         employee: employee ? { id: employee.id, firstName: employee.firstName, lastName: employee.lastName } : null,
       });

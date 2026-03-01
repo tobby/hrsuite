@@ -19,6 +19,7 @@ import {
   Star,
   Users,
   CalendarRange,
+  BookOpen,
 } from "lucide-react";
 
 const statusLabels: Record<string, string> = {
@@ -124,6 +125,12 @@ export default function Appraisals() {
               <Button variant="outline" data-testid="link-templates">
                 <FileText className="h-4 w-4 mr-2" />
                 Templates
+              </Button>
+            </Link>
+            <Link href="/appraisals/competencies">
+              <Button variant="outline" data-testid="link-competencies">
+                <BookOpen className="h-4 w-4 mr-2" />
+                Competencies
               </Button>
             </Link>
             <Link href="/appraisals/cycles">

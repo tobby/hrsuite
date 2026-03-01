@@ -12,7 +12,10 @@ import {
   hrQueryTimeline, type HrQueryTimeline,
   hrQueryAttachments, type HrQueryAttachment,
   appraisalTemplates, type AppraisalTemplate,
+  templateSections, type TemplateSection,
   templateQuestions, type TemplateQuestion,
+  competencyQuestions, type CompetencyQuestion,
+  competencies, type Competency,
   appraisalCycles, type AppraisalCycle, type InsertAppraisalCycle,
   appraisals, type Appraisal,
   appraisalFeedback, type AppraisalFeedback, type InsertAppraisalFeedback,
@@ -110,12 +113,33 @@ export interface IStorage {
   updateAppraisalTemplate(id: string, data: Partial<{ name: string; description: string; isDefault: number }>): Promise<AppraisalTemplate | undefined>;
   deleteAppraisalTemplate(id: string): Promise<boolean>;
 
+  // Template Sections
+  createTemplateSection(data: { templateId: string; name: string; order?: number }): Promise<TemplateSection>;
+  getTemplateSections(templateId: string): Promise<TemplateSection[]>;
+  updateTemplateSection(id: string, data: Partial<{ name: string; order: number }>): Promise<TemplateSection | undefined>;
+  deleteTemplateSection(id: string): Promise<boolean>;
+  deleteTemplateSectionsByTemplate(templateId: string): Promise<void>;
+
   // Template Questions
-  createTemplateQuestion(data: { templateId: string; questionText: string; questionType: string; order?: number; competencyId?: string; section?: string | null }): Promise<TemplateQuestion>;
+  createTemplateQuestion(data: { templateId: string; questionText: string; questionType: string; order?: number; competencyId?: string; section?: string | null; sectionId?: string | null; reviewerTypes?: string[] }): Promise<TemplateQuestion>;
   getTemplateQuestions(templateId: string): Promise<TemplateQuestion[]>;
-  updateTemplateQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number; competencyId: string; section: string | null }>): Promise<TemplateQuestion | undefined>;
+  updateTemplateQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number; competencyId: string; section: string | null; sectionId: string | null; reviewerTypes: string[] }>): Promise<TemplateQuestion | undefined>;
   deleteTemplateQuestion(id: string): Promise<boolean>;
   deleteTemplateQuestionsByTemplate(templateId: string): Promise<void>;
+
+  // Competencies
+  createCompetency(data: { companyId: string; name: string; description: string; category: string }): Promise<Competency>;
+  getCompetenciesByCompany(companyId: string): Promise<Competency[]>;
+  getCompetency(id: string): Promise<Competency | undefined>;
+  updateCompetency(id: string, data: Partial<{ name: string; description: string; category: string }>): Promise<Competency | undefined>;
+  deleteCompetency(id: string): Promise<boolean>;
+
+  // Competency Questions
+  createCompetencyQuestion(data: { competencyId: string; questionText: string; questionType: string; order?: number }): Promise<CompetencyQuestion>;
+  getCompetencyQuestions(competencyId: string): Promise<CompetencyQuestion[]>;
+  updateCompetencyQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number }>): Promise<CompetencyQuestion | undefined>;
+  deleteCompetencyQuestion(id: string): Promise<boolean>;
+  deleteCompetencyQuestionsByCompetency(competencyId: string): Promise<void>;
 
   // Appraisal Cycles
   createAppraisalCycle(data: InsertAppraisalCycle): Promise<AppraisalCycle>;
@@ -578,9 +602,35 @@ export class DatabaseStorage implements IStorage {
     return result.length > 0;
   }
 
+  // ==================== TEMPLATE SECTIONS ====================
+
+  async createTemplateSection(data: { templateId: string; name: string; order?: number }): Promise<TemplateSection> {
+    const [section] = await db.insert(templateSections).values(data).returning();
+    return section;
+  }
+
+  async getTemplateSections(templateId: string): Promise<TemplateSection[]> {
+    return db.select().from(templateSections).where(eq(templateSections.templateId, templateId)).orderBy(templateSections.order);
+  }
+
+  async updateTemplateSection(id: string, data: Partial<{ name: string; order: number }>): Promise<TemplateSection | undefined> {
+    const [section] = await db.update(templateSections).set(data).where(eq(templateSections.id, id)).returning();
+    return section;
+  }
+
+  async deleteTemplateSection(id: string): Promise<boolean> {
+    await db.update(templateQuestions).set({ sectionId: null }).where(eq(templateQuestions.sectionId, id));
+    const result = await db.delete(templateSections).where(eq(templateSections.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async deleteTemplateSectionsByTemplate(templateId: string): Promise<void> {
+    await db.delete(templateSections).where(eq(templateSections.templateId, templateId));
+  }
+
   // ==================== TEMPLATE QUESTIONS ====================
 
-  async createTemplateQuestion(data: { templateId: string; questionText: string; questionType: string; order?: number; competencyId?: string; section?: string | null }): Promise<TemplateQuestion> {
+  async createTemplateQuestion(data: { templateId: string; questionText: string; questionType: string; order?: number; competencyId?: string; section?: string | null; sectionId?: string | null; reviewerTypes?: string[] }): Promise<TemplateQuestion> {
     const [question] = await db.insert(templateQuestions).values(data).returning();
     return question;
   }
@@ -589,7 +639,7 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(templateQuestions).where(eq(templateQuestions.templateId, templateId)).orderBy(templateQuestions.order);
   }
 
-  async updateTemplateQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number; competencyId: string; section: string | null }>): Promise<TemplateQuestion | undefined> {
+  async updateTemplateQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number; competencyId: string; section: string | null; sectionId: string | null; reviewerTypes: string[] }>): Promise<TemplateQuestion | undefined> {
     const [question] = await db.update(templateQuestions).set(data).where(eq(templateQuestions.id, id)).returning();
     return question;
   }
@@ -601,6 +651,58 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTemplateQuestionsByTemplate(templateId: string): Promise<void> {
     await db.delete(templateQuestions).where(eq(templateQuestions.templateId, templateId));
+  }
+
+  // ==================== COMPETENCIES ====================
+
+  async createCompetency(data: { companyId: string; name: string; description: string; category: string }): Promise<Competency> {
+    const [competency] = await db.insert(competencies).values(data).returning();
+    return competency;
+  }
+
+  async getCompetenciesByCompany(companyId: string): Promise<Competency[]> {
+    return db.select().from(competencies).where(eq(competencies.companyId, companyId)).orderBy(competencies.category, competencies.name);
+  }
+
+  async getCompetency(id: string): Promise<Competency | undefined> {
+    const [competency] = await db.select().from(competencies).where(eq(competencies.id, id));
+    return competency;
+  }
+
+  async updateCompetency(id: string, data: Partial<{ name: string; description: string; category: string }>): Promise<Competency | undefined> {
+    const [competency] = await db.update(competencies).set(data).where(eq(competencies.id, id)).returning();
+    return competency;
+  }
+
+  async deleteCompetency(id: string): Promise<boolean> {
+    await db.delete(competencyQuestions).where(eq(competencyQuestions.competencyId, id));
+    const result = await db.delete(competencies).where(eq(competencies.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // ==================== COMPETENCY QUESTIONS ====================
+
+  async createCompetencyQuestion(data: { competencyId: string; questionText: string; questionType: string; order?: number }): Promise<CompetencyQuestion> {
+    const [question] = await db.insert(competencyQuestions).values(data).returning();
+    return question;
+  }
+
+  async getCompetencyQuestions(competencyId: string): Promise<CompetencyQuestion[]> {
+    return db.select().from(competencyQuestions).where(eq(competencyQuestions.competencyId, competencyId)).orderBy(competencyQuestions.order);
+  }
+
+  async updateCompetencyQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number }>): Promise<CompetencyQuestion | undefined> {
+    const [question] = await db.update(competencyQuestions).set(data).where(eq(competencyQuestions.id, id)).returning();
+    return question;
+  }
+
+  async deleteCompetencyQuestion(id: string): Promise<boolean> {
+    const result = await db.delete(competencyQuestions).where(eq(competencyQuestions.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async deleteCompetencyQuestionsByCompetency(competencyId: string): Promise<void> {
+    await db.delete(competencyQuestions).where(eq(competencyQuestions.competencyId, competencyId));
   }
 
   // ==================== APPRAISAL CYCLES ====================

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useParams, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,6 +41,13 @@ interface FeedbackDetail {
     questionType: string;
     order: number;
     section: string | null;
+    sectionId: string | null;
+    reviewerTypes: string[] | null;
+  }>;
+  sections: Array<{
+    id: string;
+    name: string;
+    order: number;
   }>;
   ratings: Array<{
     id: string;
@@ -80,6 +87,14 @@ function StarRating({ value, onChange, readonly }: { value: number; onChange?: (
   );
 }
 
+function isQuestionVisibleToReviewer(
+  reviewerTypes: string[] | null,
+  reviewerType: string
+): boolean {
+  if (!reviewerTypes || reviewerTypes.length === 0) return true;
+  return reviewerTypes.includes(reviewerType);
+}
+
 export default function AppraisalReview() {
   const params = useParams<{ id: string }>();
   const [, navigate] = useLocation();
@@ -107,6 +122,45 @@ export default function AppraisalReview() {
     }
   }, [data]);
 
+  const filteredQuestions = useMemo(() => {
+    if (!data) return [];
+    const reviewerType = data.feedback.reviewerType;
+    return data.questions.filter(q =>
+      isQuestionVisibleToReviewer(q.reviewerTypes, reviewerType)
+    );
+  }, [data]);
+
+  const groupedSections = useMemo(() => {
+    if (!data) return [];
+
+    const sectionLookup = new Map<string, { name: string; order: number }>();
+    for (const s of (data.sections || [])) {
+      sectionLookup.set(s.id, { name: s.name, order: s.order });
+    }
+
+    const sectionMap = new Map<string, { name: string; order: number; questions: typeof filteredQuestions }>();
+
+    for (const q of filteredQuestions) {
+      const sectionInfo = q.sectionId ? sectionLookup.get(q.sectionId) : null;
+      const key = q.sectionId && sectionInfo ? q.sectionId : "__general__";
+      const name = sectionInfo ? sectionInfo.name : "General";
+      const order = sectionInfo ? sectionInfo.order : 999999;
+
+      if (!sectionMap.has(key)) {
+        sectionMap.set(key, { name, order, questions: [] });
+      }
+      sectionMap.get(key)!.questions.push(q);
+    }
+
+    const sections = Array.from(sectionMap.values());
+    sections.sort((a, b) => a.order - b.order);
+    for (const s of sections) {
+      s.questions.sort((a, b) => a.order - b.order);
+    }
+
+    return sections;
+  }, [data, filteredQuestions]);
+
   const submitMutation = useMutation({
     mutationFn: async (payload: { overallComment: string; ratings: Array<{ questionId: string; rating?: number; textResponse?: string }> }) => {
       const res = await apiRequest("POST", `/api/feedback/${params.id}/submit`, payload);
@@ -126,10 +180,9 @@ export default function AppraisalReview() {
   function handleSubmit() {
     if (!data) return;
 
-    const sortedQuestions = [...data.questions].sort((a, b) => a.order - b.order);
     const errors: string[] = [];
 
-    for (const q of sortedQuestions) {
+    for (const q of filteredQuestions) {
       const r = ratings[q.id];
       if (q.questionType === "rating" && (!r || !r.rating)) {
         errors.push(`Please provide a rating for: "${q.questionText}"`);
@@ -152,7 +205,7 @@ export default function AppraisalReview() {
       return;
     }
 
-    const ratingsPayload = sortedQuestions.map(q => {
+    const ratingsPayload = filteredQuestions.map(q => {
       const r = ratings[q.id] || {};
       if (q.questionType === "rating") {
         return { questionId: q.id, rating: r.rating };
@@ -220,7 +273,6 @@ export default function AppraisalReview() {
   }
 
   const isSubmitted = data.feedback?.status === "submitted";
-  const sortedQuestions = [...(data.questions || [])].sort((a, b) => a.order - b.order);
   const employeeName = data.employee ? `${data.employee.firstName} ${data.employee.lastName}` : "Unknown";
   const reviewerTypeLabel = reviewerTypeLabels[data.feedback?.reviewerType] || data.feedback?.reviewerType || "Review";
 
@@ -255,22 +307,15 @@ export default function AppraisalReview() {
 
       <div className="space-y-6">
         {(() => {
-          const sectionMap = new Map<string, typeof sortedQuestions>();
-          for (const q of sortedQuestions) {
-            const sectionName = q.section || "General";
-            if (!sectionMap.has(sectionName)) sectionMap.set(sectionName, []);
-            sectionMap.get(sectionName)!.push(q);
-          }
-          const sections = Array.from(sectionMap.entries());
           let questionNum = 0;
-          return sections.map(([sectionName, sectionQuestions]) => (
-            <div key={sectionName} className="space-y-4" data-testid={`section-${sectionName.toLowerCase().replace(/\s+/g, '-')}`}>
-              {sections.length > 1 && (
-                <h2 className="text-lg font-semibold border-b pb-2" data-testid={`text-section-title-${sectionName.toLowerCase().replace(/\s+/g, '-')}`}>
-                  {sectionName}
+          return groupedSections.map((section) => (
+            <div key={section.name} className="space-y-4" data-testid={`section-${section.name.toLowerCase().replace(/\s+/g, '-')}`}>
+              {groupedSections.length > 1 && (
+                <h2 className="text-lg font-semibold border-b pb-2" data-testid={`text-section-title-${section.name.toLowerCase().replace(/\s+/g, '-')}`}>
+                  {section.name}
                 </h2>
               )}
-              {sectionQuestions.map((question) => {
+              {section.questions.map((question) => {
                 questionNum++;
                 const currentRating = ratings[question.id];
                 return (

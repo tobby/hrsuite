@@ -141,14 +141,25 @@ export const appraisalTemplates = pgTable("appraisal_templates", {
 
 export type AppraisalTemplate = typeof appraisalTemplates.$inferSelect;
 
+export const templateSections = pgTable("template_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull(),
+  name: text("name").notNull(),
+  order: integer("order").notNull().default(0),
+});
+
+export type TemplateSection = typeof templateSections.$inferSelect;
+
 export const templateQuestions = pgTable("template_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   templateId: varchar("template_id").notNull(),
+  sectionId: varchar("section_id"),
   competencyId: varchar("competency_id"),
   questionText: text("question_text").notNull(),
   questionType: text("question_type").notNull(),
   order: integer("order").notNull().default(0),
   section: text("section"),
+  reviewerTypes: text("reviewer_types").array().default(sql`ARRAY['self','peer','manager']`),
 });
 
 export type TemplateQuestion = typeof templateQuestions.$inferSelect;
@@ -236,6 +247,16 @@ export const competencies = pgTable("competencies", {
 });
 
 export type Competency = typeof competencies.$inferSelect;
+
+export const competencyQuestions = pgTable("competency_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  competencyId: varchar("competency_id").notNull(),
+  questionText: text("question_text").notNull(),
+  questionType: text("question_type").notNull().default("rating"),
+  order: integer("order").notNull().default(0),
+});
+
+export type CompetencyQuestion = typeof competencyQuestions.$inferSelect;
 
 // ==================== COMPANY HOLIDAYS ====================
 

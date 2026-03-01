@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Link, useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +56,13 @@ interface AppraisalDetail {
     questionType: string;
     order: number;
     section: string | null;
+    sectionId: string | null;
+    reviewerTypes: string[] | null;
+  }>;
+  sections: Array<{
+    id: string;
+    name: string;
+    order: number;
   }>;
   employee: {
     id: string;
@@ -103,18 +111,65 @@ function LargeStarDisplay({ value, max = 5 }: { value: number; max?: number }) {
   );
 }
 
+function isQuestionVisibleToReviewer(
+  reviewerTypes: string[] | null,
+  reviewerType: string
+): boolean {
+  if (!reviewerTypes || reviewerTypes.length === 0) return true;
+  return reviewerTypes.includes(reviewerType);
+}
+
 function getAverageRating(
   ratings: Array<{ questionId: string; rating: number | null }>,
-  questions: Array<{ id: string; questionType: string }>
+  questions: Array<{ id: string; questionType: string; reviewerTypes: string[] | null }>,
+  reviewerType: string
 ): number {
-  const ratingQuestionIds = new Set(
-    questions.filter((q) => q.questionType === "rating").map((q) => q.id)
+  const visibleRatingQuestionIds = new Set(
+    questions
+      .filter((q) => q.questionType === "rating" && isQuestionVisibleToReviewer(q.reviewerTypes, reviewerType))
+      .map((q) => q.id)
   );
   const ratingValues = ratings
-    .filter((r) => ratingQuestionIds.has(r.questionId) && r.rating != null)
+    .filter((r) => visibleRatingQuestionIds.has(r.questionId) && r.rating != null)
     .map((r) => r.rating as number);
   if (ratingValues.length === 0) return 0;
   return ratingValues.reduce((sum, v) => sum + v, 0) / ratingValues.length;
+}
+
+function buildSectionGroups(
+  questions: Array<{ id: string; questionText: string; questionType: string; order: number; sectionId: string | null; reviewerTypes: string[] | null }>,
+  sections: Array<{ id: string; name: string; order: number }>,
+  reviewerType: string
+) {
+  const sectionLookup = new Map<string, { name: string; order: number }>();
+  for (const s of sections) {
+    sectionLookup.set(s.id, { name: s.name, order: s.order });
+  }
+
+  const visibleQuestions = questions.filter(q =>
+    isQuestionVisibleToReviewer(q.reviewerTypes, reviewerType)
+  );
+
+  const sectionMap = new Map<string, { name: string; order: number; questions: typeof visibleQuestions }>();
+
+  for (const q of visibleQuestions) {
+    const sectionInfo = q.sectionId ? sectionLookup.get(q.sectionId) : null;
+    const key = q.sectionId && sectionInfo ? q.sectionId : "__general__";
+    const name = sectionInfo ? sectionInfo.name : "General";
+    const order = sectionInfo ? sectionInfo.order : 999999;
+
+    if (!sectionMap.has(key)) {
+      sectionMap.set(key, { name, order, questions: [] });
+    }
+    sectionMap.get(key)!.questions.push(q);
+  }
+
+  const result = Array.from(sectionMap.values());
+  result.sort((a, b) => a.order - b.order);
+  for (const s of result) {
+    s.questions.sort((a, b) => a.order - b.order);
+  }
+  return result;
 }
 
 export default function AppraisalResults() {
@@ -173,13 +228,13 @@ export default function AppraisalResults() {
 
   const employeeName = data.employee ? `${data.employee.firstName} ${data.employee.lastName}` : "Unknown";
   const isCompleted = data.appraisal?.status === "completed";
-  const sortedQuestions = [...(data.questions || [])].sort((a, b) => a.order - b.order);
   const feedbacks = data.feedbacks || [];
   const submittedFeedbacks = feedbacks.filter(
     (f) => f.feedback.status === "submitted"
   );
   const totalFeedbacks = feedbacks.length;
   const submittedCount = submittedFeedbacks.length;
+  const sections = data.sections || [];
 
   const selfFeedbacks = feedbacks.filter(
     (f) => f.feedback.reviewerType === "self" && f.feedback.status === "submitted"
@@ -193,14 +248,14 @@ export default function AppraisalResults() {
 
   const selfAvg =
     selfFeedbacks.length > 0
-      ? getAverageRating(selfFeedbacks[0].ratings, data.questions)
+      ? getAverageRating(selfFeedbacks[0].ratings, data.questions, "self")
       : 0;
   const managerAvg =
     managerFeedbacks.length > 0
-      ? getAverageRating(managerFeedbacks[0].ratings, data.questions)
+      ? getAverageRating(managerFeedbacks[0].ratings, data.questions, "manager")
       : 0;
   const peerAvgs = peerFeedbacks.map((f) =>
-    getAverageRating(f.ratings, data.questions)
+    getAverageRating(f.ratings, data.questions, "peer")
   );
   const peerAvg =
     peerAvgs.length > 0
@@ -313,7 +368,8 @@ export default function AppraisalResults() {
             const reviewerName = isPeer
               ? "Anonymous Peer"
               : `${fb.reviewer.firstName} ${fb.reviewer.lastName}`;
-            const feedbackAvg = getAverageRating(fb.ratings, data.questions);
+            const feedbackAvg = getAverageRating(fb.ratings, data.questions, fb.feedback.reviewerType);
+            const sectionGroups = buildSectionGroups(data.questions, sections, fb.feedback.reviewerType);
 
             return (
               <Card key={fb.feedback.id} data-testid={`card-feedback-${fb.feedback.id}`}>
@@ -349,23 +405,16 @@ export default function AppraisalResults() {
 
                   <div className="space-y-3">
                     {(() => {
-                      const sectionMap = new Map<string, typeof sortedQuestions>();
-                      for (const q of sortedQuestions) {
-                        const sectionName = q.section || "General";
-                        if (!sectionMap.has(sectionName)) sectionMap.set(sectionName, []);
-                        sectionMap.get(sectionName)!.push(q);
-                      }
-                      const sections = Array.from(sectionMap.entries());
                       let questionNum = 0;
-                      return sections.map(([sectionName, sectionQuestions]) => (
-                        <div key={sectionName}>
-                          {sections.length > 1 && (
+                      return sectionGroups.map((sectionGroup) => (
+                        <div key={sectionGroup.name}>
+                          {sectionGroups.length > 1 && (
                             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-3 mb-2 border-t pt-3"
-                               data-testid={`text-result-section-${fb.feedback.id}-${sectionName.toLowerCase().replace(/\s+/g, '-')}`}>
-                              {sectionName}
+                               data-testid={`text-result-section-${fb.feedback.id}-${sectionGroup.name.toLowerCase().replace(/\s+/g, '-')}`}>
+                              {sectionGroup.name}
                             </p>
                           )}
-                          {sectionQuestions.map((question) => {
+                          {sectionGroup.questions.map((question) => {
                             questionNum++;
                             const rating = fb.ratings.find(
                               (r) => r.questionId === question.id
