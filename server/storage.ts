@@ -80,6 +80,7 @@ export interface IStorage {
   getPendingLeaveRequestsByCompany(companyId: string): Promise<LeaveRequest[]>;
   getLeaveRequest(id: string): Promise<LeaveRequest | undefined>;
   updateLeaveRequest(id: string, data: Partial<LeaveRequest>): Promise<LeaveRequest | undefined>;
+  getOnLeaveTodayByCompany(companyId: string): Promise<LeaveRequest[]>;
 
   // HR Queries
   createHrQuery(data: InsertHrQuery): Promise<HrQuery>;
@@ -469,6 +470,18 @@ export class DatabaseStorage implements IStorage {
   async updateLeaveRequest(id: string, data: Partial<LeaveRequest>): Promise<LeaveRequest | undefined> {
     const [request] = await db.update(leaveRequests).set(data).where(eq(leaveRequests.id, id)).returning();
     return request;
+  }
+
+  async getOnLeaveTodayByCompany(companyId: string): Promise<LeaveRequest[]> {
+    const today = new Date().toISOString().split('T')[0];
+    return db.select().from(leaveRequests).where(
+      and(
+        eq(leaveRequests.companyId, companyId),
+        eq(leaveRequests.status, "approved"),
+        sql`${leaveRequests.startDate} <= ${today}`,
+        sql`${leaveRequests.endDate} >= ${today}`
+      )
+    );
   }
 
   // ==================== HR QUERIES ====================

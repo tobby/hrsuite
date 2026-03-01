@@ -16,6 +16,7 @@ import {
   Send,
   Inbox,
   Loader2,
+  Palmtree,
 } from "lucide-react";
 import { useRole, canApproveLeave, canAccessLeave } from "@/lib/role-context";
 import type { Employee, Department, LeaveRequest, LeaveBalance, LeaveType } from "@shared/schema";
@@ -51,6 +52,10 @@ export default function Dashboard() {
   const { data: leaveTypes = [] } = useQuery<LeaveType[]>({
     queryKey: ['/api/leave-types'],
     enabled: canAccessLeave(role),
+  });
+
+  const { data: onLeaveToday = [] } = useQuery<(LeaveRequest & { employeeName: string; employeePosition: string; leaveTypeName: string })[]>({
+    queryKey: ['/api/leave-requests/on-leave-today'],
   });
 
   const isLoading = isLoadingEmployees || isLoadingDepartments;
@@ -207,6 +212,49 @@ export default function Dashboard() {
           </Card>
         )}
       </div>
+
+      <Card data-testid="card-on-leave-today">
+        <CardHeader className="flex flex-row items-center justify-between gap-2">
+          <div>
+            <CardTitle className="text-lg">Who's on Leave</CardTitle>
+            <CardDescription>Employees currently out of office</CardDescription>
+          </div>
+          <Palmtree className="h-5 w-5 text-muted-foreground" />
+        </CardHeader>
+        <CardContent>
+          {onLeaveToday.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <CalendarCheck className="h-8 w-8 text-muted-foreground/50 mb-2" />
+              <p className="text-sm font-medium text-muted-foreground">No one is on leave today</p>
+              <p className="text-xs text-muted-foreground mt-1">Everyone is in the office.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {onLeaveToday.map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between" data-testid={`on-leave-${entry.id}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 text-xs font-medium text-orange-600 dark:text-orange-400">
+                      {entry.employeeName.split(" ").map(n => n[0]).join("")}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium" data-testid={`text-on-leave-name-${entry.id}`}>{entry.employeeName}</p>
+                      <p className="text-xs text-muted-foreground">{entry.employeePosition}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                      {entry.leaveTypeName}
+                    </span>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Returns {new Date(entry.endDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {role === "employee" && (
         <Card data-testid="card-quick-actions">

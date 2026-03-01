@@ -671,6 +671,26 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/leave-requests/on-leave-today", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const onLeave = await storage.getOnLeaveTodayByCompany(companyId);
+      const companyEmployees = await storage.getEmployeesByCompany(companyId);
+      const companyLeaveTypes = await storage.getLeaveTypesByCompany(companyId);
+      const empMap = Object.fromEntries(companyEmployees.map(e => [e.id, e]));
+      const ltMap = Object.fromEntries(companyLeaveTypes.map(t => [t.id, t]));
+      const result = onLeave.map(r => ({
+        ...r,
+        employeeName: empMap[r.employeeId] ? `${empMap[r.employeeId].firstName} ${empMap[r.employeeId].lastName}` : "Unknown",
+        employeePosition: empMap[r.employeeId]?.position || "",
+        leaveTypeName: ltMap[r.leaveTypeId]?.name || "Leave",
+      }));
+      return res.json(result);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/leave-requests", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = (req.session as any).companyId;
