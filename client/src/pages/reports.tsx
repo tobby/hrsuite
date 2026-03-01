@@ -132,7 +132,7 @@ export default function Reports() {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <PieChart className="h-6 w-6" />
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-reports-title">
+            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-reports-title">
               Reports & Analytics
             </h1>
           </div>

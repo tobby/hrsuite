@@ -141,7 +141,7 @@ export default function AppraisalCycles() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-cycles-title">
+            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-cycles-title">
               Review Cycles
             </h1>
           </div>

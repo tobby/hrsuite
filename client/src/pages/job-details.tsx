@@ -136,7 +136,7 @@ export default function JobDetails() {
 
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold mb-2" data-testid="text-job-title">{job.title}</h1>
+              <h1 className="text-2xl font-semibold mb-2" data-testid="text-job-title">{job.title}</h1>
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-2">
                 {departmentName && (
                   <span className="flex items-center gap-1" data-testid="text-department">

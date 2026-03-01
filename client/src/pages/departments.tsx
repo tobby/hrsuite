@@ -198,7 +198,7 @@ export default function Departments() {
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-departments-title">
+          <h1 className="text-xl font-semibold tracking-tight" data-testid="text-departments-title">
             Departments
           </h1>
           <p className="text-muted-foreground" data-testid="text-departments-subtitle">

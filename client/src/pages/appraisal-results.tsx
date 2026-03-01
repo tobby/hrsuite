@@ -158,7 +158,7 @@ export default function AppraisalResults() {
             </Button>
           </Link>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-results-title">
+            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-results-title">
               Appraisal Not Found
             </h1>
             <p className="text-muted-foreground">
@@ -232,7 +232,7 @@ export default function AppraisalResults() {
             </Button>
           </Link>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-results-title">
+            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-results-title">
               Appraisal Results - {employeeName}
             </h1>
             <p className="text-muted-foreground text-sm mt-1" data-testid="text-cycle-name">
@@ -271,7 +271,7 @@ export default function AppraisalResults() {
           </Button>
         </Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-results-title">
+          <h1 className="text-xl font-semibold tracking-tight" data-testid="text-results-title">
             Appraisal Results - {employeeName}
           </h1>
           <p className="text-muted-foreground text-sm mt-1" data-testid="text-cycle-name">

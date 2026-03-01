@@ -155,7 +155,7 @@ export default function LeaveAnalytics() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-6 w-6 text-primary" />
-          <h1 className="text-2xl font-bold tracking-tight" data-testid="text-leave-analytics-title">
+          <h1 className="text-xl font-semibold tracking-tight" data-testid="text-leave-analytics-title">
             Leave Analytics
           </h1>
         </div>

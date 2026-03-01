@@ -83,7 +83,7 @@ export default function Careers() {
           <div className="flex items-center justify-center gap-2 mb-4">
             <Briefcase className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="text-4xl font-bold mb-3" data-testid="text-careers-title">
+          <h1 className="text-2xl font-bold mb-3" data-testid="text-careers-title">
             Career Opportunities
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">

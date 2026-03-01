@@ -207,7 +207,7 @@ export default function Queries() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-queries-title">Queries & Warnings</h1>
+            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-queries-title">Queries & Warnings</h1>
             <Button
               size="icon"
               variant="ghost"

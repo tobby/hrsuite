@@ -110,7 +110,7 @@ export default function Appraisals() {
         <div>
           <div className="flex items-center gap-2">
             <ClipboardCheck className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-appraisals-title">
+            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-appraisals-title">
               Performance Appraisals
             </h1>
           </div>

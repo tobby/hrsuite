@@ -251,7 +251,7 @@ export default function AppraisalTemplates() {
             </Link>
             <div className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-muted-foreground" />
-              <h1 className="text-2xl font-bold tracking-tight" data-testid="text-templates-title">
+              <h1 className="text-xl font-semibold tracking-tight" data-testid="text-templates-title">
                 Review Templates
               </h1>
             </div>

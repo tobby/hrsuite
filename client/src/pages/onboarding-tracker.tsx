@@ -447,7 +447,7 @@ export default function OnboardingTracker() {
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <ClipboardList className="h-6 w-6" />
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-task-tracker-title">
+            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-task-tracker-title">
               Task Tracker
             </h1>
           </div>

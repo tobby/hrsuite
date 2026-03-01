@@ -208,7 +208,7 @@ export default function AppraisalReview() {
             </Button>
           </Link>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-review-title">
+            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-review-title">
               Review Not Found
             </h1>
             <p className="text-muted-foreground">This review does not exist or you do not have access to it.</p>
@@ -233,7 +233,7 @@ export default function AppraisalReview() {
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="text-review-title">
+            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-review-title">
               Review for {employeeName}
             </h1>
             <Badge variant="secondary" data-testid="badge-reviewer-type">

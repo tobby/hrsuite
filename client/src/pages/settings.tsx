@@ -84,7 +84,7 @@ export default function Settings() {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight" data-testid="text-settings-title">
+        <h1 className="text-xl font-semibold tracking-tight" data-testid="text-settings-title">
           Settings
         </h1>
         <p className="text-muted-foreground">
