@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "wouter";
+import { Link, useParams, useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,9 +14,10 @@ import { useRole } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { AppraisalCycle, CycleParticipant, PeerAssignment, Appraisal, Employee } from "@shared/schema";
+import { Input } from "@/components/ui/input";
 import {
   ArrowLeft, Users, UserPlus, Trash2, Play, CheckCircle2, Calendar,
-  Weight, Link2, Clock, AlertCircle, Inbox, Settings, CircleCheck
+  Weight, Link2, Clock, AlertCircle, Inbox, Settings, CircleCheck, Pencil
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -53,6 +54,15 @@ export default function CycleProgress() {
   const [peerReviewerId, setPeerReviewerId] = useState("");
   const [isActivateOpen, setIsActivateOpen] = useState(false);
   const [isCompleteOpen, setIsCompleteOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
+  const [editSelfWeight, setEditSelfWeight] = useState(10);
+  const [editPeerWeight, setEditPeerWeight] = useState(30);
+  const [editManagerWeight, setEditManagerWeight] = useState(60);
+  const [, navigate] = useLocation();
 
   const { data: cycle, isLoading: cycleLoading } = useQuery<AppraisalCycle>({
     queryKey: ["/api/appraisal-cycles", cycleId],
@@ -184,6 +194,69 @@ export default function CycleProgress() {
     },
   });
 
+  const editMutation = useMutation({
+    mutationFn: async (data: Record<string, unknown>) => {
+      const res = await apiRequest("PATCH", `/api/appraisal-cycles/${cycleId}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles", cycleId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles"] });
+      toast({ title: "Cycle updated", description: "The review cycle has been updated." });
+      setIsEditOpen(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("DELETE", `/api/appraisal-cycles/${cycleId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles"] });
+      toast({ title: "Cycle deleted", description: "The review cycle has been deleted." });
+      navigate("/appraisals/cycles");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  function openEditDialog() {
+    if (!cycle) return;
+    setEditName(cycle.name);
+    setEditStartDate(cycle.startDate);
+    setEditEndDate(cycle.endDate);
+    setEditSelfWeight(cycle.selfWeight);
+    setEditPeerWeight(cycle.peerWeight);
+    setEditManagerWeight(cycle.managerWeight);
+    setIsEditOpen(true);
+  }
+
+  function handleEditSave() {
+    const is360Cycle = cycle?.type === "360";
+    const peerW = is360Cycle ? editPeerWeight : 0;
+    const totalWeight = editSelfWeight + peerW + editManagerWeight;
+    if (totalWeight !== 100) {
+      toast({ title: "Validation Error", description: `Weights must sum to 100%. Current total: ${totalWeight}%.`, variant: "destructive" });
+      return;
+    }
+    if (!editName.trim()) {
+      toast({ title: "Validation Error", description: "Please enter a cycle name.", variant: "destructive" });
+      return;
+    }
+    editMutation.mutate({
+      name: editName.trim(),
+      startDate: editStartDate,
+      endDate: editEndDate,
+      selfWeight: editSelfWeight,
+      peerWeight: peerW,
+      managerWeight: editManagerWeight,
+    });
+  }
+
   function toggleEmployeeSelection(empId: string) {
     setSelectedEmployeeIds(prev =>
       prev.includes(empId) ? prev.filter(id => id !== empId) : [...prev, empId]
@@ -248,14 +321,33 @@ export default function CycleProgress() {
         {isAdmin && (
           <div className="flex items-center gap-2 flex-wrap">
             {isDraft && (
-              <Button
-                onClick={() => setIsActivateOpen(true)}
-                disabled={participants.length === 0}
-                data-testid="button-activate-cycle"
-              >
-                <Play className="h-4 w-4 mr-2" />
-                Activate Cycle
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={openEditDialog}
+                  data-testid="button-edit-cycle"
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setIsDeleteOpen(true)}
+                  data-testid="button-delete-cycle"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
+                <Button
+                  onClick={() => setIsActivateOpen(true)}
+                  disabled={participants.length === 0}
+                  data-testid="button-activate-cycle"
+                >
+                  <Play className="h-4 w-4 mr-2" />
+                  Activate Cycle
+                </Button>
+              </>
             )}
             {isActive && (
               <Button
@@ -621,6 +713,131 @@ export default function CycleProgress() {
               data-testid="button-confirm-complete"
             >
               {completeMutation.isPending ? "Completing..." : "Complete Cycle"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="dialog-edit-cycle">
+          <DialogHeader>
+            <DialogTitle>Edit Review Cycle</DialogTitle>
+            <DialogDescription>Update the cycle name, dates, and weight distribution.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-cycle-name">Name</Label>
+              <Input
+                id="edit-cycle-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                data-testid="input-edit-cycle-name"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-start-date">Start Date</Label>
+                <Input
+                  id="edit-start-date"
+                  type="date"
+                  value={editStartDate}
+                  onChange={(e) => setEditStartDate(e.target.value)}
+                  data-testid="input-edit-start-date"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-end-date">End Date</Label>
+                <Input
+                  id="edit-end-date"
+                  type="date"
+                  value={editEndDate}
+                  onChange={(e) => setEditEndDate(e.target.value)}
+                  data-testid="input-edit-end-date"
+                />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <Label>Weight Distribution</Label>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="edit-weight-self" className="text-xs text-muted-foreground">Self (%)</Label>
+                  <Input
+                    id="edit-weight-self"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={editSelfWeight}
+                    onChange={(e) => setEditSelfWeight(Number(e.target.value))}
+                    data-testid="input-edit-weight-self"
+                  />
+                </div>
+                {cycle?.type === "360" && (
+                  <div className="space-y-1">
+                    <Label htmlFor="edit-weight-peer" className="text-xs text-muted-foreground">Peer (%)</Label>
+                    <Input
+                      id="edit-weight-peer"
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={editPeerWeight}
+                      onChange={(e) => setEditPeerWeight(Number(e.target.value))}
+                      data-testid="input-edit-weight-peer"
+                    />
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <Label htmlFor="edit-weight-manager" className="text-xs text-muted-foreground">Manager (%)</Label>
+                  <Input
+                    id="edit-weight-manager"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={editManagerWeight}
+                    onChange={(e) => setEditManagerWeight(Number(e.target.value))}
+                    data-testid="input-edit-weight-manager"
+                  />
+                </div>
+              </div>
+              {(() => {
+                const editTotal = editSelfWeight + (cycle?.type === "360" ? editPeerWeight : 0) + editManagerWeight;
+                return (
+                  <p className={`text-xs ${editTotal === 100 ? "text-muted-foreground" : "text-destructive"}`} data-testid="text-edit-weight-total">
+                    Total: {editTotal}% {editTotal !== 100 ? "(must equal 100%)" : ""}
+                  </p>
+                );
+              })()}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)} data-testid="button-cancel-edit">
+              Cancel
+            </Button>
+            <Button onClick={handleEditSave} disabled={editMutation.isPending} data-testid="button-confirm-edit">
+              {editMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent data-testid="dialog-delete-cycle">
+          <DialogHeader>
+            <DialogTitle>Delete Review Cycle</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &ldquo;{cycle?.name}&rdquo;? This will remove all participants and peer assignments. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteOpen(false)} data-testid="button-cancel-delete">
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteMutation.mutate()}
+              disabled={deleteMutation.isPending}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete Cycle"}
             </Button>
           </DialogFooter>
         </DialogContent>

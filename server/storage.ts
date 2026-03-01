@@ -122,6 +122,7 @@ export interface IStorage {
   getAppraisalCyclesByCompany(companyId: string): Promise<AppraisalCycle[]>;
   getAppraisalCycle(id: string): Promise<AppraisalCycle | undefined>;
   updateAppraisalCycle(id: string, data: Partial<AppraisalCycle>): Promise<AppraisalCycle | undefined>;
+  deleteAppraisalCycle(id: string): Promise<boolean>;
 
   // Appraisals
   createAppraisal(data: { cycleId: string; employeeId: string; status?: string }): Promise<Appraisal>;
@@ -621,6 +622,22 @@ export class DatabaseStorage implements IStorage {
   async updateAppraisalCycle(id: string, data: Partial<AppraisalCycle>): Promise<AppraisalCycle | undefined> {
     const [cycle] = await db.update(appraisalCycles).set(data).where(eq(appraisalCycles.id, id)).returning();
     return cycle;
+  }
+
+  async deleteAppraisalCycle(id: string): Promise<boolean> {
+    const cycleAppraisals = await db.select().from(appraisals).where(eq(appraisals.cycleId, id));
+    for (const appraisal of cycleAppraisals) {
+      const feedback = await db.select().from(appraisalFeedback).where(eq(appraisalFeedback.appraisalId, appraisal.id));
+      for (const fb of feedback) {
+        await db.delete(feedbackRatings).where(eq(feedbackRatings.feedbackId, fb.id));
+      }
+      await db.delete(appraisalFeedback).where(eq(appraisalFeedback.appraisalId, appraisal.id));
+    }
+    await db.delete(appraisals).where(eq(appraisals.cycleId, id));
+    await db.delete(peerAssignments).where(eq(peerAssignments.cycleId, id));
+    await db.delete(cycleParticipants).where(eq(cycleParticipants.cycleId, id));
+    const [deleted] = await db.delete(appraisalCycles).where(eq(appraisalCycles.id, id)).returning();
+    return !!deleted;
   }
 
   // ==================== APPRAISALS ====================

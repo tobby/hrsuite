@@ -1453,6 +1453,23 @@ export async function registerRoutes(
     }
   });
 
+  app.delete("/api/appraisal-cycles/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const cycle = await storage.getAppraisalCycle(req.params.id);
+      if (!cycle) return res.status(404).json({ message: "Cycle not found" });
+      if (cycle.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
+      if (cycle.status !== "draft") {
+        return res.status(400).json({ message: "Only draft cycles can be deleted" });
+      }
+      const deleted = await storage.deleteAppraisalCycle(req.params.id);
+      if (!deleted) return res.status(404).json({ message: "Cycle not found" });
+      return res.json({ message: "Cycle deleted successfully" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.post("/api/appraisal-cycles/:id/activate", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
       const cycle = await storage.getAppraisalCycle(req.params.id);
