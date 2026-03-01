@@ -111,9 +111,9 @@ export interface IStorage {
   deleteAppraisalTemplate(id: string): Promise<boolean>;
 
   // Template Questions
-  createTemplateQuestion(data: { templateId: string; questionText: string; questionType: string; order?: number; competencyId?: string }): Promise<TemplateQuestion>;
+  createTemplateQuestion(data: { templateId: string; questionText: string; questionType: string; order?: number; competencyId?: string; section?: string | null }): Promise<TemplateQuestion>;
   getTemplateQuestions(templateId: string): Promise<TemplateQuestion[]>;
-  updateTemplateQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number; competencyId: string }>): Promise<TemplateQuestion | undefined>;
+  updateTemplateQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number; competencyId: string; section: string | null }>): Promise<TemplateQuestion | undefined>;
   deleteTemplateQuestion(id: string): Promise<boolean>;
   deleteTemplateQuestionsByTemplate(templateId: string): Promise<void>;
 
@@ -580,7 +580,7 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== TEMPLATE QUESTIONS ====================
 
-  async createTemplateQuestion(data: { templateId: string; questionText: string; questionType: string; order?: number; competencyId?: string }): Promise<TemplateQuestion> {
+  async createTemplateQuestion(data: { templateId: string; questionText: string; questionType: string; order?: number; competencyId?: string; section?: string | null }): Promise<TemplateQuestion> {
     const [question] = await db.insert(templateQuestions).values(data).returning();
     return question;
   }
@@ -589,7 +589,7 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(templateQuestions).where(eq(templateQuestions.templateId, templateId)).orderBy(templateQuestions.order);
   }
 
-  async updateTemplateQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number; competencyId: string }>): Promise<TemplateQuestion | undefined> {
+  async updateTemplateQuestion(id: string, data: Partial<{ questionText: string; questionType: string; order: number; competencyId: string; section: string | null }>): Promise<TemplateQuestion | undefined> {
     const [question] = await db.update(templateQuestions).set(data).where(eq(templateQuestions.id, id)).returning();
     return question;
   }

@@ -29,6 +29,7 @@ import {
   X,
   Inbox,
   Shield,
+  Layers,
 } from "lucide-react";
 
 export default function AppraisalTemplates() {
@@ -50,10 +51,12 @@ export default function AppraisalTemplates() {
 
   const [addQuestionText, setAddQuestionText] = useState("");
   const [addQuestionType, setAddQuestionType] = useState("rating");
+  const [addQuestionSection, setAddQuestionSection] = useState("");
 
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [editQuestionText, setEditQuestionText] = useState("");
   const [editQuestionType, setEditQuestionType] = useState("rating");
+  const [editQuestionSection, setEditQuestionSection] = useState("");
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<AppraisalTemplate[]>({
     queryKey: ["/api/appraisal-templates"],
@@ -114,11 +117,12 @@ export default function AppraisalTemplates() {
   });
 
   const addQuestionMutation = useMutation({
-    mutationFn: async (data: { templateId: string; questionText: string; questionType: string; order: number }) => {
+    mutationFn: async (data: { templateId: string; questionText: string; questionType: string; order: number; section?: string }) => {
       const res = await apiRequest("POST", `/api/appraisal-templates/${data.templateId}/questions`, {
         questionText: data.questionText,
         questionType: data.questionType,
         order: data.order,
+        section: data.section || null,
       });
       return res.json();
     },
@@ -128,6 +132,7 @@ export default function AppraisalTemplates() {
       toast({ title: "Question added", description: "The question has been added to the template." });
       setAddQuestionText("");
       setAddQuestionType("rating");
+      setAddQuestionSection("");
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -135,7 +140,7 @@ export default function AppraisalTemplates() {
   });
 
   const updateQuestionMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { questionText?: string; questionType?: string } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { questionText?: string; questionType?: string; section?: string | null } }) => {
       const res = await apiRequest("PATCH", `/api/template-questions/${id}`, data);
       return res.json();
     },
@@ -212,6 +217,7 @@ export default function AppraisalTemplates() {
       questionText: addQuestionText.trim(),
       questionType: addQuestionType,
       order: nextOrder,
+      section: addQuestionSection.trim() || undefined,
     });
   }
 
@@ -219,6 +225,7 @@ export default function AppraisalTemplates() {
     setEditingQuestionId(question.id);
     setEditQuestionText(question.questionText);
     setEditQuestionType(question.questionType);
+    setEditQuestionSection(question.section || "");
   }
 
   function handleSaveQuestionEdit(id: string) {
@@ -226,7 +233,7 @@ export default function AppraisalTemplates() {
       toast({ title: "Validation Error", description: "Question text cannot be empty.", variant: "destructive" });
       return;
     }
-    updateQuestionMutation.mutate({ id, data: { questionText: editQuestionText.trim(), questionType: editQuestionType } });
+    updateQuestionMutation.mutate({ id, data: { questionText: editQuestionText.trim(), questionType: editQuestionType, section: editQuestionSection.trim() || null } });
   }
 
   function toggleTemplate(id: string) {
@@ -234,10 +241,20 @@ export default function AppraisalTemplates() {
     setEditingQuestionId(null);
     setAddQuestionText("");
     setAddQuestionType("rating");
+    setAddQuestionSection("");
   }
 
   const sortedQuestions = [...questions].sort((a, b) => a.order - b.order);
   const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+
+  const groupedQuestions = sortedQuestions.reduce<Record<string, TemplateQuestion[]>>((acc, q) => {
+    const sectionName = q.section || "General";
+    if (!acc[sectionName]) acc[sectionName] = [];
+    acc[sectionName].push(q);
+    return acc;
+  }, {});
+  const sectionNames = Object.keys(groupedQuestions);
+  const existingSections = Array.from(new Set(sortedQuestions.map(q => q.section).filter(Boolean))) as string[];
 
   return (
     <div className="space-y-6 p-6">
@@ -426,90 +443,110 @@ export default function AppraisalTemplates() {
                           No questions yet. Add your first question below.
                         </p>
                       ) : (
-                        <div className="space-y-2">
-                          {sortedQuestions.map(question => {
-                            const isEditingQ = editingQuestionId === question.id;
-
-                            return (
-                              <div
-                                key={question.id}
-                                className="flex items-center gap-3 p-2 rounded-md bg-muted/50"
-                                data-testid={`question-row-${question.id}`}
-                              >
-                                <span className="text-xs text-muted-foreground w-6 text-center flex-shrink-0 flex items-center justify-center">
-                                  <GripVertical className="h-3 w-3 inline mr-0.5" />
-                                  {question.order}
+                        <div className="space-y-4">
+                          {sectionNames.map(sectionName => (
+                            <div key={sectionName} data-testid={`section-group-${sectionName}`}>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" data-testid={`text-section-header-${sectionName}`}>
+                                  {sectionName}
                                 </span>
-
-                                {isEditingQ ? (
-                                  <div className="flex-1 flex items-center gap-2 flex-wrap">
-                                    <Input
-                                      value={editQuestionText}
-                                      onChange={e => setEditQuestionText(e.target.value)}
-                                      className="flex-1 min-w-[200px]"
-                                      data-testid={`input-edit-question-text-${question.id}`}
-                                    />
-                                    <Select value={editQuestionType} onValueChange={setEditQuestionType}>
-                                      <SelectTrigger className="w-[120px]" data-testid={`select-edit-question-type-${question.id}`}>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="rating">Rating</SelectItem>
-                                        <SelectItem value="text">Text</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => handleSaveQuestionEdit(question.id)}
-                                      disabled={updateQuestionMutation.isPending}
-                                      data-testid={`button-save-question-${question.id}`}
-                                    >
-                                      <Check className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => setEditingQuestionId(null)}
-                                      data-testid={`button-cancel-edit-question-${question.id}`}
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <span className="flex-1 text-sm" data-testid={`text-question-${question.id}`}>
-                                      {question.questionText}
-                                    </span>
-                                    <Badge variant="outline" data-testid={`badge-question-type-${question.id}`}>
-                                      {question.questionType === "rating" ? (
-                                        <Star className="h-3 w-3 mr-1" />
-                                      ) : (
-                                        <AlignLeft className="h-3 w-3 mr-1" />
-                                      )}
-                                      {question.questionType === "rating" ? "Rating" : "Text"}
-                                    </Badge>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => handleStartEditQuestion(question)}
-                                      data-testid={`button-edit-question-${question.id}`}
-                                    >
-                                      <Pencil className="h-3 w-3" />
-                                    </Button>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      onClick={() => setDeleteQuestionId(question.id)}
-                                      data-testid={`button-delete-question-${question.id}`}
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                  </>
-                                )}
+                                <Badge variant="secondary" className="text-[10px]">{groupedQuestions[sectionName].length}</Badge>
                               </div>
-                            );
-                          })}
+                              <div className="space-y-2">
+                                {groupedQuestions[sectionName].map(question => {
+                                  const isEditingQ = editingQuestionId === question.id;
+
+                                  return (
+                                    <div
+                                      key={question.id}
+                                      className="flex items-center gap-3 p-2 rounded-md bg-muted/50"
+                                      data-testid={`question-row-${question.id}`}
+                                    >
+                                      <span className="text-xs text-muted-foreground w-6 text-center flex-shrink-0 flex items-center justify-center">
+                                        <GripVertical className="h-3 w-3 inline mr-0.5" />
+                                        {question.order}
+                                      </span>
+
+                                      {isEditingQ ? (
+                                        <div className="flex-1 flex items-center gap-2 flex-wrap">
+                                          <Input
+                                            value={editQuestionText}
+                                            onChange={e => setEditQuestionText(e.target.value)}
+                                            className="flex-1 min-w-[200px]"
+                                            data-testid={`input-edit-question-text-${question.id}`}
+                                          />
+                                          <Select value={editQuestionType} onValueChange={setEditQuestionType}>
+                                            <SelectTrigger className="w-[120px]" data-testid={`select-edit-question-type-${question.id}`}>
+                                              <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="rating">Rating</SelectItem>
+                                              <SelectItem value="text">Text</SelectItem>
+                                            </SelectContent>
+                                          </Select>
+                                          <Input
+                                            value={editQuestionSection}
+                                            onChange={e => setEditQuestionSection(e.target.value)}
+                                            placeholder="Section (optional)"
+                                            className="w-[160px]"
+                                            data-testid={`input-edit-question-section-${question.id}`}
+                                          />
+                                          <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            onClick={() => handleSaveQuestionEdit(question.id)}
+                                            disabled={updateQuestionMutation.isPending}
+                                            data-testid={`button-save-question-${question.id}`}
+                                          >
+                                            <Check className="h-4 w-4" />
+                                          </Button>
+                                          <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            onClick={() => setEditingQuestionId(null)}
+                                            data-testid={`button-cancel-edit-question-${question.id}`}
+                                          >
+                                            <X className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          <span className="flex-1 text-sm" data-testid={`text-question-${question.id}`}>
+                                            {question.questionText}
+                                          </span>
+                                          <Badge variant="outline" data-testid={`badge-question-type-${question.id}`}>
+                                            {question.questionType === "rating" ? (
+                                              <Star className="h-3 w-3 mr-1" />
+                                            ) : (
+                                              <AlignLeft className="h-3 w-3 mr-1" />
+                                            )}
+                                            {question.questionType === "rating" ? "Rating" : "Text"}
+                                          </Badge>
+                                          <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            onClick={() => handleStartEditQuestion(question)}
+                                            data-testid={`button-edit-question-${question.id}`}
+                                          >
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            onClick={() => setDeleteQuestionId(question.id)}
+                                            data-testid={`button-delete-question-${question.id}`}
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
 
@@ -531,6 +568,21 @@ export default function AppraisalTemplates() {
                               <SelectItem value="text">Text</SelectItem>
                             </SelectContent>
                           </Select>
+                          <Input
+                            value={addQuestionSection}
+                            onChange={e => setAddQuestionSection(e.target.value)}
+                            placeholder="Section (optional)"
+                            className="w-[160px]"
+                            list="existing-sections"
+                            data-testid="input-add-question-section"
+                          />
+                          {existingSections.length > 0 && (
+                            <datalist id="existing-sections">
+                              {existingSections.map(s => (
+                                <option key={s} value={s} />
+                              ))}
+                            </datalist>
+                          )}
                           <Button
                             onClick={handleAddQuestion}
                             disabled={addQuestionMutation.isPending}

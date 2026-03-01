@@ -1370,7 +1370,7 @@ export async function registerRoutes(
 
   app.post("/api/appraisal-templates/:id/questions", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { questionText, questionType, order, competencyId } = req.body;
+      const { questionText, questionType, order, competencyId, section } = req.body;
       if (!questionText || !questionType) {
         return res.status(400).json({ message: "questionText and questionType are required" });
       }
@@ -1380,6 +1380,7 @@ export async function registerRoutes(
         questionType,
         order,
         competencyId,
+        section: section || null,
       });
       return res.status(201).json(question);
     } catch (error) {
@@ -1587,6 +1588,23 @@ export async function registerRoutes(
       }
       const assignment = await storage.createPeerAssignment({ cycleId: req.params.id, revieweeId, reviewerId });
       return res.status(201).json(assignment);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/appraisal-cycles/:id/has-submitted-feedback", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const appraisals = await storage.getAppraisalsByCycle(req.params.id);
+      let hasSubmitted = false;
+      for (const appraisal of appraisals) {
+        const feedbacks = await storage.getAppraisalFeedbackByAppraisal(appraisal.id);
+        if (feedbacks.some(f => f.status === "submitted")) {
+          hasSubmitted = true;
+          break;
+        }
+      }
+      return res.json({ hasSubmittedFeedback: hasSubmitted });
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }

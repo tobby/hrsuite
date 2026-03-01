@@ -148,6 +148,7 @@ export const templateQuestions = pgTable("template_questions", {
   questionText: text("question_text").notNull(),
   questionType: text("question_type").notNull(),
   order: integer("order").notNull().default(0),
+  section: text("section"),
 });
 
 export type TemplateQuestion = typeof templateQuestions.$inferSelect;

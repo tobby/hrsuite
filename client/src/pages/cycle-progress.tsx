@@ -13,11 +13,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { AppraisalCycle, CycleParticipant, PeerAssignment, Appraisal, Employee } from "@shared/schema";
+import type { AppraisalCycle, CycleParticipant, PeerAssignment, Appraisal, Employee, Department } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import {
   ArrowLeft, Users, UserPlus, Trash2, Play, CheckCircle2, Calendar,
-  Weight, Link2, Clock, AlertCircle, Inbox, Settings, CircleCheck, Pencil
+  Weight, Link2, Clock, AlertCircle, Inbox, Settings, CircleCheck, Pencil, Building
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -80,8 +80,19 @@ export default function CycleProgress() {
     queryKey: ["/api/appraisals"],
   });
 
+  const { data: feedbackCheck } = useQuery<{ hasSubmittedFeedback: boolean }>({
+    queryKey: ["/api/appraisal-cycles", cycleId, "has-submitted-feedback"],
+    enabled: cycle?.status === "active",
+  });
+
+  const hasSubmittedFeedback = feedbackCheck?.hasSubmittedFeedback ?? false;
+
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ["/api/employees"],
+  });
+
+  const { data: departments = [] } = useQuery<Department[]>({
+    queryKey: ["/api/departments"],
   });
 
   const cycleAppraisals = allAppraisals.filter(a => a.cycleId === cycleId);
@@ -320,16 +331,20 @@ export default function CycleProgress() {
         </div>
         {isAdmin && (
           <div className="flex items-center gap-2 flex-wrap">
+            {(isDraft || isActive) && (
+              <Button
+                variant="outline"
+                onClick={openEditDialog}
+                disabled={isActive && hasSubmittedFeedback}
+                title={isActive && hasSubmittedFeedback ? "Cannot edit: reviews have already been submitted" : undefined}
+                data-testid="button-edit-cycle"
+              >
+                <Pencil className="h-4 w-4 mr-2" />
+                Edit
+              </Button>
+            )}
             {isDraft && (
               <>
-                <Button
-                  variant="outline"
-                  onClick={openEditDialog}
-                  data-testid="button-edit-cycle"
-                >
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
                 <Button
                   variant="outline"
                   className="text-destructive hover:text-destructive"
@@ -570,30 +585,70 @@ export default function CycleProgress() {
             <DialogTitle>Add Participants</DialogTitle>
             <DialogDescription>Select employees to add to this review cycle.</DialogDescription>
           </DialogHeader>
-          <div className="max-h-[300px] overflow-y-auto space-y-1">
-            {availableEmployees.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">All employees are already in this cycle</p>
-            ) : (
-              availableEmployees.map(emp => (
-                <label
-                  key={emp.id}
-                  className="flex items-center gap-3 p-2 rounded-md hover-elevate cursor-pointer"
-                  data-testid={`checkbox-employee-${emp.id}`}
-                >
-                  <Checkbox
-                    checked={selectedEmployeeIds.includes(emp.id)}
-                    onCheckedChange={() => toggleEmployeeSelection(emp.id)}
-                  />
-                  <Avatar className="h-7 w-7">
-                    <AvatarFallback className="text-[10px]">{emp.firstName[0]}{emp.lastName[0]}</AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{emp.firstName} {emp.lastName}</p>
-                    <p className="text-xs text-muted-foreground truncate">{emp.position}</p>
-                  </div>
-                </label>
-              ))
-            )}
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <Building className="h-4 w-4" />
+                Add by Department
+              </Label>
+              <Select
+                value=""
+                onValueChange={(deptId) => {
+                  const deptEmployees = availableEmployees
+                    .filter(e => e.departmentId === deptId)
+                    .map(e => e.id);
+                  if (deptEmployees.length === 0) {
+                    toast({ title: "No employees", description: "All employees in this department are already participants.", variant: "destructive" });
+                    return;
+                  }
+                  setSelectedEmployeeIds(prev => {
+                    const newIds = new Set([...prev, ...deptEmployees]);
+                    return Array.from(newIds);
+                  });
+                  const dept = departments.find(d => d.id === deptId);
+                  toast({ title: "Department selected", description: `${deptEmployees.length} employee(s) from ${dept?.name || "department"} selected.` });
+                }}
+              >
+                <SelectTrigger data-testid="select-department-filter">
+                  <SelectValue placeholder="Select a department to add all its members..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.map(dept => {
+                    const deptAvailableCount = availableEmployees.filter(e => e.departmentId === dept.id).length;
+                    return (
+                      <SelectItem key={dept.id} value={dept.id} data-testid={`select-department-${dept.id}`}>
+                        {dept.name} ({deptAvailableCount} available)
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="max-h-[300px] overflow-y-auto space-y-1">
+              {availableEmployees.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">All employees are already in this cycle</p>
+              ) : (
+                availableEmployees.map(emp => (
+                  <label
+                    key={emp.id}
+                    className="flex items-center gap-3 p-2 rounded-md hover-elevate cursor-pointer"
+                    data-testid={`checkbox-employee-${emp.id}`}
+                  >
+                    <Checkbox
+                      checked={selectedEmployeeIds.includes(emp.id)}
+                      onCheckedChange={() => toggleEmployeeSelection(emp.id)}
+                    />
+                    <Avatar className="h-7 w-7">
+                      <AvatarFallback className="text-[10px]">{emp.firstName[0]}{emp.lastName[0]}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{emp.firstName} {emp.lastName}</p>
+                      <p className="text-xs text-muted-foreground truncate">{emp.position}{emp.departmentId ? ` — ${departments.find(d => d.id === emp.departmentId)?.name || ""}` : ""}</p>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddParticipantsOpen(false)} data-testid="button-cancel-add-participants">
@@ -724,6 +779,12 @@ export default function CycleProgress() {
             <DialogTitle>Edit Review Cycle</DialogTitle>
             <DialogDescription>Update the cycle name, dates, and weight distribution.</DialogDescription>
           </DialogHeader>
+          {isActive && !hasSubmittedFeedback && (
+            <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300" data-testid="text-active-edit-note">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>No reviews have been submitted yet, so changes are still allowed.</span>
+            </div>
+          )}
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-cycle-name">Name</Label>

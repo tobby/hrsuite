@@ -19,7 +19,8 @@ import {
   Palmtree,
 } from "lucide-react";
 import { useRole, canApproveLeave, canAccessLeave } from "@/lib/role-context";
-import type { Employee, Department, LeaveRequest, LeaveBalance, LeaveType } from "@shared/schema";
+import type { Employee, Department, LeaveRequest, LeaveBalance, LeaveType, AppraisalCycle, Appraisal, AppraisalFeedback } from "@shared/schema";
+import { Badge } from "@/components/ui/badge";
 
 export default function Dashboard() {
   const { role, currentUser } = useRole();
@@ -58,6 +59,16 @@ export default function Dashboard() {
     queryKey: ['/api/leave-requests/on-leave-today'],
   });
 
+  const { data: appraisalCycles = [] } = useQuery<AppraisalCycle[]>({
+    queryKey: ['/api/appraisal-cycles'],
+    enabled: role === "admin" || role === "manager",
+  });
+
+  const { data: myAppraisals = [] } = useQuery<Appraisal[]>({
+    queryKey: ['/api/appraisals'],
+    enabled: role === "employee",
+  });
+
   const isLoading = isLoadingEmployees || isLoadingDepartments;
 
   const activeEmployees = employees.filter(e => e.status === "active").length;
@@ -66,6 +77,11 @@ export default function Dashboard() {
   const myPendingCount = leaveRequests.filter(r => r.status === "pending").length;
   const totalDaysUsed = leaveBalances.reduce((sum, b) => sum + b.usedDays, 0);
   const pendingApprovalCount = pendingRequests.length;
+
+  const activeCycles = appraisalCycles.filter(c => c.status === "active");
+  const activeAppraisalCount = role === "employee"
+    ? myAppraisals.filter(a => a.status === "pending" || a.status === "in_progress").length
+    : activeCycles.length;
 
   const getGreeting = () => {
     switch (role) {
@@ -192,7 +208,7 @@ export default function Dashboard() {
             <ClipboardList className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
+            <div className="text-2xl font-bold" data-testid="text-stat-active-appraisals-count">{activeAppraisalCount}</div>
             <p className="text-xs text-muted-foreground">
               {role === "employee" ? "Performance reviews" : "Reviews in progress"}
             </p>
@@ -456,17 +472,65 @@ export default function Dashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
-              <p className="text-sm font-medium text-muted-foreground">
-                {role === "employee" ? "No appraisals yet" : "No active review cycles"}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {role === "employee" 
-                  ? "Your performance reviews will appear here." 
-                  : "Review cycles will appear here once created."}
-              </p>
-            </div>
+            {role === "employee" ? (
+              myAppraisals.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">No appraisals yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Your performance reviews will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {myAppraisals.slice(0, 5).map((appraisal) => (
+                    <div key={appraisal.id} className="flex items-center justify-between" data-testid={`appraisal-row-${appraisal.id}`}>
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Performance Review</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={appraisal.status === "completed" ? "default" : appraisal.status === "pending" || appraisal.status === "in_progress" ? "outline" : "secondary"}>
+                          {appraisal.status === "in_progress" ? "In Progress" : appraisal.status.charAt(0).toUpperCase() + appraisal.status.slice(1)}
+                        </Badge>
+                        <Link href={`/appraisals/${appraisal.id}/results`}>
+                          <Button variant="ghost" size="icon" data-testid={`button-view-appraisal-${appraisal.id}`}>
+                            <ArrowRight className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              activeCycles.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                  <p className="text-sm font-medium text-muted-foreground">No active review cycles</p>
+                  <p className="text-xs text-muted-foreground mt-1">Review cycles will appear here once created.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {activeCycles.slice(0, 5).map((cycle) => (
+                    <div key={cycle.id} className="flex items-center justify-between" data-testid={`cycle-row-${cycle.id}`}>
+                      <div>
+                        <p className="text-sm font-medium" data-testid={`text-cycle-name-${cycle.id}`}>{cycle.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(cycle.startDate).toLocaleDateString()} - {new Date(cycle.endDate).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="default">Active</Badge>
+                        <Link href={`/appraisals/cycles/${cycle.id}`}>
+                          <Button variant="ghost" size="icon" data-testid={`button-view-cycle-${cycle.id}`}>
+                            <ArrowRight className="h-4 w-4" />
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
           </CardContent>
         </Card>
 

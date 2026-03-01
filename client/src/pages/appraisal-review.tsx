@@ -40,6 +40,7 @@ interface FeedbackDetail {
     questionText: string;
     questionType: string;
     order: number;
+    section: string | null;
   }>;
   ratings: Array<{
     id: string;
@@ -252,53 +253,73 @@ export default function AppraisalReview() {
         </div>
       </div>
 
-      <div className="space-y-4">
-        {sortedQuestions.map((question, index) => {
-          const currentRating = ratings[question.id];
-          return (
-            <Card key={question.id} data-testid={`card-question-${question.id}`}>
-              <CardContent className="p-6 space-y-3">
-                <div className="flex items-start gap-2">
-                  <span className="text-sm font-medium text-muted-foreground mt-0.5">{index + 1}.</span>
-                  <p className="font-medium" data-testid={`text-question-${question.id}`}>{question.questionText}</p>
-                </div>
+      <div className="space-y-6">
+        {(() => {
+          const sectionMap = new Map<string, typeof sortedQuestions>();
+          for (const q of sortedQuestions) {
+            const sectionName = q.section || "General";
+            if (!sectionMap.has(sectionName)) sectionMap.set(sectionName, []);
+            sectionMap.get(sectionName)!.push(q);
+          }
+          const sections = Array.from(sectionMap.entries());
+          let questionNum = 0;
+          return sections.map(([sectionName, sectionQuestions]) => (
+            <div key={sectionName} className="space-y-4" data-testid={`section-${sectionName.toLowerCase().replace(/\s+/g, '-')}`}>
+              {sections.length > 1 && (
+                <h2 className="text-lg font-semibold border-b pb-2" data-testid={`text-section-title-${sectionName.toLowerCase().replace(/\s+/g, '-')}`}>
+                  {sectionName}
+                </h2>
+              )}
+              {sectionQuestions.map((question) => {
+                questionNum++;
+                const currentRating = ratings[question.id];
+                return (
+                  <Card key={question.id} data-testid={`card-question-${question.id}`}>
+                    <CardContent className="p-6 space-y-3">
+                      <div className="flex items-start gap-2">
+                        <span className="text-sm font-medium text-muted-foreground mt-0.5">{questionNum}.</span>
+                        <p className="font-medium" data-testid={`text-question-${question.id}`}>{question.questionText}</p>
+                      </div>
 
-                {question.questionType === "rating" ? (
-                  isSubmitted ? (
-                    <div className="pl-5">
-                      <StarRating value={currentRating?.rating ?? 0} readonly />
-                    </div>
-                  ) : (
-                    <div className="pl-5">
-                      <StarRating
-                        value={currentRating?.rating ?? 0}
-                        onChange={(v) => updateRating(question.id, v)}
-                      />
-                    </div>
-                  )
-                ) : (
-                  isSubmitted ? (
-                    <div className="pl-5">
-                      <p className="text-sm text-muted-foreground whitespace-pre-wrap" data-testid={`text-response-${question.id}`}>
-                        {currentRating?.textResponse || "No response provided"}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="pl-5">
-                      <Textarea
-                        value={currentRating?.textResponse ?? ""}
-                        onChange={(e) => updateTextResponse(question.id, e.target.value)}
-                        placeholder="Enter your response..."
-                        rows={3}
-                        data-testid={`input-response-${question.id}`}
-                      />
-                    </div>
-                  )
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+                      {question.questionType === "rating" ? (
+                        isSubmitted ? (
+                          <div className="pl-5">
+                            <StarRating value={currentRating?.rating ?? 0} readonly />
+                          </div>
+                        ) : (
+                          <div className="pl-5">
+                            <StarRating
+                              value={currentRating?.rating ?? 0}
+                              onChange={(v) => updateRating(question.id, v)}
+                            />
+                          </div>
+                        )
+                      ) : (
+                        isSubmitted ? (
+                          <div className="pl-5">
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap" data-testid={`text-response-${question.id}`}>
+                              {currentRating?.textResponse || "No response provided"}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="pl-5">
+                            <Textarea
+                              value={currentRating?.textResponse ?? ""}
+                              onChange={(e) => updateTextResponse(question.id, e.target.value)}
+                              placeholder="Enter your response..."
+                              rows={3}
+                              data-testid={`input-response-${question.id}`}
+                            />
+                          </div>
+                        )
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          ));
+        })()}
       </div>
 
       <Card data-testid="card-overall-comment">

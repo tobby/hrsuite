@@ -54,6 +54,7 @@ interface AppraisalDetail {
     questionText: string;
     questionType: string;
     order: number;
+    section: string | null;
   }>;
   employee: {
     id: string;
@@ -347,29 +348,50 @@ export default function AppraisalResults() {
                   </div>
 
                   <div className="space-y-3">
-                    {sortedQuestions.map((question, index) => {
-                      const rating = fb.ratings.find(
-                        (r) => r.questionId === question.id
-                      );
-                      return (
-                        <div
-                          key={question.id}
-                          className="border-t pt-3 first:border-t-0 first:pt-0"
-                          data-testid={`question-response-${fb.feedback.id}-${question.id}`}
-                        >
-                          <p className="text-sm font-medium mb-1.5">
-                            {index + 1}. {question.questionText}
-                          </p>
-                          {question.questionType === "rating" ? (
-                            <StarDisplay value={rating?.rating ?? 0} />
-                          ) : (
-                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                              {rating?.textResponse || "No response provided"}
+                    {(() => {
+                      const sectionMap = new Map<string, typeof sortedQuestions>();
+                      for (const q of sortedQuestions) {
+                        const sectionName = q.section || "General";
+                        if (!sectionMap.has(sectionName)) sectionMap.set(sectionName, []);
+                        sectionMap.get(sectionName)!.push(q);
+                      }
+                      const sections = Array.from(sectionMap.entries());
+                      let questionNum = 0;
+                      return sections.map(([sectionName, sectionQuestions]) => (
+                        <div key={sectionName}>
+                          {sections.length > 1 && (
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-3 mb-2 border-t pt-3"
+                               data-testid={`text-result-section-${fb.feedback.id}-${sectionName.toLowerCase().replace(/\s+/g, '-')}`}>
+                              {sectionName}
                             </p>
                           )}
+                          {sectionQuestions.map((question) => {
+                            questionNum++;
+                            const rating = fb.ratings.find(
+                              (r) => r.questionId === question.id
+                            );
+                            return (
+                              <div
+                                key={question.id}
+                                className="border-t pt-3 first:border-t-0 first:pt-0"
+                                data-testid={`question-response-${fb.feedback.id}-${question.id}`}
+                              >
+                                <p className="text-sm font-medium mb-1.5">
+                                  {questionNum}. {question.questionText}
+                                </p>
+                                {question.questionType === "rating" ? (
+                                  <StarDisplay value={rating?.rating ?? 0} />
+                                ) : (
+                                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                                    {rating?.textResponse || "No response provided"}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                      );
-                    })}
+                      ));
+                    })()}
                   </div>
 
                   {fb.feedback.overallComment && (
