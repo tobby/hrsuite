@@ -11,7 +11,6 @@ import {
   Settings,
   BarChart3,
   ChevronDown,
-  ChevronRight,
   FileText,
   Calendar,
   Briefcase,
@@ -72,7 +71,7 @@ function DevRoleSwitcher({ currentRole, login }: { currentRole: UserRole; login:
   };
 
   return (
-    <div className="rounded-md border border-dashed border-amber-500/50 p-2 mb-2" data-testid="dev-role-switcher">
+    <div className="rounded-lg border border-dashed border-amber-500/50 p-2 mb-3" data-testid="dev-role-switcher">
       <div className="flex items-center gap-1.5 mb-2 px-1">
         <ArrowRightLeft className="h-3 w-3 text-amber-500" />
         <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider">Switch Role</span>
@@ -144,7 +143,6 @@ export function AppSidebar() {
   };
 
   const isQueriesActive = location.startsWith("/queries");
-  const isReportsActive = location === "/reports";
 
   const isLeaveActive = location.startsWith("/leave");
   const isAppraisalsActive = location.startsWith("/appraisals");
@@ -167,23 +165,25 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-4">
+      <SidebarHeader className="p-4 pb-2">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-lg">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 text-primary-foreground font-bold text-sm shadow-sm">
             HR
           </div>
           <div className="flex flex-col">
-            <span className="font-semibold text-sm">HRFlow</span>
-            <span className="text-xs text-muted-foreground">HR Platform</span>
+            <span className="font-semibold text-sm tracking-tight">HRFlow</span>
+            <span className="text-[11px] text-muted-foreground/70">HR Platform</span>
           </div>
         </div>
       </SidebarHeader>
 
-      <SidebarSeparator />
+      <SidebarSeparator className="mx-4 opacity-50" />
 
-      <SidebarContent>
+      <SidebarContent className="px-2">
         <SidebarGroup>
-          <SidebarGroupLabel>Main</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3 mb-1">
+            Main
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {filterByRole(mainNavItems).map((item) => (
@@ -191,6 +191,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={isActive(item.url)}
+                    className="transition-all duration-150"
                   >
                     <Link href={item.url} data-testid={item.testId}>
                       <item.icon className="h-4 w-4" />
@@ -204,7 +205,9 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>People Operations</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3 mb-1">
+            People Operations
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {showLeave && (showLeaveSubItems ? (
@@ -213,23 +216,21 @@ export function AppSidebar() {
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
                         isActive={isLeaveActive}
+                        className="transition-all duration-150"
                         data-testid="nav-leave-management"
                       >
                         <CalendarDays className="h-4 w-4" />
                         <span>Leave Management</span>
-                        {expandedSection === "leave" ? (
-                          <ChevronDown className="ml-auto h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="ml-auto h-4 w-4" />
-                        )}
+                        <ChevronDown className={`ml-auto h-3.5 w-3.5 text-muted-foreground/50 transition-transform duration-200 ${expandedSection === "leave" ? "" : "-rotate-90"}`} />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub>
+                      <SidebarMenuSub className="border-l-2 border-muted ml-4 pl-2">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton
                             asChild
                             isActive={location === "/leave"}
+                            className="transition-all duration-150"
                           >
                             <Link href="/leave" data-testid="nav-leave-requests">
                               <CalendarDays className="h-3 w-3" />
@@ -241,6 +242,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton
                             asChild
                             isActive={location === "/leave/analytics"}
+                            className="transition-all duration-150"
                           >
                             <Link href="/leave/analytics" data-testid="nav-leave-analytics">
                               <BarChart3 className="h-3 w-3" />
@@ -252,6 +254,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton
                             asChild
                             isActive={location === "/leave/settings"}
+                            className="transition-all duration-150"
                           >
                             <Link href="/leave/settings" data-testid="nav-leave-settings">
                               <Settings className="h-3 w-3" />
@@ -268,6 +271,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={isLeaveActive}
+                    className="transition-all duration-150"
                   >
                     <Link href="/leave" data-testid="nav-leave-management">
                       <CalendarDays className="h-4 w-4" />
@@ -283,23 +287,21 @@ export function AppSidebar() {
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
                         isActive={isAppraisalsActive}
+                        className="transition-all duration-150"
                         data-testid="nav-appraisals-management"
                       >
                         <ClipboardCheck className="h-4 w-4" />
                         <span>Appraisals</span>
-                        {expandedSection === "appraisals" ? (
-                          <ChevronDown className="ml-auto h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="ml-auto h-4 w-4" />
-                        )}
+                        <ChevronDown className={`ml-auto h-3.5 w-3.5 text-muted-foreground/50 transition-transform duration-200 ${expandedSection === "appraisals" ? "" : "-rotate-90"}`} />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub>
+                      <SidebarMenuSub className="border-l-2 border-muted ml-4 pl-2">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton
                             asChild
                             isActive={location === "/appraisals"}
+                            className="transition-all duration-150"
                           >
                             <Link href="/appraisals" data-testid="nav-my-appraisals">
                               <ClipboardCheck className="h-3 w-3" />
@@ -311,6 +313,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton
                             asChild
                             isActive={location === "/appraisals/templates"}
+                            className="transition-all duration-150"
                           >
                             <Link href="/appraisals/templates" data-testid="nav-appraisal-templates">
                               <FileText className="h-3 w-3" />
@@ -322,6 +325,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton
                             asChild
                             isActive={location === "/appraisals/cycles"}
+                            className="transition-all duration-150"
                           >
                             <Link href="/appraisals/cycles" data-testid="nav-appraisal-cycles">
                               <Calendar className="h-3 w-3" />
@@ -338,6 +342,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={isAppraisalsActive}
+                    className="transition-all duration-150"
                   >
                     <Link href="/appraisals" data-testid="nav-appraisals">
                       <ClipboardCheck className="h-4 w-4" />
@@ -353,23 +358,21 @@ export function AppSidebar() {
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
                         isActive={isRecruitmentActive}
+                        className="transition-all duration-150"
                         data-testid="nav-recruitment-management"
                       >
                         <Briefcase className="h-4 w-4" />
                         <span>Recruitment</span>
-                        {expandedSection === "recruitment" ? (
-                          <ChevronDown className="ml-auto h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="ml-auto h-4 w-4" />
-                        )}
+                        <ChevronDown className={`ml-auto h-3.5 w-3.5 text-muted-foreground/50 transition-transform duration-200 ${expandedSection === "recruitment" ? "" : "-rotate-90"}`} />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub>
+                      <SidebarMenuSub className="border-l-2 border-muted ml-4 pl-2">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton
                             asChild
                             isActive={location === "/recruitment/jobs"}
+                            className="transition-all duration-150"
                           >
                             <Link href="/recruitment/jobs" data-testid="nav-recruitment-jobs">
                               <Briefcase className="h-3 w-3" />
@@ -381,6 +384,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton
                             asChild
                             isActive={location === "/recruitment/candidates"}
+                            className="transition-all duration-150"
                           >
                             <Link href="/recruitment/candidates" data-testid="nav-recruitment-candidates">
                               <UserPlus className="h-3 w-3" />
@@ -392,6 +396,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton
                             asChild
                             isActive={location === "/recruitment/settings"}
+                            className="transition-all duration-150"
                           >
                             <Link href="/recruitment/settings" data-testid="nav-recruitment-settings">
                               <Settings className="h-3 w-3" />
@@ -411,23 +416,21 @@ export function AppSidebar() {
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
                         isActive={isOnboardingActive}
+                        className="transition-all duration-150"
                         data-testid="nav-task-management"
                       >
                         <ClipboardList className="h-4 w-4" />
                         <span>Task Management</span>
-                        {expandedSection === "onboarding" ? (
-                          <ChevronDown className="ml-auto h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="ml-auto h-4 w-4" />
-                        )}
+                        <ChevronDown className={`ml-auto h-3.5 w-3.5 text-muted-foreground/50 transition-transform duration-200 ${expandedSection === "onboarding" ? "" : "-rotate-90"}`} />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
-                      <SidebarMenuSub>
+                      <SidebarMenuSub className="border-l-2 border-muted ml-4 pl-2">
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton
                             asChild
                             isActive={location === "/onboarding/tracker"}
+                            className="transition-all duration-150"
                           >
                             <Link href="/onboarding/tracker" data-testid="nav-onboarding-tracker">
                               <Users className="h-3 w-3" />
@@ -439,6 +442,7 @@ export function AppSidebar() {
                           <SidebarMenuSubButton
                             asChild
                             isActive={location === "/onboarding/templates"}
+                            className="transition-all duration-150"
                           >
                             <Link href="/onboarding/templates" data-testid="nav-onboarding-templates">
                               <FileText className="h-3 w-3" />
@@ -455,6 +459,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={isOnboardingActive}
+                    className="transition-all duration-150"
                   >
                     <Link href="/my-tasks" data-testid="nav-my-tasks">
                       <ClipboardList className="h-4 w-4" />
@@ -468,6 +473,7 @@ export function AppSidebar() {
                 <SidebarMenuButton
                   asChild
                   isActive={isQueriesActive}
+                  className="transition-all duration-150"
                 >
                   <Link href="/queries" data-testid="nav-queries">
                     <HelpCircle className="h-4 w-4" />
@@ -480,7 +486,9 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel>System</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold px-3 mb-1">
+            System
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {filterByRole(settingsNavItems).map((item) => (
@@ -488,6 +496,7 @@ export function AppSidebar() {
                   <SidebarMenuButton
                     asChild
                     isActive={isActive(item.url)}
+                    className="transition-all duration-150"
                   >
                     <Link href={item.url} data-testid={item.testId}>
                       <item.icon className="h-4 w-4" />
@@ -501,24 +510,32 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-3">
         {import.meta.env.DEV && <DevRoleSwitcher currentRole={role} login={login} />}
-        <div className="flex flex-col gap-2 rounded-md p-3 bg-sidebar-accent/50">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium truncate" data-testid="text-sidebar-user">
-              {currentUser.firstName} {currentUser.lastName}
-            </span>
-            <Badge variant="secondary" className={`text-xs ${roleLabels[role].color}`} data-testid="badge-sidebar-role">
-              {roleLabels[role].label}
-            </Badge>
-          </div>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground truncate" data-testid="text-sidebar-position">
-              {currentUser.position}
-            </span>
+        <div className="rounded-lg bg-sidebar-accent/40 p-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary/80 to-primary text-primary-foreground text-xs font-semibold shadow-sm">
+              {currentUser.firstName[0]}{currentUser.lastName[0]}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium truncate" data-testid="text-sidebar-user">
+                  {currentUser.firstName} {currentUser.lastName}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-4 ${roleLabels[role].color}`} data-testid="badge-sidebar-role">
+                  {roleLabels[role].label}
+                </Badge>
+                <span className="text-[11px] text-muted-foreground/70 truncate" data-testid="text-sidebar-position">
+                  {currentUser.position}
+                </span>
+              </div>
+            </div>
             <Button
               variant="ghost"
               size="icon"
+              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
               onClick={logout}
               data-testid="button-logout"
             >
