@@ -128,10 +128,15 @@ export function AppSidebar() {
   const [location] = useLocation();
   const { role, currentUser } = useRole();
   const { login, logout } = useAuth();
-  const [leaveExpanded, setLeaveExpanded] = useState(location.startsWith("/leave"));
-  const [appraisalsExpanded, setAppraisalsExpanded] = useState(location.startsWith("/appraisals"));
-  const [recruitmentExpanded, setRecruitmentExpanded] = useState(location.startsWith("/recruitment"));
-  const [onboardingExpanded, setOnboardingExpanded] = useState(location.startsWith("/onboarding"));
+  const getInitialExpanded = (): string | null => {
+    if (location.startsWith("/leave")) return "leave";
+    if (location.startsWith("/appraisals")) return "appraisals";
+    if (location.startsWith("/recruitment")) return "recruitment";
+    if (location.startsWith("/onboarding")) return "onboarding";
+    return null;
+  };
+  const [expandedSection, setExpandedSection] = useState<string | null>(getInitialExpanded);
+  const toggleSection = (section: string) => setExpandedSection(prev => prev === section ? null : section);
 
   const isActive = (url: string) => {
     if (url === "/") return location === "/";
@@ -203,7 +208,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {showLeave && (showLeaveSubItems ? (
-                <Collapsible open={leaveExpanded} onOpenChange={setLeaveExpanded}>
+                <Collapsible open={expandedSection === "leave"} onOpenChange={() => toggleSection("leave")}>
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -212,7 +217,7 @@ export function AppSidebar() {
                       >
                         <CalendarDays className="h-4 w-4" />
                         <span>Leave Management</span>
-                        {leaveExpanded ? (
+                        {expandedSection === "leave" ? (
                           <ChevronDown className="ml-auto h-4 w-4" />
                         ) : (
                           <ChevronRight className="ml-auto h-4 w-4" />
@@ -273,7 +278,7 @@ export function AppSidebar() {
               ))}
 
               {showAppraisalsSubItems ? (
-                <Collapsible open={appraisalsExpanded} onOpenChange={setAppraisalsExpanded}>
+                <Collapsible open={expandedSection === "appraisals"} onOpenChange={() => toggleSection("appraisals")}>
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -282,7 +287,7 @@ export function AppSidebar() {
                       >
                         <ClipboardCheck className="h-4 w-4" />
                         <span>Appraisals</span>
-                        {appraisalsExpanded ? (
+                        {expandedSection === "appraisals" ? (
                           <ChevronDown className="ml-auto h-4 w-4" />
                         ) : (
                           <ChevronRight className="ml-auto h-4 w-4" />
@@ -343,7 +348,7 @@ export function AppSidebar() {
               )}
 
               {showRecruitment && (
-                <Collapsible open={recruitmentExpanded} onOpenChange={setRecruitmentExpanded}>
+                <Collapsible open={expandedSection === "recruitment"} onOpenChange={() => toggleSection("recruitment")}>
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -352,7 +357,7 @@ export function AppSidebar() {
                       >
                         <Briefcase className="h-4 w-4" />
                         <span>Recruitment</span>
-                        {recruitmentExpanded ? (
+                        {expandedSection === "recruitment" ? (
                           <ChevronDown className="ml-auto h-4 w-4" />
                         ) : (
                           <ChevronRight className="ml-auto h-4 w-4" />
@@ -401,7 +406,7 @@ export function AppSidebar() {
               )}
 
               {showOnboardingSubItems ? (
-                <Collapsible open={onboardingExpanded} onOpenChange={setOnboardingExpanded}>
+                <Collapsible open={expandedSection === "onboarding"} onOpenChange={() => toggleSection("onboarding")}>
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton
@@ -410,7 +415,7 @@ export function AppSidebar() {
                       >
                         <ClipboardList className="h-4 w-4" />
                         <span>Task Management</span>
-                        {onboardingExpanded ? (
+                        {expandedSection === "onboarding" ? (
                           <ChevronDown className="ml-auto h-4 w-4" />
                         ) : (
                           <ChevronRight className="ml-auto h-4 w-4" />
