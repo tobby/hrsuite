@@ -80,13 +80,6 @@ export default function CycleProgress() {
     queryKey: ["/api/appraisals"],
   });
 
-  const { data: feedbackCheck } = useQuery<{ hasSubmittedFeedback: boolean }>({
-    queryKey: ["/api/appraisal-cycles", cycleId, "has-submitted-feedback"],
-    enabled: cycle?.status === "active",
-  });
-
-  const hasSubmittedFeedback = feedbackCheck?.hasSubmittedFeedback ?? false;
-
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ["/api/employees"],
   });
@@ -331,38 +324,32 @@ export default function CycleProgress() {
         </div>
         {isAdmin && (
           <div className="flex items-center gap-2 flex-wrap">
-            {(isDraft || isActive) && (
-              <Button
-                variant="outline"
-                onClick={openEditDialog}
-                disabled={isActive && hasSubmittedFeedback}
-                title={isActive && hasSubmittedFeedback ? "Cannot edit: reviews have already been submitted" : undefined}
-                data-testid="button-edit-cycle"
-              >
-                <Pencil className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              onClick={openEditDialog}
+              data-testid="button-edit-cycle"
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setIsDeleteOpen(true)}
+              data-testid="button-delete-cycle"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Delete
+            </Button>
             {isDraft && (
-              <>
-                <Button
-                  variant="outline"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => setIsDeleteOpen(true)}
-                  data-testid="button-delete-cycle"
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
-                <Button
-                  onClick={() => setIsActivateOpen(true)}
-                  disabled={participants.length === 0}
-                  data-testid="button-activate-cycle"
-                >
-                  <Play className="h-4 w-4 mr-2" />
-                  Activate Cycle
-                </Button>
-              </>
+              <Button
+                onClick={() => setIsActivateOpen(true)}
+                disabled={participants.length === 0}
+                data-testid="button-activate-cycle"
+              >
+                <Play className="h-4 w-4 mr-2" />
+                Activate Cycle
+              </Button>
             )}
             {isActive && (
               <Button
@@ -779,12 +766,6 @@ export default function CycleProgress() {
             <DialogTitle>Edit Review Cycle</DialogTitle>
             <DialogDescription>Update the cycle name, dates, and weight distribution.</DialogDescription>
           </DialogHeader>
-          {isActive && !hasSubmittedFeedback && (
-            <div className="flex items-center gap-2 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300" data-testid="text-active-edit-note">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>No reviews have been submitted yet, so changes are still allowed.</span>
-            </div>
-          )}
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="edit-cycle-name">Name</Label>
@@ -885,7 +866,7 @@ export default function CycleProgress() {
           <DialogHeader>
             <DialogTitle>Delete Review Cycle</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete &ldquo;{cycle?.name}&rdquo;? This will remove all participants and peer assignments. This action cannot be undone.
+              Are you sure you want to delete &ldquo;{cycle?.name}&rdquo;? This will permanently remove all participants, peer assignments, appraisals, feedback, and ratings associated with this cycle. This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
