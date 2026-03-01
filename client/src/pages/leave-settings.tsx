@@ -670,12 +670,13 @@ export default function LeaveSettings() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="balance-total" className="text-muted-foreground">Total Days</Label>
+              <Label htmlFor="balance-total">Total Days</Label>
               <Input
                 id="balance-total"
                 type="number"
+                min={0}
                 value={balanceTotal}
-                disabled
+                onChange={(e) => setBalanceTotal(Number(e.target.value))}
                 data-testid="input-balance-total"
               />
             </div>
