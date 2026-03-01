@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3, Inbox, Check, X, Info, Loader2 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, CartesianGrid, Legend } from "recharts";
 import { useRole, canEditOrgSettings, canViewAllRequests } from "@/lib/role-context";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +10,31 @@ function getLeaveTypeName(leaveTypeId: string, leaveTypes: LeaveType[] | undefin
   if (!leaveTypes) return leaveTypeId;
   const lt = leaveTypes.find((t) => t.id === leaveTypeId);
   return lt ? lt.name : leaveTypeId;
+}
+
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 shadow-lg" data-testid="chart-tooltip">
+      <p className="text-xs font-medium text-foreground mb-1">{label}</p>
+      {payload.map((entry: any, idx: number) => (
+        <p key={idx} className="text-xs" style={{ color: entry.color }}>
+          {entry.name || "Count"}: <span className="font-semibold">{entry.value}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function PieTooltip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border bg-background px-3 py-2 shadow-lg">
+      <p className="text-xs font-medium" style={{ color: payload[0].payload.color }}>
+        {payload[0].name}: <span className="font-semibold">{payload[0].value}</span>
+      </p>
+    </div>
+  );
 }
 
 export default function LeaveAnalytics() {
@@ -75,14 +100,22 @@ export default function LeaveAnalytics() {
     rejected: "Rejected",
     cancelled: "Cancelled",
   };
-  const statusColors = ["#3b82f6", "#6366f1", "#22c55e", "#ef4444", "#a1a1aa"];
+  const statusGradients: Record<string, [string, string]> = {
+    pending: ["#60a5fa", "#2563eb"],
+    manager_approved: ["#818cf8", "#4f46e5"],
+    approved: ["#4ade80", "#16a34a"],
+    rejected: ["#f87171", "#dc2626"],
+    cancelled: ["#d4d4d8", "#71717a"],
+  };
   const statusOrder = ["pending", "manager_approved", "approved", "rejected", "cancelled"];
   const statusData = statusOrder
     .filter((s) => statusCounts[s])
     .map((s) => ({
       name: statusLabels[s] || s,
       value: statusCounts[s],
-      color: statusColors[statusOrder.indexOf(s)],
+      color: statusGradients[s]?.[1] || "#3b82f6",
+      gradientStart: statusGradients[s]?.[0] || "#60a5fa",
+      gradientEnd: statusGradients[s]?.[1] || "#2563eb",
     }));
 
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -107,11 +140,11 @@ export default function LeaveAnalytics() {
 
   const renderCustomLabel = ({ name, value, cx, cy, midAngle, outerRadius }: any) => {
     const RADIAN = Math.PI / 180;
-    const radius = outerRadius + 25;
+    const radius = outerRadius + 28;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
     return (
-      <text x={x} y={y} fill="hsl(var(--muted-foreground))" textAnchor={x > cx ? "start" : "end"} dominantBaseline="central" fontSize={12}>
+      <text x={x} y={y} fill="hsl(var(--muted-foreground))" textAnchor={x > cx ? "start" : "end"} dominantBaseline="central" fontSize={11} fontWeight={500}>
         {`${name} (${value})`}
       </text>
     );
@@ -200,11 +233,18 @@ export default function LeaveAnalytics() {
               <CardContent>
                 <div className="h-[300px]" data-testid="chart-usage-by-type">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={usageByTypeData}>
-                      <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))" }} fontSize={12} />
-                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} fontSize={12} allowDecimals={false} />
-                      <Tooltip />
-                      <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <BarChart data={usageByTypeData} barCategoryGap="20%">
+                      <defs>
+                        <linearGradient id="barGradientBlue" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#60a5fa" stopOpacity={1} />
+                          <stop offset="100%" stopColor="#2563eb" stopOpacity={0.85} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.15} />
+                      <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted-foreground))", fillOpacity: 0.06 }} />
+                      <Bar dataKey="count" fill="url(#barGradientBlue)" radius={[6, 6, 0, 0]} animationDuration={800} animationEasing="ease-out" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -218,12 +258,40 @@ export default function LeaveAnalytics() {
                 <div className="h-[300px]" data-testid="chart-status-breakdown">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
-                      <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={renderCustomLabel}>
-                        {statusData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
+                      <defs>
+                        {statusData.map((entry, idx) => (
+                          <linearGradient key={`pieGrad-${idx}`} id={`pieGrad-${idx}`} x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor={entry.gradientStart} stopOpacity={1} />
+                            <stop offset="100%" stopColor={entry.gradientEnd} stopOpacity={0.9} />
+                          </linearGradient>
+                        ))}
+                      </defs>
+                      <Pie
+                        data={statusData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={55}
+                        outerRadius={90}
+                        paddingAngle={3}
+                        cornerRadius={4}
+                        label={renderCustomLabel}
+                        animationDuration={800}
+                        animationEasing="ease-out"
+                        stroke="none"
+                      >
+                        {statusData.map((_entry, index) => (
+                          <Cell key={`cell-${index}`} fill={`url(#pieGrad-${index})`} />
                         ))}
                       </Pie>
-                      <Tooltip />
+                      <Tooltip content={<PieTooltip />} />
+                      <text x="50%" y="48%" textAnchor="middle" dominantBaseline="central" fill="hsl(var(--foreground))" fontSize={24} fontWeight={700}>
+                        {totalRequests}
+                      </text>
+                      <text x="50%" y="58%" textAnchor="middle" dominantBaseline="central" fill="hsl(var(--muted-foreground))" fontSize={11}>
+                        Total
+                      </text>
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -239,14 +307,31 @@ export default function LeaveAnalytics() {
               <CardContent>
                 <div className="h-[300px]" data-testid="chart-monthly-trends">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={monthlyData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))" }} fontSize={12} />
-                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} fontSize={12} allowDecimals={false} />
-                      <Tooltip />
-                      <Legend />
-                      <Line type="monotone" dataKey="count" stroke="#3b82f6" strokeWidth={2} name="Requests" />
-                    </LineChart>
+                    <AreaChart data={monthlyData}>
+                      <defs>
+                        <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.3} />
+                          <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.02} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.15} />
+                      <XAxis dataKey="month" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend formatter={() => <span className="text-xs text-muted-foreground">Requests</span>} />
+                      <Area
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#8b5cf6"
+                        strokeWidth={2.5}
+                        fill="url(#areaGradient)"
+                        name="Requests"
+                        dot={{ r: 3, fill: "#8b5cf6", stroke: "#fff", strokeWidth: 2 }}
+                        activeDot={{ r: 5, fill: "#8b5cf6", stroke: "#fff", strokeWidth: 2 }}
+                        animationDuration={800}
+                        animationEasing="ease-out"
+                      />
+                    </AreaChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>
@@ -258,11 +343,18 @@ export default function LeaveAnalytics() {
               <CardContent>
                 <div className="h-[300px]" data-testid="chart-leave-by-department">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={deptData}>
-                      <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))" }} fontSize={12} />
-                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} fontSize={12} allowDecimals={false} />
-                      <Tooltip />
-                      <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                    <BarChart data={deptData} barCategoryGap="20%">
+                      <defs>
+                        <linearGradient id="barGradientTeal" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#2dd4bf" stopOpacity={1} />
+                          <stop offset="100%" stopColor="#0d9488" stopOpacity={0.85} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.15} />
+                      <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsl(var(--muted-foreground))", fillOpacity: 0.06 }} />
+                      <Bar dataKey="count" fill="url(#barGradientTeal)" radius={[6, 6, 0, 0]} animationDuration={800} animationEasing="ease-out" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
