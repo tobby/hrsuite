@@ -720,7 +720,14 @@ export default function CycleProgress() {
                   <SelectValue placeholder="Select reviewee..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {participants.map(p => {
+                  {participants
+                    .filter(p => {
+                      if (editingPeerAssignmentId) return true;
+                      const otherParticipants = participants.filter(op => op.employeeId !== p.employeeId);
+                      const assignedReviewers = peerAssignments.filter(a => a.revieweeId === p.employeeId);
+                      return assignedReviewers.length < otherParticipants.length;
+                    })
+                    .map(p => {
                     const emp = getEmployee(p.employeeId);
                     return emp ? (
                       <SelectItem key={p.employeeId} value={p.employeeId}>
