@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link, useParams, useLocation } from "wouter";
+import { Link, useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -97,7 +97,7 @@ function isQuestionVisibleToReviewer(
 
 export default function AppraisalReview() {
   const params = useParams<{ id: string }>();
-  const [, navigate] = useLocation();
+
   const { toast } = useToast();
   const { role } = useRole();
 
@@ -170,7 +170,6 @@ export default function AppraisalReview() {
       queryClient.invalidateQueries({ queryKey: ["/api/feedback", params.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/appraisals"] });
       toast({ title: "Review submitted", description: "Your feedback has been submitted successfully." });
-      navigate("/appraisals");
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });

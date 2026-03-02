@@ -223,10 +223,9 @@ export default function Appraisals() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {pendingReviews.map((feedback) => {
-              const appraisal = appraisals.find((a) => a.id === feedback.appraisalId);
-              const employeeName = appraisal ? getEmployeeName(appraisal.employeeId) : "Unknown";
-              const cycleName = appraisal ? getCycleName(appraisal.cycleId) : "Review";
+            {pendingReviews.map((feedback: any) => {
+              const employeeName = feedback.employeeName || "Unknown";
+              const cycleName = feedback.cycleName || "Review";
               return (
                 <Card key={feedback.id} className="hover-elevate" data-testid={`card-pending-review-${feedback.id}`}>
                   <CardContent className="p-4">

@@ -1953,7 +1953,19 @@ export async function registerRoutes(
       const employeeId = (req.session as any).employeeId;
       const allFeedback = await storage.getAppraisalFeedbackByReviewer(employeeId);
       const pending = allFeedback.filter(f => f.status === "pending");
-      return res.json(pending);
+      const enriched = await Promise.all(pending.map(async (f) => {
+        const appraisal = await storage.getAppraisal(f.appraisalId);
+        let employeeName = "Unknown";
+        let cycleName = "Review";
+        if (appraisal) {
+          const emp = await storage.getEmployee(appraisal.employeeId);
+          if (emp) employeeName = `${emp.firstName} ${emp.lastName}`;
+          const cycle = await storage.getAppraisalCycle(appraisal.cycleId);
+          if (cycle) cycleName = cycle.name;
+        }
+        return { ...f, employeeName, cycleName };
+      }));
+      return res.json(enriched);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
