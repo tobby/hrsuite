@@ -177,6 +177,8 @@ export interface IStorage {
   createPeerAssignment(data: { cycleId: string; revieweeId: string; reviewerId: string }): Promise<PeerAssignment>;
   getPeerAssignmentsByCycle(cycleId: string): Promise<PeerAssignment[]>;
   getPeerAssignmentsByReviewee(cycleId: string, revieweeId: string): Promise<PeerAssignment[]>;
+  getPeerAssignment(id: string): Promise<PeerAssignment | null>;
+  updatePeerAssignment(id: string, data: { revieweeId?: string; reviewerId?: string }): Promise<PeerAssignment | null>;
   deletePeerAssignment(id: string): Promise<boolean>;
   deletePeerAssignmentsByCycle(cycleId: string): Promise<void>;
 
@@ -851,6 +853,16 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(peerAssignments).where(
       and(eq(peerAssignments.cycleId, cycleId), eq(peerAssignments.revieweeId, revieweeId))
     );
+  }
+
+  async getPeerAssignment(id: string): Promise<PeerAssignment | null> {
+    const [assignment] = await db.select().from(peerAssignments).where(eq(peerAssignments.id, id));
+    return assignment || null;
+  }
+
+  async updatePeerAssignment(id: string, data: { revieweeId?: string; reviewerId?: string }): Promise<PeerAssignment | null> {
+    const [updated] = await db.update(peerAssignments).set(data).where(eq(peerAssignments.id, id)).returning();
+    return updated || null;
   }
 
   async deletePeerAssignment(id: string): Promise<boolean> {

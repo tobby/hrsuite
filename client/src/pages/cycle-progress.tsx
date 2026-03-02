@@ -52,6 +52,7 @@ export default function CycleProgress() {
   const [isAddPeerOpen, setIsAddPeerOpen] = useState(false);
   const [peerRevieweeId, setPeerRevieweeId] = useState("");
   const [peerReviewerId, setPeerReviewerId] = useState("");
+  const [editingPeerAssignmentId, setEditingPeerAssignmentId] = useState<string | null>(null);
   const [isActivateOpen, setIsActivateOpen] = useState(false);
   const [isCompleteOpen, setIsCompleteOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -144,6 +145,24 @@ export default function CycleProgress() {
       queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles", cycleId, "peer-assignments"] });
       toast({ title: "Peer assignment added", description: "The peer review assignment has been created." });
       setIsAddPeerOpen(false);
+      setPeerRevieweeId("");
+      setPeerReviewerId("");
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const editPeerMutation = useMutation({
+    mutationFn: async (data: { id: string; revieweeId: string; reviewerId: string }) => {
+      const res = await apiRequest("PATCH", `/api/peer-assignments/${data.id}`, { revieweeId: data.revieweeId, reviewerId: data.reviewerId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles", cycleId, "peer-assignments"] });
+      toast({ title: "Assignment updated", description: "The peer review assignment has been updated." });
+      setIsAddPeerOpen(false);
+      setEditingPeerAssignmentId(null);
       setPeerRevieweeId("");
       setPeerReviewerId("");
     },
@@ -512,6 +531,7 @@ export default function CycleProgress() {
               <Button
                 variant="outline"
                 onClick={() => {
+                  setEditingPeerAssignmentId(null);
                   setPeerRevieweeId("");
                   setPeerReviewerId("");
                   setIsAddPeerOpen(true);
@@ -549,15 +569,30 @@ export default function CycleProgress() {
                         {getEmployeeName(assignment.reviewerId)}
                       </span>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removePeerMutation.mutate(assignment.id)}
-                      disabled={removePeerMutation.isPending}
-                      data-testid={`button-remove-peer-${assignment.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setEditingPeerAssignmentId(assignment.id);
+                          setPeerRevieweeId(assignment.revieweeId);
+                          setPeerReviewerId(assignment.reviewerId);
+                          setIsAddPeerOpen(true);
+                        }}
+                        data-testid={`button-edit-peer-${assignment.id}`}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removePeerMutation.mutate(assignment.id)}
+                        disabled={removePeerMutation.isPending}
+                        data-testid={`button-remove-peer-${assignment.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -652,16 +687,26 @@ export default function CycleProgress() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAddPeerOpen} onOpenChange={setIsAddPeerOpen}>
+      <Dialog open={isAddPeerOpen} onOpenChange={(open) => {
+        setIsAddPeerOpen(open);
+        if (!open) {
+          setEditingPeerAssignmentId(null);
+          setPeerRevieweeId("");
+          setPeerReviewerId("");
+        }
+      }}>
         <DialogContent className="sm:max-w-[420px]" data-testid="dialog-add-peer">
           <DialogHeader>
-            <DialogTitle>Add Peer Assignment</DialogTitle>
+            <DialogTitle>{editingPeerAssignmentId ? "Edit Peer Assignment" : "Add Peer Assignment"}</DialogTitle>
             <DialogDescription>Select who will be reviewed and who will review them.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Reviewee (being reviewed)</Label>
-              <Select value={peerRevieweeId} onValueChange={setPeerRevieweeId}>
+              <Select value={peerRevieweeId} onValueChange={(val) => {
+                setPeerRevieweeId(val);
+                setPeerReviewerId("");
+              }}>
                 <SelectTrigger data-testid="select-peer-reviewee">
                   <SelectValue placeholder="Select reviewee..." />
                 </SelectTrigger>
@@ -685,7 +730,13 @@ export default function CycleProgress() {
                 </SelectTrigger>
                 <SelectContent>
                   {participants
-                    .filter(p => p.employeeId !== peerRevieweeId)
+                    .filter(p => {
+                      if (p.employeeId === peerRevieweeId) return false;
+                      const alreadyAssigned = peerAssignments.some(
+                        a => a.revieweeId === peerRevieweeId && a.reviewerId === p.employeeId && a.id !== editingPeerAssignmentId
+                      );
+                      return !alreadyAssigned;
+                    })
                     .map(p => {
                       const emp = getEmployee(p.employeeId);
                       return emp ? (
@@ -703,11 +754,19 @@ export default function CycleProgress() {
               Cancel
             </Button>
             <Button
-              onClick={() => addPeerMutation.mutate({ revieweeId: peerRevieweeId, reviewerId: peerReviewerId })}
-              disabled={!peerRevieweeId || !peerReviewerId || addPeerMutation.isPending}
+              onClick={() => {
+                if (editingPeerAssignmentId) {
+                  editPeerMutation.mutate({ id: editingPeerAssignmentId, revieweeId: peerRevieweeId, reviewerId: peerReviewerId });
+                } else {
+                  addPeerMutation.mutate({ revieweeId: peerRevieweeId, reviewerId: peerReviewerId });
+                }
+              }}
+              disabled={!peerRevieweeId || !peerReviewerId || addPeerMutation.isPending || editPeerMutation.isPending}
               data-testid="button-confirm-add-peer"
             >
-              {addPeerMutation.isPending ? "Adding..." : "Add Assignment"}
+              {editingPeerAssignmentId
+                ? (editPeerMutation.isPending ? "Saving..." : "Save Changes")
+                : (addPeerMutation.isPending ? "Adding..." : "Add Assignment")}
             </Button>
           </DialogFooter>
         </DialogContent>

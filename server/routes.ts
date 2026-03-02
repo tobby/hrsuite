@@ -1776,6 +1776,40 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/peer-assignments/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { revieweeId, reviewerId } = req.body;
+      if (!revieweeId && !reviewerId) {
+        return res.status(400).json({ message: "At least one of revieweeId or reviewerId is required" });
+      }
+      if (revieweeId && reviewerId && revieweeId === reviewerId) {
+        return res.status(400).json({ message: "Reviewee and reviewer cannot be the same person" });
+      }
+      const currentAssignment = await storage.getPeerAssignment(req.params.id);
+      if (!currentAssignment) return res.status(404).json({ message: "Peer assignment not found" });
+      const cycleId = currentAssignment.cycleId;
+      const finalRevieweeId = revieweeId || currentAssignment.revieweeId;
+      const finalReviewerId = reviewerId || currentAssignment.reviewerId;
+      if (finalRevieweeId === finalReviewerId) {
+        return res.status(400).json({ message: "Reviewee and reviewer cannot be the same person" });
+      }
+      if (cycleId && finalRevieweeId && finalReviewerId) {
+        const cycleAssignments = await storage.getPeerAssignmentsByCycle(cycleId);
+        const duplicate = cycleAssignments.find(
+          a => a.revieweeId === finalRevieweeId && a.reviewerId === finalReviewerId && a.id !== req.params.id
+        );
+        if (duplicate) {
+          return res.status(400).json({ message: "This peer assignment already exists" });
+        }
+      }
+      const updated = await storage.updatePeerAssignment(req.params.id, { revieweeId, reviewerId });
+      if (!updated) return res.status(404).json({ message: "Peer assignment not found" });
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.delete("/api/peer-assignments/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
       const deleted = await storage.deletePeerAssignment(req.params.id);
