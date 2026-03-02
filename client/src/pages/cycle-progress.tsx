@@ -376,11 +376,6 @@ export default function CycleProgress() {
                     <Play className="h-4 w-4 mr-2" />
                     Activate Cycle
                   </Button>
-                  {is360 && !allHavePeers && participants.length > 0 && (
-                    <p className="text-xs text-muted-foreground" data-testid="text-peer-warning">
-                      All participants must have peer reviewers assigned
-                    </p>
-                  )}
                 </div>
               );
             })()}
