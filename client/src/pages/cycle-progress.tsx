@@ -360,16 +360,30 @@ export default function CycleProgress() {
               <Trash2 className="h-4 w-4 mr-2" />
               Delete
             </Button>
-            {isDraft && (
-              <Button
-                onClick={() => setIsActivateOpen(true)}
-                disabled={participants.length === 0}
-                data-testid="button-activate-cycle"
-              >
-                <Play className="h-4 w-4 mr-2" />
-                Activate Cycle
-              </Button>
-            )}
+            {isDraft && (() => {
+              const allHavePeers = is360
+                ? participants.length > 0 && participants.every(p =>
+                    peerAssignments.some(a => a.revieweeId === p.employeeId)
+                  )
+                : participants.length > 0;
+              return (
+                <div className="flex flex-col items-end gap-1">
+                  <Button
+                    onClick={() => setIsActivateOpen(true)}
+                    disabled={!allHavePeers}
+                    data-testid="button-activate-cycle"
+                  >
+                    <Play className="h-4 w-4 mr-2" />
+                    Activate Cycle
+                  </Button>
+                  {is360 && !allHavePeers && participants.length > 0 && (
+                    <p className="text-xs text-muted-foreground" data-testid="text-peer-warning">
+                      All participants must have peer reviewers assigned
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
             {isActive && (
               <Button
                 variant="outline"
