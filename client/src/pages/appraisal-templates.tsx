@@ -17,7 +17,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { AppraisalTemplate, TemplateQuestion, TemplateSection, Competency, CompetencyQuestion } from "@shared/schema";
 import {
-  FileText,
   Plus,
   Trash2,
   Pencil,
@@ -821,12 +820,9 @@ export default function AppraisalTemplates() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-muted-foreground" />
-              <h1 className="text-xl font-semibold tracking-tight" data-testid="text-templates-title">
-                Review Templates
-              </h1>
-            </div>
+            <h1 className="text-lg font-semibold tracking-tight" data-testid="text-templates-title">
+              Review Templates
+            </h1>
           </div>
           <p className="text-sm text-muted-foreground ml-12">
             Create and manage templates for performance reviews

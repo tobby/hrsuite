@@ -8,7 +8,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import type { Appraisal, AppraisalFeedback, AppraisalCycle, Employee } from "@shared/schema";
 import {
-  ClipboardCheck,
   BarChart3,
   Clock,
   CheckCircle2,
@@ -109,12 +108,9 @@ export default function Appraisals() {
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <div className="flex items-center gap-2">
-            <ClipboardCheck className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-appraisals-title">
-              Performance Appraisals
-            </h1>
-          </div>
+          <h1 className="text-lg font-semibold tracking-tight" data-testid="text-appraisals-title">
+            Performance Appraisals
+          </h1>
           <p className="text-muted-foreground text-sm mt-1" data-testid="text-appraisals-subtitle">
             {subtitle}
           </p>

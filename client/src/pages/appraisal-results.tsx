@@ -214,7 +214,7 @@ export default function AppraisalResults() {
             </Button>
           </Link>
           <div className="flex-1">
-            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-results-title">
+            <h1 className="text-lg font-semibold tracking-tight" data-testid="text-results-title">
               Appraisal Not Found
             </h1>
             <p className="text-muted-foreground">
@@ -288,7 +288,7 @@ export default function AppraisalResults() {
             </Button>
           </Link>
           <div className="flex-1 min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-results-title">
+            <h1 className="text-lg font-semibold tracking-tight" data-testid="text-results-title">
               Appraisal Results - {employeeName}
             </h1>
             <p className="text-muted-foreground text-sm mt-1" data-testid="text-cycle-name">
@@ -327,7 +327,7 @@ export default function AppraisalResults() {
           </Button>
         </Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight" data-testid="text-results-title">
+          <h1 className="text-lg font-semibold tracking-tight" data-testid="text-results-title">
             Appraisal Results - {employeeName}
           </h1>
           <p className="text-muted-foreground text-sm mt-1" data-testid="text-cycle-name">
@@ -353,7 +353,7 @@ export default function AppraisalResults() {
       </Card>
 
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold" data-testid="text-feedback-section-title">
+        <h2 className="text-lg font-semibold" data-testid="text-feedback-section-title">
           Feedback Breakdown
         </h2>
 

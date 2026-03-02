@@ -16,7 +16,6 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Competency, CompetencyQuestion } from "@shared/schema";
 import {
-  BookOpen,
   Plus,
   Trash2,
   Pencil,
@@ -281,12 +280,9 @@ export default function CompetencyLibrary() {
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
-            <div className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-muted-foreground" />
-              <h1 className="text-xl font-semibold tracking-tight" data-testid="text-competency-library-title">
-                Competency Library
-              </h1>
-            </div>
+            <h1 className="text-lg font-semibold tracking-tight" data-testid="text-competency-library-title">
+              Competency Library
+            </h1>
           </div>
           <p className="text-sm text-muted-foreground ml-12">
             Manage competencies and their predefined questions for use in appraisal templates

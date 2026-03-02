@@ -310,7 +310,7 @@ export default function CycleProgress() {
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-xl font-semibold tracking-tight" data-testid="text-cycle-progress-title">
+            <h1 className="text-lg font-semibold tracking-tight" data-testid="text-cycle-progress-title">
               {cycle.name}
             </h1>
             <Badge variant={cycleStatusCfg.variant} className={cycleStatusCfg.className} data-testid="badge-cycle-status">
