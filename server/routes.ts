@@ -376,9 +376,56 @@ export async function registerRoutes(
   app.get("/api/employees", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
       const emps = await storage.getEmployeesByCompany(companyId);
-      const safeEmps = emps.map(({ passwordHash, inviteToken, inviteExpiresAt, ...rest }) => rest);
+      const safeEmps = emps.map(({ passwordHash, inviteToken, inviteExpiresAt, ...rest }) => {
+        if (role !== "admin") {
+          const { dateOfBirth, homeAddress, ...filtered } = rest;
+          return filtered;
+        }
+        return rest;
+      });
       return res.json(safeEmps);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/employees/upcoming-birthdays", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const settings = await storage.getRecruitmentSettings(companyId);
+      const reminderSetting = settings.find(s => s.key === "birthday_reminder_days");
+      const reminderDays = parseInt(reminderSetting?.value || "3");
+
+      const emps = await storage.getEmployeesByCompany(companyId);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const upcoming = emps
+        .filter(e => e.dateOfBirth && e.status === "active")
+        .map(e => {
+          const dob = new Date(e.dateOfBirth!);
+          const thisYearBirthday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
+          if (thisYearBirthday < today) {
+            thisYearBirthday.setFullYear(thisYearBirthday.getFullYear() + 1);
+          }
+          const diffTime = thisYearBirthday.getTime() - today.getTime();
+          const daysUntil = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          return {
+            id: e.id,
+            firstName: e.firstName,
+            lastName: e.lastName,
+            position: e.position,
+            dateOfBirth: e.dateOfBirth,
+            daysUntil,
+            birthdayDate: thisYearBirthday.toISOString().split("T")[0],
+          };
+        })
+        .filter(e => e.daysUntil >= 0 && e.daysUntil <= reminderDays)
+        .sort((a, b) => a.daysUntil - b.daysUntil);
+
+      return res.json(upcoming);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
@@ -386,9 +433,14 @@ export async function registerRoutes(
 
   app.get("/api/employees/:id", requireAuth, async (req: Request, res: Response) => {
     try {
+      const role = (req.session as any).role;
       const employee = await storage.getEmployee(req.params.id);
       if (!employee) return res.status(404).json({ message: "Employee not found" });
       const { passwordHash, inviteToken, inviteExpiresAt, ...safeEmployee } = employee;
+      if (role !== "admin") {
+        const { dateOfBirth, homeAddress, ...filtered } = safeEmployee;
+        return res.json(filtered);
+      }
       return res.json(safeEmployee);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
@@ -428,11 +480,13 @@ export async function registerRoutes(
   app.patch("/api/profile", requireAuth, async (req: Request, res: Response) => {
     try {
       const employeeId = (req.session as any)?.employeeId;
-      const { firstName, lastName, phone } = req.body;
-      const updateData: Record<string, string> = {};
+      const { firstName, lastName, phone, dateOfBirth, homeAddress } = req.body;
+      const updateData: Record<string, any> = {};
       if (firstName !== undefined) updateData.firstName = firstName;
       if (lastName !== undefined) updateData.lastName = lastName;
       if (phone !== undefined) updateData.phone = phone;
+      if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth || null;
+      if (homeAddress !== undefined) updateData.homeAddress = homeAddress || null;
 
       const employee = await storage.updateEmployee(employeeId, updateData);
       if (!employee) return res.status(404).json({ message: "Employee not found" });
@@ -483,6 +537,34 @@ export async function registerRoutes(
 
       const inviteToken = await storage.generateInviteToken(employee.id);
       return res.json({ inviteLink: `/invite/${inviteToken}` });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== COMPANY SETTINGS ROUTES ====================
+
+  app.get("/api/company-settings/birthday-reminder-days", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const settings = await storage.getRecruitmentSettings(companyId);
+      const setting = settings.find(s => s.key === "birthday_reminder_days");
+      return res.json({ value: setting?.value || "3" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/company-settings/birthday-reminder-days", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const { value } = req.body;
+      const days = parseInt(value);
+      if (isNaN(days) || days < 1 || days > 30) {
+        return res.status(400).json({ message: "Invalid value. Must be between 1 and 30." });
+      }
+      await storage.upsertRecruitmentSetting(companyId, "birthday_reminder_days", String(days));
+      return res.json({ value: String(days) });
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }

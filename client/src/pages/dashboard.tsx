@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   MessageSquareWarning,
+  Cake,
 } from "lucide-react";
 import { useRole, canApproveLeave, canAccessLeave } from "@/lib/role-context";
 import type { Employee, Department, LeaveRequest, LeaveBalance, LeaveType, AppraisalCycle, Appraisal, HrQuery, TaskAssignment, TaskCompletion } from "@shared/schema";
@@ -95,6 +96,11 @@ export default function Dashboard() {
   const { data: myTaskCompletions = [] } = useQuery<TaskCompletion[]>({
     queryKey: ['/api/my-task-completions'],
     enabled: role !== "contract",
+  });
+
+  const { data: upcomingBirthdays = [] } = useQuery<{ id: string; firstName: string; lastName: string; position: string; daysUntil: number; birthdayDate: string }[]>({
+    queryKey: ['/api/employees/upcoming-birthdays'],
+    enabled: role === "admin",
   });
 
   const isLoading = isLoadingEmployees || isLoadingDepartments;
@@ -534,6 +540,56 @@ export default function Dashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Upcoming Birthdays - Admin only */}
+      {role === "admin" && (
+        <Card data-testid="card-upcoming-birthdays">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-lg">Upcoming Birthdays</CardTitle>
+              <CardDescription>Employee birthdays coming up soon</CardDescription>
+            </div>
+            <Cake className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {upcomingBirthdays.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <Cake className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                <p className="text-sm font-medium text-muted-foreground">No upcoming birthdays</p>
+                <p className="text-xs text-muted-foreground mt-1">No employee birthdays within the reminder window.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {upcomingBirthdays.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between" data-testid={`birthday-${entry.id}`}>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 dark:bg-pink-900/30 text-xs font-medium text-pink-600 dark:text-pink-400">
+                        {entry.firstName[0]}{entry.lastName[0]}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{entry.firstName} {entry.lastName}</p>
+                        <p className="text-xs text-muted-foreground">{entry.position}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        entry.daysUntil === 0
+                          ? "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400"
+                          : "bg-muted text-muted-foreground"
+                      }`}>
+                        {entry.daysUntil === 0 ? "Today!" : entry.daysUntil === 1 ? "Tomorrow" : `In ${entry.daysUntil} days`}
+                      </span>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {new Date(entry.birthdayDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* 4. Leave Balance / Recent Requests */}
       {role === "employee" && (

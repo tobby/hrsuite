@@ -5,10 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Form,
   FormControl,
@@ -19,23 +20,23 @@ import {
 } from "@/components/ui/form";
 import { 
   User,
-  Bell,
-  Palette,
   Building2,
   Save,
+  Loader2,
 } from "lucide-react";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Department } from "@shared/schema";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
 
 const profileFormSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Invalid email address"),
   phone: z.string().default(""),
+  dateOfBirth: z.string().optional().default(""),
+  homeAddress: z.string().optional().default(""),
 });
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
@@ -46,6 +47,11 @@ export default function Settings() {
   const department = departments.find(d => d.id === currentUser.departmentId);
   const { toast } = useToast();
 
+  const { data: birthdayReminderDays } = useQuery<{ value: string }>({
+    queryKey: ['/api/company-settings/birthday-reminder-days'],
+    enabled: canEditOrgSettings(role),
+  });
+
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
     defaultValues: {
@@ -53,6 +59,8 @@ export default function Settings() {
       lastName: currentUser.lastName,
       email: currentUser.email,
       phone: currentUser.phone || "",
+      dateOfBirth: (currentUser as any).dateOfBirth || "",
+      homeAddress: (currentUser as any).homeAddress || "",
     },
   });
 
@@ -77,6 +85,16 @@ export default function Settings() {
     },
   });
 
+  const birthdayReminderMutation = useMutation({
+    mutationFn: async (days: string) => {
+      await apiRequest("PUT", "/api/company-settings/birthday-reminder-days", { value: days });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/company-settings/birthday-reminder-days"] });
+      toast({ title: "Setting Updated", description: "Birthday reminder days updated." });
+    },
+  });
+
   const onSubmit = (data: ProfileFormValues) => {
     profileMutation.mutate(data);
   };
@@ -88,7 +106,7 @@ export default function Settings() {
           Settings
         </h1>
         <p className="text-muted-foreground">
-          Manage your account and application preferences
+          Manage your account and organization settings
         </p>
       </div>
 
@@ -97,14 +115,6 @@ export default function Settings() {
           <TabsTrigger value="profile" data-testid="tab-profile">
             <User className="mr-2 h-4 w-4" />
             Profile
-          </TabsTrigger>
-          <TabsTrigger value="notifications" data-testid="tab-notifications">
-            <Bell className="mr-2 h-4 w-4" />
-            Notifications
-          </TabsTrigger>
-          <TabsTrigger value="appearance" data-testid="tab-appearance">
-            <Palette className="mr-2 h-4 w-4" />
-            Appearance
           </TabsTrigger>
           {canEditOrgSettings(role) && (
             <TabsTrigger value="organization" data-testid="tab-organization">
@@ -203,7 +213,39 @@ export default function Settings() {
                         </FormItem>
                       )}
                     />
+                    <FormField
+                      control={form.control}
+                      name="dateOfBirth"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Date of Birth</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} data-testid="input-date-of-birth" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </div>
+
+                  <FormField
+                    control={form.control}
+                    name="homeAddress"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Home Address</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            placeholder="Enter your home address"
+                            rows={3}
+                            data-testid="input-home-address"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   <div className="flex justify-end">
                     <Button type="submit" disabled={profileMutation.isPending} data-testid="button-save-profile">
@@ -252,90 +294,6 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="notifications" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Email Notifications</CardTitle>
-              <CardDescription>
-                Configure which emails you receive
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Leave Request Updates</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Receive emails when your leave requests are approved or rejected
-                  </p>
-                </div>
-                <Switch defaultChecked data-testid="switch-leave-notifications" />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Performance Review Reminders</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Get notified about upcoming reviews and feedback requests
-                  </p>
-                </div>
-                <Switch defaultChecked data-testid="switch-review-notifications" />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Approval Requests</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Receive notifications when team members submit requests
-                  </p>
-                </div>
-                <Switch defaultChecked data-testid="switch-approval-notifications" />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Weekly Summary</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Get a weekly digest of HR activities and updates
-                  </p>
-                </div>
-                <Switch data-testid="switch-weekly-summary" />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="appearance" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Theme</CardTitle>
-              <CardDescription>
-                Customize the look and feel of the application
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Dark Mode</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Switch between light and dark themes
-                  </p>
-                </div>
-                <Switch data-testid="switch-dark-mode" />
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Compact Mode</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Use smaller spacing for a denser layout
-                  </p>
-                </div>
-                <Switch data-testid="switch-compact-mode" />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         <TabsContent value="organization" className="space-y-6">
           <Card>
             <CardHeader>
@@ -368,6 +326,39 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">
                 Contact your HR administrator to update organization settings.
               </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Birthday Reminders</CardTitle>
+              <CardDescription>
+                Configure how many days before an employee's birthday you receive a reminder on the dashboard
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4">
+                <Label htmlFor="birthdayDays">Remind me</Label>
+                <Select
+                  value={birthdayReminderDays?.value || "3"}
+                  onValueChange={(val) => birthdayReminderMutation.mutate(val)}
+                  data-testid="select-birthday-reminder-days"
+                >
+                  <SelectTrigger className="w-[120px]" data-testid="select-birthday-reminder-trigger">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 day</SelectItem>
+                    <SelectItem value="2">2 days</SelectItem>
+                    <SelectItem value="3">3 days</SelectItem>
+                    <SelectItem value="5">5 days</SelectItem>
+                    <SelectItem value="7">7 days</SelectItem>
+                    <SelectItem value="14">14 days</SelectItem>
+                    <SelectItem value="30">30 days</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-muted-foreground">before the birthday</span>
+              </div>
             </CardContent>
           </Card>
 

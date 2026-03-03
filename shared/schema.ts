@@ -52,6 +52,8 @@ export const employees = pgTable("employees", {
   position: text("position").notNull(),
   managerId: varchar("manager_id"),
   hireDate: date("hire_date"),
+  dateOfBirth: date("date_of_birth"),
+  homeAddress: text("home_address"),
   profileImageUrl: text("profile_image_url"),
   status: text("status").notNull().default("invited"),
   role: text("role").notNull().default("employee"),
