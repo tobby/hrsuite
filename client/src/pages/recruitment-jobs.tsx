@@ -201,7 +201,7 @@ export default function RecruitmentJobs() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/job-postings'] });
       queryClient.invalidateQueries({ queryKey: ['/api/candidates'] });
-      toast({ title: "Job Restored", description: "The job posting has been restored to draft status." });
+      toast({ title: "Job Restored", description: "The job posting has been restored to active status." });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
