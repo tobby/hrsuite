@@ -117,8 +117,13 @@ export default function RecruitmentCandidates() {
 
   const { currentPage, totalPages, paginatedItems: paginatedCandidates, setCurrentPage, totalItems, pageSize } = usePagination(filteredCandidates, 10);
 
+  const knownStageKeys = new Set(pipelineStages.map((s: any) => s.key));
   const getCandidatesByStage = (stage: string) =>
-    filteredCandidates.filter((c) => c.stage === stage);
+    filteredCandidates.filter((c) => {
+      if (c.stage === stage) return true;
+      if (stage === pipelineStages[0]?.key && !knownStageKeys.has(c.stage) && c.stage !== "archived") return true;
+      return false;
+    });
 
   const handleDragStart = (candidateId: string) => {
     setDraggedCandidate(candidateId);
