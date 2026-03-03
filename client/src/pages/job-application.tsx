@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
+import { Checkbox } from "@/components/ui/checkbox";
 import { MapPin, Clock, CheckCircle2, ArrowLeft, ArrowRight, Upload, Inbox, FileText, Loader2 } from "lucide-react";
 
 type FieldVisibility = "hidden" | "optional" | "required";
@@ -24,9 +25,11 @@ const defaultAppFields: AppFieldsConfig = {
   location: "optional",
   gender: "optional",
   linkedinUrl: "optional",
+  website: "optional",
   source: "optional",
   coverLetter: "optional",
   resume: "optional",
+  ndpaConsent: "optional",
 };
 
 function parseFieldsConfig(job: JobPosting): AppFieldsConfig {
@@ -68,6 +71,11 @@ function buildSchema(config: AppFieldsConfig) {
       ? z.enum(["male", "female", "other", "prefer_not_to_say"])
       : z.enum(["male", "female", "other", "prefer_not_to_say"]).optional();
   }
+  if (isVisible(config, "ndpaConsent")) {
+    step1.ndpaConsent = isRequired(config, "ndpaConsent")
+      ? z.boolean().refine(val => val === true, { message: "You must consent to proceed" })
+      : z.boolean().optional();
+  }
 
   const step2: Record<string, z.ZodTypeAny> = {};
   if (isVisible(config, "linkedinUrl")) {
@@ -79,6 +87,11 @@ function buildSchema(config: AppFieldsConfig) {
     step2.source = isRequired(config, "source")
       ? z.enum(["website", "referral", "linkedin", "job_board", "agency", "direct", "other"])
       : z.enum(["website", "referral", "linkedin", "job_board", "agency", "direct", "other"]).optional();
+  }
+  if (isVisible(config, "website")) {
+    step2.website = isRequired(config, "website")
+      ? z.string().min(1, "Website is required")
+      : z.string().optional();
   }
   if (isVisible(config, "coverLetter")) {
     step2.coverLetter = isRequired(config, "coverLetter")
@@ -195,7 +208,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
   const fieldsConfig = useMemo(() => parseFieldsConfig(job), [job]);
   const schema = useMemo(() => buildSchema(fieldsConfig), [fieldsConfig]);
 
-  const hasStep2Fields = isVisible(fieldsConfig, "linkedinUrl") || isVisible(fieldsConfig, "source") || isVisible(fieldsConfig, "coverLetter");
+  const hasStep2Fields = isVisible(fieldsConfig, "linkedinUrl") || isVisible(fieldsConfig, "website") || isVisible(fieldsConfig, "source") || isVisible(fieldsConfig, "coverLetter");
   const hasStep3Fields = isVisible(fieldsConfig, "resume");
 
   const activeSteps = useMemo(() => {
@@ -223,9 +236,11 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
       location: "",
       gender: undefined,
       linkedinUrl: "",
+      website: "",
       source: "website",
       coverLetter: "",
       resumeFileName: "",
+      ndpaConsent: false,
     },
     mode: "onTouched",
   });
@@ -276,11 +291,13 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
       if (isVisible(fieldsConfig, "phone")) fields.push("phone");
       if (isVisible(fieldsConfig, "location")) fields.push("location");
       if (isVisible(fieldsConfig, "gender")) fields.push("gender");
+      if (isVisible(fieldsConfig, "ndpaConsent")) fields.push("ndpaConsent");
       return form.trigger(fields);
     }
     if (stepConfig.key === 2) {
       const fields: any[] = [];
       if (isVisible(fieldsConfig, "linkedinUrl")) fields.push("linkedinUrl");
+      if (isVisible(fieldsConfig, "website")) fields.push("website");
       if (isVisible(fieldsConfig, "source")) fields.push("source");
       if (isVisible(fieldsConfig, "coverLetter")) fields.push("coverLetter");
       return fields.length > 0 ? form.trigger(fields) : true;
@@ -315,8 +332,10 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           linkedinUrl: data.linkedinUrl || null,
           gender: data.gender || null,
           coverLetter: data.coverLetter || null,
+          website: data.website || null,
           source: data.source || "website",
           resumeFileName: data.resumeFileName || null,
+          ndpaConsent: data.ndpaConsent || false,
         }),
       });
 
@@ -464,6 +483,30 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           )}
         />
       )}
+
+      {isVisible(fieldsConfig, "ndpaConsent") && (
+        <FormField
+          control={form.control}
+          name="ndpaConsent"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+              <FormControl>
+                <Checkbox
+                  checked={field.value}
+                  onCheckedChange={field.onChange}
+                  data-testid="checkbox-ndpa-consent"
+                />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel className="text-sm font-normal">
+                  I consent to the processing of my personal data in accordance with the Nigeria Data Protection Act (NDPA){isRequired(fieldsConfig, "ndpaConsent") ? " *" : ""}
+                </FormLabel>
+                <FormMessage />
+              </div>
+            </FormItem>
+          )}
+        />
+      )}
     </>
   );
 
@@ -478,6 +521,22 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
               <FormLabel>LinkedIn Profile{isRequired(fieldsConfig, "linkedinUrl") ? " *" : ""}</FormLabel>
               <FormControl>
                 <Input placeholder="https://linkedin.com/in/yourprofile" {...field} data-testid="input-linkedin" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
+
+      {isVisible(fieldsConfig, "website") && (
+        <FormField
+          control={form.control}
+          name="website"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Website{isRequired(fieldsConfig, "website") ? " *" : ""}</FormLabel>
+              <FormControl>
+                <Input placeholder="https://yourwebsite.com" {...field} data-testid="input-website" />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -600,6 +659,18 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
             <div className="flex justify-between">
               <span className="text-muted-foreground">LinkedIn</span>
               <span className="font-medium truncate max-w-[200px]">{form.getValues("linkedinUrl")}</span>
+            </div>
+          )}
+          {isVisible(fieldsConfig, "website") && form.getValues("website") && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Website</span>
+              <span className="font-medium truncate max-w-[200px]">{form.getValues("website")}</span>
+            </div>
+          )}
+          {isVisible(fieldsConfig, "ndpaConsent") && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">NDPA Consent</span>
+              <span className="font-medium">{form.getValues("ndpaConsent") ? "Yes" : "No"}</span>
             </div>
           )}
           {isVisible(fieldsConfig, "resume") && uploadedFile && (

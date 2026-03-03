@@ -2465,7 +2465,7 @@ export async function registerRoutes(
 
   app.post("/api/candidates/apply", async (req, res) => {
     try {
-      const { jobId, firstName, lastName, email, phone, location, linkedinUrl, gender, coverLetter, source, resumeFileName } = req.body;
+      const { jobId, firstName, lastName, email, phone, location, linkedinUrl, gender, coverLetter, source, resumeFileName, website, ndpaConsent } = req.body;
       const posting = await storage.getJobPosting(jobId);
       if (!posting) return res.status(404).json({ message: "Job posting not found" });
       if (posting.status !== "active") return res.status(400).json({ message: "This position is no longer accepting applications" });
@@ -2481,8 +2481,10 @@ export async function registerRoutes(
         linkedinUrl,
         gender,
         coverLetter,
+        website,
         source: source || "website",
         resumeFileName,
+        ndpaConsent: ndpaConsent || false,
       });
       if (!parsed.success) return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
 

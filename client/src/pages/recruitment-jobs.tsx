@@ -82,9 +82,11 @@ export default function RecruitmentJobs() {
     location: "optional",
     gender: "optional",
     linkedinUrl: "optional",
+    website: "optional",
     source: "optional",
     coverLetter: "optional",
     resume: "optional",
+    ndpaConsent: "optional",
   };
 
   const appFieldLabels: Record<string, string> = {
@@ -92,9 +94,11 @@ export default function RecruitmentJobs() {
     location: "Location",
     gender: "Gender",
     linkedinUrl: "LinkedIn Profile",
+    website: "Website",
     source: "How Did You Hear About Us",
     coverLetter: "Cover Letter",
     resume: "Resume / CV",
+    ndpaConsent: "NDPA Consent",
   };
 
   const [applicationFieldsConfig, setApplicationFieldsConfig] = useState<AppFieldsConfig>({ ...defaultAppFields });
