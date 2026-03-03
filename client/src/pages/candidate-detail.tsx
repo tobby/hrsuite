@@ -643,7 +643,11 @@ export default function CandidateDetail() {
                 {candidate.resumeFileName && (
                   <div className="flex items-start gap-2 text-sm">
                     <FileText className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                    <span data-testid="text-resume">{candidate.resumeFileName}</span>
+                    {candidate.resumeFileUrl ? (
+                      <a href={candidate.resumeFileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate" data-testid="link-resume">{candidate.resumeFileName}</a>
+                    ) : (
+                      <span data-testid="text-resume">{candidate.resumeFileName}</span>
+                    )}
                   </div>
                 )}
               </div>

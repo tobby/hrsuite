@@ -102,6 +102,7 @@ function buildSchema(config: AppFieldsConfig) {
     step3.resumeFileName = isRequired(config, "resume")
       ? z.string().min(1, "Resume is required")
       : z.string().optional();
+    step3.resumeFileUrl = z.string().optional();
   }
 
   const fullSchema = z.object({ ...step1, ...step2, ...step3 });
@@ -238,6 +239,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
       source: undefined,
       coverLetter: "",
       resumeFileName: "",
+      resumeFileUrl: "",
       ndpaConsent: false,
     },
     mode: "onTouched",
@@ -269,6 +271,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
         const data = await res.json();
         setUploadedFile(data.fileName);
         form.setValue("resumeFileName", data.fileName);
+        form.setValue("resumeFileUrl", data.fileUrl);
         toast({ title: "Resume uploaded", description: `${data.fileName} uploaded successfully.` });
       } else {
         toast({ title: "Upload failed", description: "Could not upload your resume. Please try again.", variant: "destructive" });
@@ -333,6 +336,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           website: data.website || null,
           source: data.source || "website",
           resumeFileName: data.resumeFileName || null,
+          resumeFileUrl: data.resumeFileUrl || null,
           ndpaConsent: data.ndpaConsent || false,
         }),
       });

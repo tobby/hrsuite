@@ -46,7 +46,7 @@ function validateAttachments(attachments: any): attachments is Array<{ fileName:
   if (attachments.length > 5) return false;
   return attachments.every(a =>
     typeof a.fileName === "string" && a.fileName.length > 0 &&
-    typeof a.fileUrl === "string" && a.fileUrl.startsWith("/uploads/") &&
+    typeof a.fileUrl === "string" && a.fileUrl.startsWith("/api/uploads/") &&
     typeof a.fileSize === "number" && a.fileSize > 0 && a.fileSize <= 10 * 1024 * 1024 &&
     typeof a.mimeType === "string" && a.mimeType.length > 0
   );
@@ -275,6 +275,15 @@ export async function registerRoutes(
     }
     next();
   }
+
+  app.get("/api/uploads/:filename", requireAuth, (req: Request, res: Response) => {
+    const filename = path.basename(req.params.filename);
+    const filePath = path.join(uploadsDir, filename);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ message: "File not found" });
+    }
+    return res.sendFile(filePath);
+  });
 
   function requireAdmin(req: Request, res: Response, next: NextFunction) {
     const role = (req.session as any)?.role;
@@ -1263,7 +1272,7 @@ export async function registerRoutes(
 
       const uploadedFiles = files.map(file => ({
         fileName: file.originalname,
-        fileUrl: `/uploads/${file.filename}`,
+        fileUrl: `/api/uploads/${file.filename}`,
         fileSize: file.size,
         mimeType: file.mimetype,
       }));
@@ -2476,7 +2485,7 @@ export async function registerRoutes(
 
   app.post("/api/candidates/apply", async (req, res) => {
     try {
-      const { jobId, firstName, lastName, email, phone, location, linkedinUrl, gender, coverLetter, source, resumeFileName, website, ndpaConsent } = req.body;
+      const { jobId, firstName, lastName, email, phone, location, linkedinUrl, gender, coverLetter, source, resumeFileName, resumeFileUrl, website, ndpaConsent } = req.body;
       const posting = await storage.getJobPosting(jobId);
       if (!posting) return res.status(404).json({ message: "Job posting not found" });
       if (posting.status !== "active") return res.status(400).json({ message: "This position is no longer accepting applications" });
@@ -2495,6 +2504,7 @@ export async function registerRoutes(
         website,
         source: source || "website",
         resumeFileName,
+        resumeFileUrl,
         ndpaConsent: ndpaConsent || false,
       });
       if (!parsed.success) return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
@@ -2886,7 +2896,7 @@ export async function registerRoutes(
       if (!req.file) return res.status(400).json({ message: "No file uploaded" });
       return res.json({
         fileName: req.file.originalname,
-        fileUrl: `/uploads/${req.file.filename}`,
+        fileUrl: `/api/uploads/${req.file.filename}`,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
       });
