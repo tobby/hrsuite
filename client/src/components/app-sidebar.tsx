@@ -459,6 +459,18 @@ export function AppSidebar() {
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton
                             asChild
+                            isActive={location === "/my-tasks"}
+                            className="transition-all duration-150"
+                          >
+                            <Link href="/my-tasks" data-testid="nav-my-tasks">
+                              <ClipboardList className="h-3 w-3" />
+                              <span>My Tasks</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
                             isActive={location === "/onboarding/tracker"}
                             className="transition-all duration-150"
                           >

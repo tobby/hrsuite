@@ -89,12 +89,12 @@ export default function Dashboard() {
 
   const { data: myTaskAssignments = [] } = useQuery<TaskAssignment[]>({
     queryKey: ['/api/my-task-assignments'],
-    enabled: role === "employee",
+    enabled: role !== "contract",
   });
 
   const { data: myTaskCompletions = [] } = useQuery<TaskCompletion[]>({
     queryKey: ['/api/my-task-completions'],
-    enabled: role === "employee",
+    enabled: role !== "contract",
   });
 
   const isLoading = isLoadingEmployees || isLoadingDepartments;
@@ -335,12 +335,22 @@ export default function Dashboard() {
                   {role === "employee" ? "Your incomplete task items" : "Active task assignments"}
                 </CardDescription>
               </div>
-              <Link href={role === "employee" ? "/onboarding/my-tasks" : "/onboarding/tracker"}>
-                <Button variant="ghost" size="sm" data-testid="button-view-all-tasks">
-                  {role === "employee" ? "My Tasks" : "Tracker"}
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
+              <div className="flex items-center gap-1">
+                {role !== "employee" && (
+                  <Link href="/my-tasks">
+                    <Button variant="ghost" size="sm" data-testid="button-view-my-tasks">
+                      My Tasks
+                      <ArrowRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  </Link>
+                )}
+                <Link href={role === "employee" ? "/my-tasks" : "/onboarding/tracker"}>
+                  <Button variant="ghost" size="sm" data-testid="button-view-all-tasks">
+                    {role === "employee" ? "My Tasks" : "Tracker"}
+                    <ArrowRight className="ml-1 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
             </CardHeader>
             <CardContent>
               {role === "employee" ? (
@@ -372,30 +382,58 @@ export default function Dashboard() {
                   </div>
                 )
               ) : (
-                pendingTaskAssignments.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-6 text-center">
-                    <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
-                    <p className="text-sm text-muted-foreground">No active assignments</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {pendingTaskAssignments.slice(0, 5).map((a) => {
-                      const items = parseItems(a.items);
-                      const target = a.targetEmployeeId ? employees.find(e => e.id === a.targetEmployeeId) : null;
-                      return (
-                        <div key={a.id} className="flex items-center justify-between" data-testid={`pending-task-${a.id}`}>
-                          <div>
-                            <p className="text-sm font-medium truncate">{a.title}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {target ? `${target.firstName} ${target.lastName}` : a.assignmentType} &middot; {items.length} items
-                            </p>
-                          </div>
-                          <Badge variant="outline" className="text-xs shrink-0">{a.priority}</Badge>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )
+                <div className="space-y-4">
+                  {myTaskAssignments.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Your Tasks</p>
+                      <div className="space-y-3">
+                        {myTaskAssignments.slice(0, 3).map((a) => {
+                          const items = parseItems(a.items);
+                          const completedIds = myTaskCompletions.filter(c => c.assignmentId === a.id && c.completed).map(c => c.itemId);
+                          const pendingCount = items.filter(item => !completedIds.includes(item.id)).length;
+                          const progressPercent = items.length > 0 ? Math.round(((items.length - pendingCount) / items.length) * 100) : 0;
+                          return (
+                            <div key={a.id} className="space-y-1" data-testid={`my-pending-task-${a.id}`}>
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-medium truncate">{a.title}</p>
+                                <span className="text-xs text-muted-foreground shrink-0">{pendingCount} pending</span>
+                              </div>
+                              <Progress value={progressPercent} className="h-1.5" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {pendingTaskAssignments.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Assigned by You</p>
+                      <div className="space-y-3">
+                        {pendingTaskAssignments.slice(0, 3).map((a) => {
+                          const items = parseItems(a.items);
+                          const target = a.targetEmployeeId ? employees.find(e => e.id === a.targetEmployeeId) : null;
+                          return (
+                            <div key={a.id} className="flex items-center justify-between" data-testid={`pending-task-${a.id}`}>
+                              <div>
+                                <p className="text-sm font-medium truncate">{a.title}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {target ? `${target.firstName} ${target.lastName}` : a.assignmentType} &middot; {items.length} items
+                                </p>
+                              </div>
+                              <Badge variant="outline" className="text-xs shrink-0">{a.priority}</Badge>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {myTaskAssignments.length === 0 && pendingTaskAssignments.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-6 text-center">
+                      <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                      <p className="text-sm text-muted-foreground">No active tasks</p>
+                    </div>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>
