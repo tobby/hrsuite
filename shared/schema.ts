@@ -316,7 +316,7 @@ export const insertJobPostingSchema = createInsertSchema(jobPostings).omit({ id:
   salaryMax: z.number().min(0).optional().nullable(),
   numberOfOpenings: z.number().min(1).optional(),
   applicationDeadline: z.string().optional().nullable(),
-  status: z.enum(["draft", "active", "on-hold", "closed"]).optional(),
+  status: z.enum(["draft", "active", "on-hold", "closed", "archived"]).optional(),
 });
 export type InsertJobPosting = z.infer<typeof insertJobPostingSchema>;
 export type JobPosting = typeof jobPostings.$inferSelect;
@@ -347,7 +347,7 @@ export const candidates = pgTable("candidates", {
 export const PIPELINE_STAGES = [
   "new", "screening", "manager_review", "phone_interview",
   "technical_interview", "final_interview", "offer_extended",
-  "hired", "rejected", "withdrawn"
+  "hired", "rejected", "withdrawn", "archived"
 ] as const;
 
 export const insertCandidateSchema = createInsertSchema(candidates).omit({ id: true, appliedAt: true }).extend({

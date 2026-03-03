@@ -20,7 +20,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Briefcase, Plus, LayoutGrid, List, MapPin, Clock, Users, Copy, MoreHorizontal, Pencil, Trash2, ExternalLink, Inbox, Loader2, DollarSign, Calendar, Building2, X } from "lucide-react";
+import { Briefcase, Plus, LayoutGrid, List, MapPin, Clock, Users, Copy, MoreHorizontal, Pencil, Trash2, ExternalLink, Inbox, Loader2, DollarSign, Calendar, Building2, X, Archive } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 const jobFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -38,7 +40,7 @@ const jobFormSchema = z.object({
   salaryMax: z.coerce.number().min(0).optional(),
   numberOfOpenings: z.coerce.number().min(1),
   applicationDeadline: z.string().optional(),
-  status: z.enum(["draft", "active", "on-hold", "closed"]),
+  status: z.enum(["draft", "active", "on-hold", "closed", "archived"]),
 });
 
 type JobFormData = z.infer<typeof jobFormSchema>;
@@ -65,6 +67,7 @@ export default function RecruitmentJobs() {
   }, {});
 
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
+  const [showArchived, setShowArchived] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<string | null>(null);
   const [requirementItems, setRequirementItems] = useState<string[]>([]);
@@ -103,7 +106,8 @@ export default function RecruitmentJobs() {
 
   const [applicationFieldsConfig, setApplicationFieldsConfig] = useState<AppFieldsConfig>({ ...defaultAppFields });
 
-  const { currentPage, totalPages, paginatedItems: paginatedJobs, setCurrentPage, totalItems, pageSize } = usePagination(jobs, 10);
+  const filteredJobs = showArchived ? jobs : jobs.filter(j => j.status !== "archived");
+  const { currentPage, totalPages, paginatedItems: paginatedJobs, setCurrentPage, totalItems, pageSize } = usePagination(filteredJobs, 10);
 
   const form = useForm<JobFormData>({
     resolver: zodResolver(jobFormSchema),
@@ -170,6 +174,25 @@ export default function RecruitmentJobs() {
     },
   });
 
+  const archiveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/job-postings/${id}/archive`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/job-postings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/candidates'] });
+      toast({ title: "Job Archived", description: "The job posting and all its candidates have been archived." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleArchive = (jobId: string) => {
+    archiveMutation.mutate(jobId);
+  };
+
   const getDepartmentName = (id: string) => departments.find((d) => d.id === id)?.name || "Unknown";
 
   const getEmploymentTypeLabel = (type: string) => {
@@ -192,19 +215,21 @@ export default function RecruitmentJobs() {
   };
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, "default" | "secondary" | "outline"> = {
+    const variants: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
       draft: "outline",
       active: "default",
       "on-hold": "secondary",
       closed: "secondary",
+      archived: "outline",
     };
     const labels: Record<string, string> = {
       draft: "Draft",
       active: "Active",
       "on-hold": "On Hold",
       closed: "Closed",
+      archived: "Archived",
     };
-    return <Badge variant={variants[status] || "outline"} data-testid={`badge-status-${status}`}>{labels[status] || status}</Badge>;
+    return <Badge variant={variants[status] || "outline"} className={status === "archived" ? "text-muted-foreground" : ""} data-testid={`badge-status-${status}`}>{labels[status] || status}</Badge>;
   };
 
   const handleOpenDialog = (jobId?: string) => {
@@ -335,7 +360,20 @@ export default function RecruitmentJobs() {
           <h1 className="text-lg font-semibold tracking-tight" data-testid="text-page-title">Job Postings</h1>
           <p className="text-muted-foreground">Manage your open positions and job listings</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {isAdmin && jobs.some(j => j.status === "archived") && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="show-archived"
+                checked={showArchived}
+                onCheckedChange={(checked) => setShowArchived(!!checked)}
+                data-testid="checkbox-show-archived"
+              />
+              <Label htmlFor="show-archived" className="text-sm text-muted-foreground cursor-pointer">
+                Show archived
+              </Label>
+            </div>
+          )}
           <div className="flex items-center border rounded-md">
             <Button
               variant={viewMode === "card" ? "secondary" : "ghost"}
@@ -363,21 +401,25 @@ export default function RecruitmentJobs() {
         </div>
       </div>
 
-      {jobs.length === 0 ? (
+      {filteredJobs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <Inbox className="h-12 w-12 text-muted-foreground/50 mb-4" />
-          <h3 className="text-lg font-medium text-muted-foreground">No job postings yet</h3>
+          <h3 className="text-lg font-medium text-muted-foreground">
+            {!showArchived && jobs.some(j => j.status === "archived") ? "All jobs are archived" : "No job postings yet"}
+          </h3>
           <p className="text-sm text-muted-foreground mt-1 max-w-md">
-            {isAdmin ? "Create your first job posting to start attracting candidates." : "No job postings available for your department."}
+            {!showArchived && jobs.some(j => j.status === "archived")
+              ? "Enable \"Show archived\" to see archived job postings."
+              : isAdmin ? "Create your first job posting to start attracting candidates." : "No job postings available for your department."}
           </p>
         </div>
       ) : viewMode === "card" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {jobs.map((job) => {
+          {paginatedJobs.map((job) => {
             const candidateCount = candidateCountByJob[job.id] || 0;
             const salary = formatSalary(job.salaryMin, job.salaryMax);
             return (
-              <Card key={job.id} className="hover-elevate" data-testid={`card-job-${job.id}`}>
+              <Card key={job.id} className={`hover-elevate ${job.status === "archived" ? "opacity-60" : ""}`} data-testid={`card-job-${job.id}`}>
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-1">
@@ -404,6 +446,12 @@ export default function RecruitmentJobs() {
                             <ExternalLink className="h-4 w-4 mr-2" />
                             Preview
                           </DropdownMenuItem>
+                          {job.status !== "archived" && (
+                            <DropdownMenuItem onClick={() => handleArchive(job.id)} data-testid={`button-archive-job-${job.id}`}>
+                              <Archive className="h-4 w-4 mr-2" />
+                              Archive
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => handleDelete(job.id)} className="text-destructive" data-testid={`button-delete-job-${job.id}`}>
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete
@@ -501,6 +549,12 @@ export default function RecruitmentJobs() {
                               <Copy className="h-4 w-4 mr-2" />
                               Copy Link
                             </DropdownMenuItem>
+                            {job.status !== "archived" && (
+                              <DropdownMenuItem onClick={() => handleArchive(job.id)} data-testid={`button-table-archive-job-${job.id}`}>
+                                <Archive className="h-4 w-4 mr-2" />
+                                Archive
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem onClick={() => handleDelete(job.id)} className="text-destructive" data-testid={`button-table-delete-job-${job.id}`}>
                               <Trash2 className="h-4 w-4 mr-2" />
                               Delete
