@@ -154,8 +154,8 @@ export default function RecruitmentSettings() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
           <div>
-            <CardTitle>Pipeline Stages</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-base">Pipeline Stages</CardTitle>
+            <CardDescription className="text-sm">
               Configure the stages candidates move through in your hiring pipeline. Drag to reorder.
             </CardDescription>
           </div>
