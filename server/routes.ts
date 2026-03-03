@@ -2825,6 +2825,56 @@ export async function registerRoutes(
     }
   });
 
+  // ==================== PIPELINE STAGES ====================
+
+  const DEFAULT_PIPELINE_STAGES = [
+    { key: "new", label: "New Application", color: "#6b7280" },
+    { key: "screening", label: "Screening", color: "#3b82f6" },
+    { key: "manager_review", label: "Manager Review", color: "#6366f1" },
+    { key: "phone_interview", label: "Phone Interview", color: "#8b5cf6" },
+    { key: "technical_interview", label: "Technical Interview", color: "#7c3aed" },
+    { key: "final_interview", label: "Final Interview", color: "#ec4899" },
+    { key: "offer_extended", label: "Offer Extended", color: "#f59e0b" },
+    { key: "hired", label: "Hired", color: "#22c55e" },
+    { key: "rejected", label: "Rejected", color: "#ef4444" },
+    { key: "withdrawn", label: "Withdrawn", color: "#6b7280" },
+  ];
+
+  app.get("/api/recruitment/pipeline-stages", requireAuth, async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const settings = await storage.getRecruitmentSettings(companyId);
+      const setting = settings.find(s => s.key === "pipeline_stages");
+      if (setting) {
+        return res.json(JSON.parse(setting.value));
+      }
+      return res.json(DEFAULT_PIPELINE_STAGES);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.put("/api/recruitment/pipeline-stages", requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      const stages = req.body;
+      if (!Array.isArray(stages) || stages.length === 0) {
+        return res.status(400).json({ message: "Stages must be a non-empty array" });
+      }
+      for (const stage of stages) {
+        if (!stage.key || !stage.label || !stage.color) {
+          return res.status(400).json({ message: "Each stage must have key, label, and color" });
+        }
+      }
+      await storage.upsertRecruitmentSetting(companyId, "pipeline_stages", JSON.stringify(stages));
+      return res.json(stages);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // ==================== EMAIL TEMPLATES ====================
 
   app.get("/api/email-templates", async (req, res) => {

@@ -9,7 +9,6 @@ import type {
   Candidate, JobPosting, Employee, CandidateActivity,
   CandidateNote,
 } from "@shared/schema";
-import { PIPELINE_STAGES } from "@shared/schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,18 +25,7 @@ import {
   Activity, ChevronRight,
 } from "lucide-react";
 
-const STAGE_LABELS: Record<string, string> = {
-  new: "New Application",
-  screening: "Screening",
-  manager_review: "Manager Review",
-  phone_interview: "Phone Interview",
-  technical_interview: "Technical Interview",
-  final_interview: "Final Interview",
-  offer_extended: "Offer Extended",
-  hired: "Hired",
-  rejected: "Rejected",
-  withdrawn: "Withdrawn",
-};
+type PipelineStage = { key: string; label: string; color: string };
 
 const NOTE_CATEGORIES = ["general", "feedback", "concern", "positive"];
 
@@ -87,6 +75,12 @@ export default function CandidateDetail() {
   const { data: employees = [] } = useQuery<Employee[]>({
     queryKey: ["/api/employees"],
   });
+
+  const { data: pipelineStages = [] } = useQuery<PipelineStage[]>({
+    queryKey: ["/api/recruitment/pipeline-stages"],
+  });
+
+  const getStageLabel = (key: string) => pipelineStages.find(s => s.key === key)?.label || key;
 
   const getEmployeeName = (empId: string | null) => {
     if (!empId) return "Unknown";
@@ -145,12 +139,13 @@ export default function CandidateDetail() {
   const isAdminOrManager = isAdmin || isManager;
 
   const getAvailableStages = () => {
-    if (isAdmin) return PIPELINE_STAGES;
-    if (isManager) return PIPELINE_STAGES.filter((s) => s !== "offer_extended" && s !== "hired");
+    const stageKeys = pipelineStages.map(s => s.key);
+    if (isAdmin) return stageKeys;
+    if (isManager) return stageKeys.filter((s) => s !== "offer_extended" && s !== "hired");
     return [];
   };
 
-  if (candidateLoading) {
+  if (candidateLoading || pipelineStages.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" data-testid="loading-spinner" />
@@ -187,7 +182,7 @@ export default function CandidateDetail() {
             {candidate.firstName} {candidate.lastName}
           </h1>
           <Badge variant={getStageBadgeVariant(candidate.stage)} data-testid="badge-stage">
-            {STAGE_LABELS[candidate.stage] || candidate.stage}
+            {getStageLabel(candidate.stage)}
           </Badge>
         </div>
         <p className="text-sm text-muted-foreground" data-testid="text-candidate-email">{candidate.email}</p>
@@ -377,7 +372,7 @@ export default function CandidateDetail() {
             <CardContent className="space-y-4">
               <div>
                 <Label className="text-sm text-muted-foreground">Current Stage</Label>
-                <p className="font-medium" data-testid="text-current-stage">{STAGE_LABELS[candidate.stage] || candidate.stage}</p>
+                <p className="font-medium" data-testid="text-current-stage">{getStageLabel(candidate.stage)}</p>
               </div>
               {isAdminOrManager && (
                 <div className="space-y-2">
@@ -398,7 +393,7 @@ export default function CandidateDetail() {
                     <SelectContent>
                       {getAvailableStages().map((stage) => (
                         <SelectItem key={stage} value={stage} data-testid={`select-stage-option-${stage}`}>
-                          {STAGE_LABELS[stage] || stage}
+                          {getStageLabel(stage)}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -1,48 +1,27 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useState, useEffect } from "react";
 import { Redirect } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
-import type { EmailTemplate } from "@shared/schema";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Pencil, Trash2, Mail, Loader2, MoreVertical } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Plus, Pencil, Trash2, GripVertical, Loader2 } from "lucide-react";
 
-const templateFormSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  category: z.enum(["application_received", "interview_scheduled", "offer_extended", "rejection", "general"]),
-  subject: z.string().min(1, "Subject is required"),
-  body: z.string().min(1, "Body is required"),
-});
+type PipelineStage = { key: string; label: string; color: string };
 
-type TemplateFormData = z.infer<typeof templateFormSchema>;
+const PRESET_COLORS = [
+  "#6b7280", "#3b82f6", "#6366f1", "#8b5cf6", "#7c3aed",
+  "#ec4899", "#f59e0b", "#22c55e", "#ef4444", "#14b8a6",
+  "#f97316", "#0ea5e9",
+];
 
-const CATEGORY_LABELS: Record<string, string> = {
-  application_received: "Application Received",
-  interview_scheduled: "Interview Scheduled",
-  offer_extended: "Offer Extended",
-  rejection: "Rejection",
-  general: "General",
-};
-
-const CATEGORY_BADGE_VARIANT: Record<string, "default" | "secondary" | "outline"> = {
-  application_received: "default",
-  interview_scheduled: "default",
-  offer_extended: "default",
-  rejection: "secondary",
-  general: "outline",
-};
+function slugify(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+}
 
 export default function RecruitmentSettings() {
   const { role } = useRole();
@@ -52,288 +31,285 @@ export default function RecruitmentSettings() {
     return <Redirect to="/" />;
   }
 
-  const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null);
+  const [stages, setStages] = useState<PipelineStage[]>([]);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [isStageDialogOpen, setIsStageDialogOpen] = useState(false);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [stageLabel, setStageLabel] = useState("");
+  const [stageKey, setStageKey] = useState("");
+  const [stageColor, setStageColor] = useState("#3b82f6");
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  const { data: templates = [], isLoading } = useQuery<EmailTemplate[]>({
-    queryKey: ["/api/email-templates"],
+  const { data: fetchedStages, isLoading } = useQuery<PipelineStage[]>({
+    queryKey: ["/api/recruitment/pipeline-stages"],
   });
 
-  const createMutation = useMutation({
-    mutationFn: (data: TemplateFormData) => apiRequest("POST", "/api/email-templates", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/email-templates"] });
-      toast({ title: "Template Created" });
-      setIsTemplateDialogOpen(false);
-      templateForm.reset();
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: TemplateFormData }) =>
-      apiRequest("PATCH", `/api/email-templates/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/email-templates"] });
-      toast({ title: "Template Updated" });
-      setIsTemplateDialogOpen(false);
-      setEditingTemplate(null);
-      templateForm.reset();
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => apiRequest("DELETE", `/api/email-templates/${id}`),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/email-templates"] });
-      toast({ title: "Template Deleted" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const templateForm = useForm<TemplateFormData>({
-    resolver: zodResolver(templateFormSchema),
-    defaultValues: {
-      name: "",
-      subject: "",
-      body: "",
-      category: "general",
-    },
-  });
-
-  const handleOpenCreateDialog = () => {
-    templateForm.reset({
-      name: "",
-      subject: "",
-      body: "",
-      category: "general",
-    });
-    setEditingTemplate(null);
-    setIsTemplateDialogOpen(true);
-  };
-
-  const handleOpenEditDialog = (template: EmailTemplate) => {
-    templateForm.reset({
-      name: template.name,
-      subject: template.subject,
-      body: template.body,
-      category: template.category as TemplateFormData["category"],
-    });
-    setEditingTemplate(template);
-    setIsTemplateDialogOpen(true);
-  };
-
-  const handleSubmitTemplate = (data: TemplateFormData) => {
-    if (editingTemplate) {
-      updateMutation.mutate({ id: editingTemplate.id, data });
-    } else {
-      createMutation.mutate(data);
+  useEffect(() => {
+    if (fetchedStages && !hasChanges) {
+      setStages(fetchedStages);
     }
+  }, [fetchedStages]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: PipelineStage[]) => {
+      await apiRequest("PUT", "/api/recruitment/pipeline-stages", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/recruitment/pipeline-stages"] });
+      toast({ title: "Pipeline stages saved" });
+      setHasChanges(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleOpenCreate = () => {
+    setStageLabel("");
+    setStageKey("");
+    setStageColor("#3b82f6");
+    setEditingIndex(null);
+    setIsStageDialogOpen(true);
   };
 
-  const isMutating = createMutation.isPending || updateMutation.isPending;
+  const handleOpenEdit = (index: number) => {
+    const stage = stages[index];
+    setStageLabel(stage.label);
+    setStageKey(stage.key);
+    setStageColor(stage.color);
+    setEditingIndex(index);
+    setIsStageDialogOpen(true);
+  };
+
+  const handleSaveStage = () => {
+    if (!stageLabel.trim()) return;
+    const key = stageKey.trim() || slugify(stageLabel);
+    if (!key) return;
+
+    const newStage: PipelineStage = { key, label: stageLabel.trim(), color: stageColor };
+    const updated = [...stages];
+
+    if (editingIndex !== null) {
+      updated[editingIndex] = newStage;
+    } else {
+      const exists = stages.some(s => s.key === key);
+      if (exists) {
+        toast({ title: "Duplicate key", description: `A stage with key "${key}" already exists.`, variant: "destructive" });
+        return;
+      }
+      updated.push(newStage);
+    }
+
+    setStages(updated);
+    setHasChanges(true);
+    setIsStageDialogOpen(false);
+  };
+
+  const handleDelete = (index: number) => {
+    const updated = stages.filter((_, i) => i !== index);
+    setStages(updated);
+    setHasChanges(true);
+  };
+
+  const handleDragStart = (index: number) => {
+    setDragIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === dropIndex) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    const updated = [...stages];
+    const [moved] = updated.splice(dragIndex, 1);
+    updated.splice(dropIndex, 0, moved);
+    setStages(updated);
+    setHasChanges(true);
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
 
   return (
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-lg font-semibold tracking-tight" data-testid="text-page-title">Recruitment Settings</h1>
         <p className="text-muted-foreground" data-testid="text-page-subtitle">
-          Manage email templates and recruitment configuration
+          Manage your recruitment pipeline configuration
         </p>
       </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-          <div className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <CardTitle>Email Templates</CardTitle>
-              <CardDescription>
-                Create and manage email templates for candidate communications
-              </CardDescription>
-            </div>
+          <div>
+            <CardTitle>Pipeline Stages</CardTitle>
+            <CardDescription>
+              Configure the stages candidates move through in your hiring pipeline. Drag to reorder.
+            </CardDescription>
           </div>
-          <Button onClick={handleOpenCreateDialog} data-testid="button-create-template">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Template
-          </Button>
+          <div className="flex items-center gap-2">
+            {hasChanges && (
+              <Button
+                onClick={() => saveMutation.mutate(stages)}
+                disabled={saveMutation.isPending}
+                data-testid="button-save-stages"
+              >
+                {saveMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save Changes
+              </Button>
+            )}
+            <Button variant="outline" onClick={handleOpenCreate} data-testid="button-add-stage">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Stage
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center py-12" data-testid="loading-templates">
+            <div className="flex items-center justify-center py-12" data-testid="loading-stages">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : templates.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground" data-testid="text-no-templates">
-              No email templates yet. Create one to get started.
+          ) : stages.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground" data-testid="text-no-stages">
+              No pipeline stages configured. Add stages to get started.
             </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {templates.map((template) => (
-                <Card key={template.id} data-testid={`card-template-${template.id}`}>
-                  <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
-                    <div className="space-y-1 min-w-0">
-                      <CardTitle className="text-base truncate" data-testid={`text-template-name-${template.id}`}>
-                        {template.name}
-                      </CardTitle>
-                      <Badge
-                        variant={CATEGORY_BADGE_VARIANT[template.category] || "outline"}
-                        data-testid={`badge-template-category-${template.id}`}
-                      >
-                        {CATEGORY_LABELS[template.category] || template.category}
-                      </Badge>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" data-testid={`button-template-actions-${template.id}`}>
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => handleOpenEditDialog(template)}
-                          data-testid={`button-edit-template-${template.id}`}
-                        >
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => deleteMutation.mutate(template.id)}
-                          className="text-destructive"
-                          data-testid={`button-delete-template-${template.id}`}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <p className="text-sm font-medium truncate" data-testid={`text-template-subject-${template.id}`}>
-                      {template.subject}
-                    </p>
-                    <p className="text-sm text-muted-foreground line-clamp-3" data-testid={`text-template-body-${template.id}`}>
-                      {template.body}
-                    </p>
-                  </CardContent>
-                </Card>
+            <div className="space-y-1" data-testid="stage-list">
+              {stages.map((stage, index) => (
+                <div
+                  key={stage.key}
+                  draggable
+                  onDragStart={() => handleDragStart(index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onDragEnd={handleDragEnd}
+                  className={`flex items-center gap-3 p-3 rounded-md border transition-colors ${
+                    dragIndex === index ? "opacity-50" : ""
+                  } ${dragOverIndex === index && dragIndex !== index ? "border-primary bg-primary/5" : ""}
+                  hover:bg-muted/50`}
+                  data-testid={`stage-row-${stage.key}`}
+                >
+                  <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab flex-shrink-0" />
+                  <div
+                    className="h-3 w-3 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: stage.color }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" data-testid={`stage-label-${stage.key}`}>{stage.label}</p>
+                    <p className="text-xs text-muted-foreground">{stage.key}</p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleOpenEdit(index)}
+                      data-testid={`button-edit-stage-${stage.key}`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(index)}
+                      data-testid={`button-delete-stage-${stage.key}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
 
-      <Dialog open={isTemplateDialogOpen} onOpenChange={setIsTemplateDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+      <Dialog open={isStageDialogOpen} onOpenChange={setIsStageDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>{editingTemplate ? "Edit Template" : "Create Template"}</DialogTitle>
+            <DialogTitle>{editingIndex !== null ? "Edit Stage" : "Add Stage"}</DialogTitle>
             <DialogDescription>
-              {editingTemplate
-                ? "Update the email template details."
-                : "Create a new email template for candidate communications."}
+              {editingIndex !== null ? "Update the pipeline stage." : "Add a new stage to your hiring pipeline."}
             </DialogDescription>
           </DialogHeader>
-          <Form {...templateForm}>
-            <form onSubmit={templateForm.handleSubmit(handleSubmitTemplate)} className="space-y-4">
-              <FormField
-                control={templateForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Template Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Interview Invitation" {...field} data-testid="input-template-name" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Stage Name</Label>
+              <Input
+                placeholder="e.g., Technical Interview"
+                value={stageLabel}
+                onChange={(e) => {
+                  setStageLabel(e.target.value);
+                  if (editingIndex === null) {
+                    setStageKey(slugify(e.target.value));
+                  }
+                }}
+                data-testid="input-stage-label"
               />
-
-              <FormField
-                control={templateForm.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-template-category">
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+            </div>
+            <div className="space-y-2">
+              <Label>Key</Label>
+              <Input
+                placeholder="e.g., technical_interview"
+                value={stageKey}
+                onChange={(e) => setStageKey(e.target.value)}
+                disabled={editingIndex !== null}
+                data-testid="input-stage-key"
               />
-
-              <FormField
-                control={templateForm.control}
-                name="subject"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Subject Line</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="e.g., Interview Scheduled - {{jobTitle}}"
-                        {...field}
-                        data-testid="input-template-subject"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={templateForm.control}
-                name="body"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email Body</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Dear {{candidateName}},..."
-                        className="min-h-[200px]"
-                        {...field}
-                        data-testid="input-template-body"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsTemplateDialogOpen(false)}
-                  data-testid="button-cancel-template"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isMutating} data-testid="button-save-template">
-                  {isMutating && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  {editingTemplate ? "Update Template" : "Create Template"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </Form>
+              <p className="text-xs text-muted-foreground">Unique identifier. Auto-generated from name.</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Color</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={stageColor}
+                  onChange={(e) => setStageColor(e.target.value)}
+                  className="h-9 w-12 rounded border cursor-pointer"
+                  data-testid="input-stage-color"
+                />
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESET_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className={`h-6 w-6 rounded-full border-2 transition-transform ${
+                        stageColor === color ? "border-foreground scale-110" : "border-transparent"
+                      }`}
+                      style={{ backgroundColor: color }}
+                      onClick={() => setStageColor(color)}
+                      data-testid={`color-preset-${color.replace("#", "")}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsStageDialogOpen(false)} data-testid="button-cancel-stage">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveStage}
+              disabled={!stageLabel.trim()}
+              data-testid="button-save-stage"
+            >
+              {editingIndex !== null ? "Update Stage" : "Add Stage"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

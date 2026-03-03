@@ -3,7 +3,6 @@ import { Link, Redirect } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import type { Candidate, JobPosting } from "@shared/schema";
-import { PIPELINE_STAGES } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/lib/role-context";
@@ -21,31 +20,19 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Skeleton } from "@/components/ui/skeleton";
 import { LayoutGrid, List, Search, MoreHorizontal, Eye, GripVertical, Inbox, Plus } from "lucide-react";
 
-const STAGE_CONFIG: Record<string, { label: string; color: string }> = {
-  new: { label: "New Application", color: "bg-gray-100 dark:bg-gray-800" },
-  screening: { label: "Screening", color: "bg-blue-100 dark:bg-blue-900/30" },
-  manager_review: { label: "Manager Review", color: "bg-indigo-100 dark:bg-indigo-900/30" },
-  phone_interview: { label: "Phone Interview", color: "bg-purple-100 dark:bg-purple-900/30" },
-  technical_interview: { label: "Technical Interview", color: "bg-violet-100 dark:bg-violet-900/30" },
-  final_interview: { label: "Final Interview", color: "bg-pink-100 dark:bg-pink-900/30" },
-  offer_extended: { label: "Offer Extended", color: "bg-amber-100 dark:bg-amber-900/30" },
-  hired: { label: "Hired", color: "bg-green-100 dark:bg-green-900/30" },
-  rejected: { label: "Rejected", color: "bg-red-100 dark:bg-red-900/30" },
-  withdrawn: { label: "Withdrawn", color: "bg-gray-100 dark:bg-gray-800" },
-};
+type PipelineStage = { key: string; label: string; color: string };
 
-const STAGE_BADGE_VARIANTS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  new: "secondary",
-  screening: "default",
-  manager_review: "default",
-  phone_interview: "default",
-  technical_interview: "default",
-  final_interview: "default",
-  offer_extended: "default",
-  hired: "default",
-  rejected: "destructive",
-  withdrawn: "outline",
-};
+function hexToLightBg(hex: string): string {
+  if (/^#[0-9a-fA-F]{6}$/.test(hex)) return `${hex}15`;
+  return "#6b728015";
+}
+
+function getStageBadgeVariant(key: string): "default" | "secondary" | "outline" | "destructive" {
+  if (key === "rejected") return "destructive";
+  if (key === "new") return "secondary";
+  if (key === "withdrawn") return "outline";
+  return "default";
+}
 
 const SOURCE_OPTIONS = ["website", "referral", "linkedin", "job_board", "agency", "direct", "other"] as const;
 
@@ -81,6 +68,13 @@ export default function RecruitmentCandidates() {
     queryKey: ["/api/job-postings"],
   });
 
+  const { data: pipelineStages = [] } = useQuery<PipelineStage[]>({
+    queryKey: ["/api/recruitment/pipeline-stages"],
+  });
+
+  const getStageLabel = (key: string) => pipelineStages.find(s => s.key === key)?.label || key;
+  const getStageColor = (key: string) => pipelineStages.find(s => s.key === key)?.color || "#6b7280";
+
   const stageMutation = useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: string }) => {
       await apiRequest("PATCH", `/api/candidates/${id}`, { stage });
@@ -108,7 +102,7 @@ export default function RecruitmentCandidates() {
     },
   });
 
-  const isLoading = candidatesLoading || jobsLoading;
+  const isLoading = candidatesLoading || jobsLoading || pipelineStages.length === 0;
 
   const getJobTitle = (jobId: string) => jobPostings.find((j) => j.id === jobId)?.title || "Unknown";
 
@@ -156,7 +150,7 @@ export default function RecruitmentCandidates() {
         onSuccess: () => {
           toast({
             title: "Candidate Moved",
-            description: `${candidate.firstName} ${candidate.lastName} moved to ${STAGE_CONFIG[stage]?.label}`,
+            description: `${candidate.firstName} ${candidate.lastName} moved to ${getStageLabel(stage)}`,
           });
         },
       }
@@ -177,7 +171,7 @@ export default function RecruitmentCandidates() {
         onSuccess: () => {
           toast({
             title: "Stage Updated",
-            description: `${candidate?.firstName} ${candidate?.lastName} moved to ${STAGE_CONFIG[newStage]?.label}`,
+            description: `${candidate?.firstName} ${candidate?.lastName} moved to ${getStageLabel(newStage)}`,
           });
         },
       }
@@ -389,9 +383,9 @@ export default function RecruitmentCandidates() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Stages</SelectItem>
-              {PIPELINE_STAGES.map((stage) => (
-                <SelectItem key={stage} value={stage}>
-                  {STAGE_CONFIG[stage]?.label}
+              {pipelineStages.map((stage) => (
+                <SelectItem key={stage.key} value={stage.key}>
+                  {stage.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -407,13 +401,14 @@ export default function RecruitmentCandidates() {
         </div>
       ) : viewMode === "kanban" ? (
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {PIPELINE_STAGES.map((stage) => {
+          {pipelineStages.map((stageConfig) => {
+            const stage = stageConfig.key;
             const stageCandidates = getCandidatesByStage(stage);
-            const config = STAGE_CONFIG[stage];
             return (
               <div
                 key={stage}
-                className={`flex-shrink-0 w-72 rounded-lg ${config.color}`}
+                className="flex-shrink-0 w-72 rounded-lg"
+                style={{ backgroundColor: hexToLightBg(stageConfig.color) }}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, stage)}
                 data-testid={`column-${stage}`}
@@ -421,7 +416,7 @@ export default function RecruitmentCandidates() {
                 <div className="p-3 border-b border-border/50">
                   <div className="flex items-center justify-between gap-1">
                     <h3 className="font-medium text-sm" data-testid={`text-stage-label-${stage}`}>
-                      {config.label} ({stageCandidates.length})
+                      {stageConfig.label} ({stageCandidates.length})
                     </h3>
                   </div>
                 </div>
@@ -477,13 +472,13 @@ export default function RecruitmentCandidates() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  {PIPELINE_STAGES.filter((s) => s !== candidate.stage).map((s) => (
+                                  {pipelineStages.filter((s) => s.key !== candidate.stage).map((s) => (
                                     <DropdownMenuItem
-                                      key={s}
-                                      onClick={() => handleStageChange(candidate.id, s)}
-                                      data-testid={`menu-move-${candidate.id}-${s}`}
+                                      key={s.key}
+                                      onClick={() => handleStageChange(candidate.id, s.key)}
+                                      data-testid={`menu-move-${candidate.id}-${s.key}`}
                                     >
-                                      Move to {STAGE_CONFIG[s]?.label}
+                                      Move to {s.label}
                                     </DropdownMenuItem>
                                   ))}
                                 </DropdownMenuContent>
@@ -538,8 +533,8 @@ export default function RecruitmentCandidates() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={STAGE_BADGE_VARIANTS[candidate.stage] || "outline"} data-testid={`badge-stage-${candidate.id}`}>
-                      {STAGE_CONFIG[candidate.stage]?.label || candidate.stage}
+                    <Badge variant={getStageBadgeVariant(candidate.stage)} data-testid={`badge-stage-${candidate.id}`}>
+                      {getStageLabel(candidate.stage)}
                     </Badge>
                   </TableCell>
                   <TableCell data-testid={`text-applied-${candidate.id}`}>
@@ -561,13 +556,13 @@ export default function RecruitmentCandidates() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          {PIPELINE_STAGES.filter((s) => s !== candidate.stage).map((s) => (
+                          {pipelineStages.filter((s) => s.key !== candidate.stage).map((s) => (
                             <DropdownMenuItem
-                              key={s}
-                              onClick={() => handleStageChange(candidate.id, s)}
-                              data-testid={`menu-move-table-${candidate.id}-${s}`}
+                              key={s.key}
+                              onClick={() => handleStageChange(candidate.id, s.key)}
+                              data-testid={`menu-move-table-${candidate.id}-${s.key}`}
                             >
-                              Move to {STAGE_CONFIG[s]?.label}
+                              Move to {s.label}
                             </DropdownMenuItem>
                           ))}
                         </DropdownMenuContent>
