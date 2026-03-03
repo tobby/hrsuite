@@ -297,26 +297,24 @@ export default function CandidateDetail() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center gap-4 flex-wrap">
-        <Link href="/recruitment/candidates" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" data-testid="link-back">
-          <ArrowLeft className="h-4 w-4" /> Back to Candidates
-        </Link>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-lg font-semibold tracking-tight" data-testid="text-candidate-name">
-              {candidate.firstName} {candidate.lastName}
-            </h1>
-            <Badge variant={getStageBadgeVariant(candidate.stage)} data-testid="badge-stage">
-              {STAGE_LABELS[candidate.stage] || candidate.stage}
-            </Badge>
-          </div>
-          <p className="text-sm text-muted-foreground" data-testid="text-candidate-email">{candidate.email}</p>
-          {candidate.appliedAt && (
-            <p className="text-xs text-muted-foreground" data-testid="text-applied-date">
-              Applied {format(new Date(candidate.appliedAt), "MMM d, yyyy")}
-            </p>
-          )}
+      <Link href="/recruitment/candidates" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" data-testid="link-back">
+        <ArrowLeft className="h-4 w-4" /> Back to Candidates
+      </Link>
+      <div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-lg font-semibold tracking-tight" data-testid="text-candidate-name">
+            {candidate.firstName} {candidate.lastName}
+          </h1>
+          <Badge variant={getStageBadgeVariant(candidate.stage)} data-testid="badge-stage">
+            {STAGE_LABELS[candidate.stage] || candidate.stage}
+          </Badge>
         </div>
+        <p className="text-sm text-muted-foreground" data-testid="text-candidate-email">{candidate.email}</p>
+        {candidate.appliedAt && (
+          <p className="text-xs text-muted-foreground" data-testid="text-applied-date">
+            Applied {format(new Date(candidate.appliedAt), "MMM d, yyyy")}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
