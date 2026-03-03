@@ -180,18 +180,22 @@ export default function JobDetails() {
             {job.responsibilities && (
               <section>
                 <h2 className="text-base font-semibold mb-4">Responsibilities</h2>
-                <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-line" data-testid="text-responsibilities">
-                  {job.responsibilities}
-                </div>
+                <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground" data-testid="text-responsibilities">
+                  {job.responsibilities.split("\n").filter(line => line.trim()).map((line, i) => (
+                    <li key={i}>{line.replace(/^[-•*]\s*/, "").trim()}</li>
+                  ))}
+                </ul>
               </section>
             )}
 
             {job.requirements && (
               <section>
                 <h2 className="text-base font-semibold mb-4">Requirements</h2>
-                <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-line" data-testid="text-requirements">
-                  {job.requirements}
-                </div>
+                <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground" data-testid="text-requirements">
+                  {job.requirements.split("\n").filter(line => line.trim()).map((line, i) => (
+                    <li key={i}>{line.replace(/^[-•*]\s*/, "").trim()}</li>
+                  ))}
+                </ul>
               </section>
             )}
           </div>
