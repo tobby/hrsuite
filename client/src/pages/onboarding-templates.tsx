@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Department, TaskTemplate } from "@shared/schema";
-import { Plus, FileText, Trash2, GripVertical, ClipboardList, Building2, Users, UserCheck, Globe, Upload, X, ShieldCheck } from "lucide-react";
+import { Plus, FileText, Trash2, GripVertical, ClipboardList, Building2, Users, UserCheck, Globe, Upload, X, ShieldCheck, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const categoryLabels: Record<string, string> = {
@@ -303,9 +303,247 @@ function CreateTemplateDialog() {
   );
 }
 
+function EditTemplateDialog({ template, open, onOpenChange }: { template: TaskTemplate; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
+  const { toast } = useToast();
+  const [name, setName] = useState(template.name);
+  const [description, setDescription] = useState(template.description || "");
+  const [category, setCategory] = useState(template.category);
+  const [departmentId, setDepartmentId] = useState<string>(template.departmentId || "none");
+  const [defaultAssignmentType, setDefaultAssignmentType] = useState(template.defaultAssignmentType || "individual");
+  const [items, setItems] = useState<TaskItem[]>(parseItems(template.items));
+  const [itemTitle, setItemTitle] = useState("");
+  const [itemDesc, setItemDesc] = useState("");
+  const [itemRequired, setItemRequired] = useState(true);
+  const [itemRequiresAck, setItemRequiresAck] = useState(false);
+  const [itemDocUrl, setItemDocUrl] = useState("");
+  const [itemDocName, setItemDocName] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName(template.name);
+      setDescription(template.description || "");
+      setCategory(template.category);
+      setDepartmentId(template.departmentId || "none");
+      setDefaultAssignmentType(template.defaultAssignmentType || "individual");
+      setItems(parseItems(template.items));
+      setItemTitle(""); setItemDesc(""); setItemRequired(true);
+      setItemRequiresAck(false); setItemDocUrl(""); setItemDocName("");
+    }
+  }, [open, template]);
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("PUT", `/api/task-templates/${template.id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/task-templates'] });
+      toast({ title: "Template updated" });
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const addItem = () => {
+    if (!itemTitle.trim()) return;
+    setItems([...items, {
+      id: `item-${Date.now()}-${items.length}`,
+      title: itemTitle.trim(),
+      description: itemDesc.trim(),
+      isRequired: itemRequired,
+      ...(itemRequiresAck ? {
+        requiresAcknowledgment: true,
+        ...(itemDocUrl ? { documentUrl: itemDocUrl, documentName: itemDocName } : {}),
+      } : {}),
+    }]);
+    setItemTitle(""); setItemDesc(""); setItemRequired(true);
+    setItemRequiresAck(false); setItemDocUrl(""); setItemDocName("");
+  };
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("files", file);
+      const res = await fetch("/api/uploads", { method: "POST", body: formData, credentials: "include" });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setItemDocUrl(data[0].fileUrl);
+        setItemDocName(data[0].fileName || file.name);
+      }
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index));
+
+  const handleSubmit = () => {
+    if (!name.trim() || items.length === 0) return;
+    const itemsToSave = items.map((item, i) => ({
+      ...item,
+      id: item.id || `item-${Date.now()}-${i}`,
+    }));
+    updateMutation.mutate({
+      name: name.trim(),
+      description: description.trim() || undefined,
+      category,
+      departmentId: departmentId === "none" ? null : departmentId,
+      defaultAssignmentType,
+      items: JSON.stringify(itemsToSave),
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit Task Template</DialogTitle>
+          <DialogDescription>Update the template details and checklist items</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Template Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., New Hire Setup" data-testid="input-edit-template-name" />
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger data-testid="select-edit-template-category">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(categoryLabels).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Description</Label>
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe this template..." data-testid="input-edit-template-description" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Department (Optional)</Label>
+              <Select value={departmentId} onValueChange={setDepartmentId}>
+                <SelectTrigger data-testid="select-edit-template-department">
+                  <SelectValue placeholder="All Departments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">All Departments</SelectItem>
+                  {departments.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Default Assignment Type</Label>
+              <Select value={defaultAssignmentType} onValueChange={setDefaultAssignmentType}>
+                <SelectTrigger data-testid="select-edit-assignment-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="individual">Individual Employee</SelectItem>
+                  <SelectItem value="department">Entire Department</SelectItem>
+                  <SelectItem value="managers">All Managers</SelectItem>
+                  <SelectItem value="everyone">Everyone</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 space-y-3">
+            <h4 className="font-medium text-sm">Checklist Items</h4>
+            {items.length > 0 && (
+              <div className="space-y-1">
+                {items.map((item, i) => (
+                  <div key={item.id || i} className="flex items-center justify-between gap-2 p-2 rounded-md border">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <GripVertical className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="text-sm truncate">{item.title}</span>
+                      {item.isRequired && <Badge variant="outline" className="text-xs shrink-0">Required</Badge>}
+                      {item.requiresAcknowledgment && <Badge variant="secondary" className="text-xs shrink-0"><ShieldCheck className="h-3 w-3 mr-1" />Acknowledgment</Badge>}
+                      {item.documentName && <Badge variant="outline" className="text-xs shrink-0"><FileText className="h-3 w-3 mr-1" />{item.documentName}</Badge>}
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => removeItem(i)} data-testid={`button-edit-remove-item-${i}`}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="space-y-2 border-t pt-3">
+              <Label>Add New Item</Label>
+              <Input value={itemTitle} onChange={(e) => setItemTitle(e.target.value)} placeholder="Task name" data-testid="input-edit-item-title" />
+            </div>
+            <div className="space-y-2">
+              <Label>Item Description (Optional)</Label>
+              <Input value={itemDesc} onChange={(e) => setItemDesc(e.target.value)} placeholder="Brief description" data-testid="input-edit-item-description" />
+            </div>
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Checkbox id="edit-item-required" checked={itemRequired} onCheckedChange={(v) => setItemRequired(!!v)} data-testid="checkbox-edit-item-required" />
+                <Label htmlFor="edit-item-required" className="text-sm">Required</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox id="edit-item-ack" checked={itemRequiresAck} onCheckedChange={(v) => setItemRequiresAck(!!v)} data-testid="checkbox-edit-item-acknowledgment" />
+                <Label htmlFor="edit-item-ack" className="text-sm">Requires Acknowledgment</Label>
+              </div>
+            </div>
+            {itemRequiresAck && (
+              <div className="space-y-2 rounded-md border border-dashed p-3">
+                <p className="text-xs text-muted-foreground">Attach a document employees must read before acknowledging (optional)</p>
+                {itemDocUrl ? (
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm truncate">{itemDocName}</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => { setItemDocUrl(""); setItemDocName(""); }}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Label className="flex items-center gap-2 cursor-pointer text-sm text-primary hover:underline">
+                    <Upload className="h-3.5 w-3.5" />
+                    {uploading ? "Uploading..." : "Upload Document"}
+                    <input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" onChange={handleDocUpload} disabled={uploading} />
+                  </Label>
+                )}
+              </div>
+            )}
+            <Button type="button" size="sm" onClick={addItem} disabled={!itemTitle.trim()} data-testid="button-edit-add-item">
+              <Plus className="h-3 w-3 mr-1" />
+              Add Item
+            </Button>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleSubmit} disabled={!name.trim() || items.length === 0 || updateMutation.isPending} data-testid="button-update-template">
+            {updateMutation.isPending ? "Saving..." : "Save Changes"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function TemplateCard({ template }: { template: TaskTemplate }) {
   const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
   const { toast } = useToast();
+  const [editOpen, setEditOpen] = useState(false);
   const dept = template.departmentId ? departments.find((d) => d.id === template.departmentId) : null;
   const items = parseItems(template.items);
   const AssignIcon = assignmentTypeIcons[template.defaultAssignmentType || "individual"] || UserCheck;
@@ -324,6 +562,7 @@ function TemplateCard({ template }: { template: TaskTemplate }) {
   });
 
   return (
+    <>
     <Card data-testid={`card-template-${template.id}`}>
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
@@ -334,11 +573,16 @@ function TemplateCard({ template }: { template: TaskTemplate }) {
             </CardTitle>
             <CardDescription className="mt-1">{template.description}</CardDescription>
           </div>
-          {!template.isDefault && (
-            <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} data-testid={`button-delete-template-${template.id}`}>
-              <Trash2 className="h-4 w-4" />
+          <div className="flex items-center gap-1 shrink-0">
+            <Button variant="ghost" size="icon" onClick={() => setEditOpen(true)} data-testid={`button-edit-template-${template.id}`}>
+              <Pencil className="h-4 w-4" />
             </Button>
-          )}
+            {!template.isDefault && (
+              <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending} data-testid={`button-delete-template-${template.id}`}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="secondary" className={`text-xs ${categoryColors[template.category] || categoryColors.general}`}>
@@ -370,6 +614,8 @@ function TemplateCard({ template }: { template: TaskTemplate }) {
         </div>
       </CardContent>
     </Card>
+    <EditTemplateDialog template={template} open={editOpen} onOpenChange={setEditOpen} />
+    </>
   );
 }
 
