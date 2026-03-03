@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Briefcase, Plus, LayoutGrid, List, MapPin, Clock, Users, Copy, MoreHorizontal, Pencil, Trash2, ExternalLink, Inbox, Loader2, DollarSign, Calendar, Building2 } from "lucide-react";
+import { Briefcase, Plus, LayoutGrid, List, MapPin, Clock, Users, Copy, MoreHorizontal, Pencil, Trash2, ExternalLink, Inbox, Loader2, DollarSign, Calendar, Building2, X } from "lucide-react";
 
 const jobFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -66,6 +66,10 @@ export default function RecruitmentJobs() {
   const [viewMode, setViewMode] = useState<"card" | "table">("card");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<string | null>(null);
+  const [requirementItems, setRequirementItems] = useState<string[]>([]);
+  const [responsibilityItems, setResponsibilityItems] = useState<string[]>([]);
+  const [newRequirement, setNewRequirement] = useState("");
+  const [newResponsibility, setNewResponsibility] = useState("");
 
   const { currentPage, totalPages, paginatedItems: paginatedJobs, setCurrentPage, totalItems, pageSize } = usePagination(jobs, 10);
 
@@ -191,6 +195,8 @@ export default function RecruitmentJobs() {
           applicationDeadline: job.applicationDeadline || "",
           status: (job.status as "draft" | "active" | "on-hold" | "closed") || "draft",
         });
+        setRequirementItems((job.requirements || "").split("\n").filter(s => s.trim()).map(s => s.replace(/^[-•*]\s*/, "").trim()));
+        setResponsibilityItems((job.responsibilities || "").split("\n").filter(s => s.trim()).map(s => s.replace(/^[-•*]\s*/, "").trim()));
         setEditingJob(jobId);
       }
     } else {
@@ -211,17 +217,25 @@ export default function RecruitmentJobs() {
         applicationDeadline: "",
         status: "draft",
       });
+      setRequirementItems([]);
+      setResponsibilityItems([]);
       setEditingJob(null);
     }
+    setNewRequirement("");
+    setNewResponsibility("");
     setIsDialogOpen(true);
   };
 
   const handleSubmit = (data: JobFormData) => {
+    const finalRequirements = [...requirementItems];
+    if (newRequirement.trim()) finalRequirements.push(newRequirement.trim());
+    const finalResponsibilities = [...responsibilityItems];
+    if (newResponsibility.trim()) finalResponsibilities.push(newResponsibility.trim());
     const payload = {
       ...data,
       companyId: currentUser.companyId,
-      requirements: data.requirements || null,
-      responsibilities: data.responsibilities || null,
+      requirements: finalRequirements.length > 0 ? finalRequirements.join("\n") : null,
+      responsibilities: finalResponsibilities.length > 0 ? finalResponsibilities.join("\n") : null,
       assignedManagerId: data.assignedManagerId || null,
       salaryMin: data.salaryMin || null,
       salaryMax: data.salaryMax || null,
@@ -718,43 +732,115 @@ export default function RecruitmentJobs() {
                 )}
               />
 
-              <FormField
-                control={form.control}
-                name="requirements"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Requirements</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="List the requirements..."
-                        className="min-h-[80px]"
-                        {...field}
-                        data-testid="input-requirements"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              <div className="space-y-2">
+                <FormLabel>Requirements</FormLabel>
+                <div className="flex gap-2">
+                  <Input
+                    value={newRequirement}
+                    onChange={(e) => setNewRequirement(e.target.value)}
+                    placeholder="Add a requirement..."
+                    data-testid="input-new-requirement"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (newRequirement.trim()) {
+                          setRequirementItems([...requirementItems, newRequirement.trim()]);
+                          setNewRequirement("");
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      if (newRequirement.trim()) {
+                        setRequirementItems([...requirementItems, newRequirement.trim()]);
+                        setNewRequirement("");
+                      }
+                    }}
+                    data-testid="button-add-requirement"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                {requirementItems.length > 0 && (
+                  <ul className="space-y-1" data-testid="list-requirements">
+                    {requirementItems.map((item, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm p-2 rounded-md border bg-muted/30">
+                        <span className="text-muted-foreground text-xs w-5 shrink-0">{i + 1}.</span>
+                        <span className="flex-1" data-testid={`text-requirement-${i}`}>{item}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          onClick={() => setRequirementItems(requirementItems.filter((_, idx) => idx !== i))}
+                          data-testid={`button-remove-requirement-${i}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              />
+              </div>
 
-              <FormField
-                control={form.control}
-                name="responsibilities"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Responsibilities</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="List the responsibilities..."
-                        className="min-h-[80px]"
-                        {...field}
-                        data-testid="input-responsibilities"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              <div className="space-y-2">
+                <FormLabel>Responsibilities</FormLabel>
+                <div className="flex gap-2">
+                  <Input
+                    value={newResponsibility}
+                    onChange={(e) => setNewResponsibility(e.target.value)}
+                    placeholder="Add a responsibility..."
+                    data-testid="input-new-responsibility"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (newResponsibility.trim()) {
+                          setResponsibilityItems([...responsibilityItems, newResponsibility.trim()]);
+                          setNewResponsibility("");
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      if (newResponsibility.trim()) {
+                        setResponsibilityItems([...responsibilityItems, newResponsibility.trim()]);
+                        setNewResponsibility("");
+                      }
+                    }}
+                    data-testid="button-add-responsibility"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                {responsibilityItems.length > 0 && (
+                  <ul className="space-y-1" data-testid="list-responsibilities">
+                    {responsibilityItems.map((item, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm p-2 rounded-md border bg-muted/30">
+                        <span className="text-muted-foreground text-xs w-5 shrink-0">{i + 1}.</span>
+                        <span className="flex-1" data-testid={`text-responsibility-${i}`}>{item}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          onClick={() => setResponsibilityItems(responsibilityItems.filter((_, idx) => idx !== i))}
+                          data-testid={`button-remove-responsibility-${i}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
                 )}
-              />
+              </div>
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} data-testid="button-cancel">

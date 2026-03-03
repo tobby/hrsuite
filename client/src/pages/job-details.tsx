@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "wouter";
 import type { JobPosting } from "@shared/schema";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { MapPin, Clock, Building2, ArrowLeft, Inbox, Briefcase, Users, DollarSign, Calendar, Globe } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { MapPin, ArrowLeft, Inbox, Briefcase, DollarSign, Calendar, Globe, Clock, Users, Building2 } from "lucide-react";
 
 export default function JobDetails() {
   const { id } = useParams<{ id: string }>();
@@ -62,26 +61,16 @@ export default function JobDetails() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
-        <div className="bg-primary/5 border-b">
-          <div className="max-w-4xl mx-auto px-6 py-8">
-            <Skeleton className="h-8 w-32 mb-4" />
-            <Skeleton className="h-10 w-3/4 mb-2" />
-            <Skeleton className="h-5 w-1/2 mb-4" />
-            <Skeleton className="h-4 w-2/3" />
-          </div>
-        </div>
-        <div className="max-w-4xl mx-auto px-6 py-8">
-          <div className="grid gap-8 md:grid-cols-3">
-            <div className="md:col-span-2 space-y-6">
-              <Skeleton className="h-6 w-40" />
-              <Skeleton className="h-32 w-full" />
-              <Skeleton className="h-6 w-40" />
-              <Skeleton className="h-24 w-full" />
-            </div>
-            <div>
-              <Skeleton className="h-64 w-full" />
-            </div>
-          </div>
+        <div className="max-w-3xl mx-auto px-6 py-8">
+          <Skeleton className="h-5 w-28 mb-6" />
+          <Skeleton className="h-8 w-3/4 mb-3" />
+          <Skeleton className="h-4 w-1/3 mb-6" />
+          <Skeleton className="h-10 w-32 mb-10" />
+          <Skeleton className="h-px w-full mb-8" />
+          <Skeleton className="h-5 w-40 mb-4" />
+          <Skeleton className="h-24 w-full mb-8" />
+          <Skeleton className="h-5 w-40 mb-4" />
+          <Skeleton className="h-20 w-full" />
         </div>
       </div>
     );
@@ -125,165 +114,128 @@ export default function JobDetails() {
 
   return (
     <div className="min-h-screen bg-background" data-testid="page-job-details">
-      <div className="bg-primary/5 border-b">
-        <div className="max-w-4xl mx-auto px-6 py-8">
-          <Link href="/careers">
-            <Button variant="ghost" size="sm" className="mb-4" data-testid="button-back">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to All Jobs
+      <div className="max-w-3xl mx-auto px-6 py-8">
+        <Link href="/careers">
+          <Button variant="ghost" size="sm" className="mb-6 -ml-2" data-testid="button-back">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to jobs
+          </Button>
+        </Link>
+
+        <h1 className="text-2xl font-bold mb-2" data-testid="text-job-title">{job.title}</h1>
+        <p className="text-muted-foreground mb-6" data-testid="text-job-location">
+          {getLocationTypeLabel(job.locationType)}{job.location ? `, ${job.location}` : ""}
+        </p>
+
+        <Link href={`/jobs/${job.id}/apply`}>
+          <Button size="lg" data-testid="button-apply">
+            Apply
+          </Button>
+        </Link>
+
+        <Separator className="my-8" />
+
+        <div className="space-y-8">
+          <section>
+            <h2 className="text-base font-semibold mb-3">About This Role</h2>
+            <div className="text-sm text-muted-foreground whitespace-pre-line leading-relaxed" data-testid="text-job-description">
+              {job.description}
+            </div>
+          </section>
+
+          {job.responsibilities && (
+            <section>
+              <h2 className="text-base font-semibold mb-3">Responsibilities</h2>
+              <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground" data-testid="text-responsibilities">
+                {job.responsibilities.split("\n").filter(line => line.trim()).map((line, i) => (
+                  <li key={i}>{line.replace(/^[-•*]\s*/, "").trim()}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {job.requirements && (
+            <section>
+              <h2 className="text-base font-semibold mb-3">Requirements</h2>
+              <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground" data-testid="text-requirements">
+                {job.requirements.split("\n").filter(line => line.trim()).map((line, i) => (
+                  <li key={i}>{line.replace(/^[-•*]\s*/, "").trim()}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <section>
+            <h2 className="text-base font-semibold mb-3">Job Details</h2>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-center gap-3">
+                <Briefcase className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground w-32 shrink-0">Employment Type</span>
+                <span data-testid="badge-employment-type">{getEmploymentTypeLabel(job.employmentType)}</span>
+              </div>
+              {departmentName && (
+                <div className="flex items-center gap-3">
+                  <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground w-32 shrink-0">Department</span>
+                  <span data-testid="text-dept-detail">{departmentName}</span>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground w-32 shrink-0">Location</span>
+                <span data-testid="text-location-detail">{job.location}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Globe className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground w-32 shrink-0">Work Type</span>
+                <span data-testid="text-work-type">{getLocationTypeLabel(job.locationType)}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="text-muted-foreground w-32 shrink-0">Experience</span>
+                <span data-testid="text-experience-detail">{job.experienceYears}+ years</span>
+              </div>
+              {(job.salaryMin || job.salaryMax) && (
+                <div className="flex items-center gap-3">
+                  <DollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground w-32 shrink-0">Salary Range</span>
+                  <span data-testid="text-salary">
+                    ${job.salaryMin?.toLocaleString()}{job.salaryMax ? ` - $${job.salaryMax.toLocaleString()}` : "+"}
+                  </span>
+                </div>
+              )}
+              {job.numberOfOpenings > 1 && (
+                <div className="flex items-center gap-3">
+                  <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground w-32 shrink-0">Openings</span>
+                  <span data-testid="text-openings">{job.numberOfOpenings} positions</span>
+                </div>
+              )}
+              {job.applicationDeadline && (
+                <div className="flex items-center gap-3">
+                  <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="text-muted-foreground w-32 shrink-0">Deadline</span>
+                  <span data-testid="text-deadline">{new Date(job.applicationDeadline).toLocaleDateString()}</span>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+
+        <Separator className="my-8" />
+
+        <div className="text-center py-4">
+          <p className="text-sm text-muted-foreground mb-4">Interested in this role? We'd love to hear from you.</p>
+          <Link href={`/jobs/${job.id}/apply`}>
+            <Button size="lg" data-testid="button-apply-sidebar">
+              Apply for this Position
             </Button>
           </Link>
-
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div>
-              <h1 className="text-lg font-semibold tracking-tight mb-2" data-testid="text-job-title">{job.title}</h1>
-              <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-2">
-                {departmentName && (
-                  <span className="flex items-center gap-1" data-testid="text-department">
-                    <Building2 className="h-4 w-4" />
-                    {departmentName}
-                  </span>
-                )}
-                <span className="flex items-center gap-1" data-testid="text-location">
-                  <MapPin className="h-4 w-4" />
-                  {job.location}
-                </span>
-                <span className="flex items-center gap-1" data-testid="text-location-type">
-                  <Globe className="h-4 w-4" />
-                  {getLocationTypeLabel(job.locationType)}
-                </span>
-                <span className="flex items-center gap-1" data-testid="text-experience">
-                  <Clock className="h-4 w-4" />
-                  {job.experienceYears}+ years experience
-                </span>
-              </div>
-            </div>
-            <Link href={`/jobs/${job.id}/apply`}>
-              <Button size="lg" className="w-full md:w-auto" data-testid="button-apply">
-                Apply for this Position
-              </Button>
-            </Link>
-          </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="grid gap-8 md:grid-cols-3">
-          <div className="md:col-span-2 space-y-8">
-            <section>
-              <h2 className="text-base font-semibold mb-4">About This Role</h2>
-              <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-line" data-testid="text-job-description">
-                {job.description}
-              </div>
-            </section>
-
-            {job.responsibilities && (
-              <section>
-                <h2 className="text-base font-semibold mb-4">Responsibilities</h2>
-                <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground" data-testid="text-responsibilities">
-                  {job.responsibilities.split("\n").filter(line => line.trim()).map((line, i) => (
-                    <li key={i}>{line.replace(/^[-•*]\s*/, "").trim()}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {job.requirements && (
-              <section>
-                <h2 className="text-base font-semibold mb-4">Requirements</h2>
-                <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground" data-testid="text-requirements">
-                  {job.requirements.split("\n").filter(line => line.trim()).map((line, i) => (
-                    <li key={i}>{line.replace(/^[-•*]\s*/, "").trim()}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Job Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Employment Type</p>
-                  <Badge variant="outline" data-testid="badge-employment-type">{getEmploymentTypeLabel(job.employmentType)}</Badge>
-                </div>
-                {departmentName && (
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase mb-1">Department</p>
-                    <p className="text-sm font-medium" data-testid="text-dept-detail">{departmentName}</p>
-                  </div>
-                )}
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Location</p>
-                  <p className="text-sm font-medium" data-testid="text-location-detail">{job.location}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Work Type</p>
-                  <p className="text-sm font-medium" data-testid="text-work-type">{getLocationTypeLabel(job.locationType)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase mb-1">Experience</p>
-                  <p className="text-sm font-medium" data-testid="text-experience-detail">{job.experienceYears}+ years</p>
-                </div>
-                {(job.salaryMin || job.salaryMax) && (
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase mb-1">Salary Range</p>
-                    <p className="text-sm font-medium flex items-center gap-1" data-testid="text-salary">
-                      <DollarSign className="h-3 w-3" />
-                      {job.salaryMin?.toLocaleString()}{job.salaryMax ? ` - $${job.salaryMax.toLocaleString()}` : "+"}
-                    </p>
-                  </div>
-                )}
-                {job.numberOfOpenings > 1 && (
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase mb-1">Openings</p>
-                    <p className="text-sm font-medium flex items-center gap-1" data-testid="text-openings">
-                      <Users className="h-3 w-3" />
-                      {job.numberOfOpenings} positions
-                    </p>
-                  </div>
-                )}
-                {job.applicationDeadline && (
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase mb-1">Application Deadline</p>
-                    <p className="text-sm font-medium flex items-center gap-1" data-testid="text-deadline">
-                      <Calendar className="h-3 w-3" />
-                      {new Date(job.applicationDeadline).toLocaleDateString()}
-                    </p>
-                  </div>
-                )}
-                {job.createdAt && (
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase mb-1">Posted</p>
-                    <p className="text-sm font-medium" data-testid="text-posted-date">
-                      {new Date(job.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="py-6">
-                <p className="text-sm text-muted-foreground mb-4">
-                  Interested in this role? We'd love to hear from you.
-                </p>
-                <Link href={`/jobs/${job.id}/apply`}>
-                  <Button className="w-full" data-testid="button-apply-sidebar">
-                    Apply Now
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-
-      <footer className="border-t mt-12">
-        <div className="max-w-4xl mx-auto px-6 py-6 text-center text-sm text-muted-foreground">
+      <footer className="border-t mt-8">
+        <div className="max-w-3xl mx-auto px-6 py-6 text-center text-sm text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} All rights reserved.</p>
         </div>
       </footer>
