@@ -604,6 +604,7 @@ export const insertTaskAssignmentSchema = createInsertSchema(taskAssignments).om
   assignmentType: z.enum(["individual", "department", "managers", "everyone"]),
   items: z.string().min(1, "At least one task item is required"),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
+  dueDate: z.coerce.date().optional().nullable(),
 });
 export type InsertTaskAssignment = z.infer<typeof insertTaskAssignmentSchema>;
 export type TaskAssignment = typeof taskAssignments.$inferSelect;
