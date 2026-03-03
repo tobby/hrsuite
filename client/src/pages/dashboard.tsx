@@ -90,12 +90,10 @@ export default function Dashboard() {
 
   const { data: myTaskAssignments = [] } = useQuery<TaskAssignment[]>({
     queryKey: ['/api/my-task-assignments'],
-    enabled: role !== "contract",
   });
 
   const { data: myTaskCompletions = [] } = useQuery<TaskCompletion[]>({
     queryKey: ['/api/my-task-completions'],
-    enabled: role !== "contract",
   });
 
   const { data: upcomingBirthdays = [] } = useQuery<{ id: string; firstName: string; lastName: string; position: string; daysUntil: number; birthdayDate: string }[]>({
@@ -176,7 +174,7 @@ export default function Dashboard() {
       </div>
 
       {/* 1. Stats Overview */}
-      <div className={`grid gap-4 md:grid-cols-2 ${role === "admin" ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
+      <div className={`grid gap-4 md:grid-cols-2 ${role === "admin" ? "lg:grid-cols-4" : role === "contract" ? "lg:grid-cols-2" : "lg:grid-cols-3"}`}>
         {role === "employee" && (
           <>
             <Card data-testid="card-stat-pending-requests">
@@ -200,90 +198,110 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground">This year</p>
               </CardContent>
             </Card>
+
+            <Card data-testid="card-stat-active-appraisals">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">My Reviews</CardTitle>
+                <ClipboardList className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-stat-active-appraisals-count">{activeAppraisalCount}</div>
+                <p className="text-xs text-muted-foreground">Performance reviews</p>
+              </CardContent>
+            </Card>
           </>
         )}
 
         {(role === "manager" || role === "admin") && (
-          <Card data-testid="card-stat-employees">
-            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                {role === "manager" ? "Team Members" : "Total Employees"}
-              </CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" data-testid="text-stat-employees-count">
-                {role === "manager" ? teamMembers.length : employees.length}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {role === "manager" ? "Direct reports" : `${activeEmployees} active`}
-              </p>
-            </CardContent>
-          </Card>
+          <>
+            <Card data-testid="card-stat-employees">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  {role === "manager" ? "Team Members" : "Total Employees"}
+                </CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-stat-employees-count">
+                  {role === "manager" ? teamMembers.length : employees.length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {role === "manager" ? "Direct reports" : `${activeEmployees} active`}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card data-testid="card-stat-pending-leave">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending Leave</CardTitle>
+                <CalendarCheck className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{pendingApprovalCount}</div>
+                <p className="text-xs text-muted-foreground">
+                  {role === "manager" ? "Team requests" : "Requests awaiting approval"}
+                </p>
+              </CardContent>
+            </Card>
+
+            {role === "admin" && (
+              <Card data-testid="card-stat-departments">
+                <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Departments</CardTitle>
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-stat-departments-count">
+                    {departments.length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Active departments</p>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card data-testid="card-stat-active-appraisals">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Appraisals</CardTitle>
+                <ClipboardList className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="text-stat-active-appraisals-count">{activeAppraisalCount}</div>
+                <p className="text-xs text-muted-foreground">Reviews in progress</p>
+              </CardContent>
+            </Card>
+          </>
         )}
 
-        {(role === "manager" || role === "admin") && (
-          <Card data-testid="card-stat-pending-leave">
-            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pending Leave</CardTitle>
-              <CalendarCheck className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{pendingApprovalCount}</div>
-              <p className="text-xs text-muted-foreground">
-                {role === "manager" ? "Team requests" : "Requests awaiting approval"}
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        {role === "contract" && (
+          <>
+            <Card data-testid="card-stat-employees">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Your Role</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-base">Contract</div>
+                <p className="text-xs text-muted-foreground">{currentUser.position}</p>
+              </CardContent>
+            </Card>
 
-        {role === "admin" && (
-          <Card data-testid="card-stat-departments">
-            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Departments</CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" data-testid="text-stat-departments-count">
-                {departments.length}
-              </div>
-              <p className="text-xs text-muted-foreground">Active departments</p>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card data-testid="card-stat-active-appraisals">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {role === "employee" ? "My Reviews" : "Active Appraisals"}
-            </CardTitle>
-            <ClipboardList className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-stat-active-appraisals-count">{activeAppraisalCount}</div>
-            <p className="text-xs text-muted-foreground">
-              {role === "employee" ? "Performance reviews" : "Reviews in progress"}
-            </p>
-          </CardContent>
-        </Card>
-
-        {(role === "contract") && (
-          <Card data-testid="card-stat-employees">
-            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Your Role</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-base">Contract</div>
-              <p className="text-xs text-muted-foreground">{currentUser.position}</p>
-            </CardContent>
-          </Card>
+            <Card data-testid="card-stat-pending-tasks-count">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pending Tasks</CardTitle>
+                <ClipboardList className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{myTaskAssignments.length}</div>
+                <p className="text-xs text-muted-foreground">Assigned to you</p>
+              </CardContent>
+            </Card>
+          </>
         )}
       </div>
 
       {/* 2. Pending Items Requiring Action */}
       {role !== "contract" && (
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className={`grid gap-6 ${canApproveLeave(role) ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
           {canApproveLeave(role) && (
             <Card data-testid="card-pending-approvals">
               <CardHeader className="flex flex-row items-center justify-between gap-2">
@@ -497,90 +515,86 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* 3. Who's on Leave */}
-      <Card data-testid="card-on-leave-today">
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <div>
-            <CardTitle className="text-lg">Who's on Leave</CardTitle>
-            <CardDescription>Employees currently out of office</CardDescription>
-          </div>
-          <Palmtree className="h-5 w-5 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          {onLeaveToday.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-6 text-center">
-              <CalendarCheck className="h-8 w-8 text-muted-foreground/50 mb-2" />
-              <p className="text-sm font-medium text-muted-foreground">No one is on leave today</p>
-              <p className="text-xs text-muted-foreground mt-1">Everyone is in the office.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {onLeaveToday.map((entry) => (
-                <div key={entry.id} className="flex items-center justify-between" data-testid={`on-leave-${entry.id}`}>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 text-xs font-medium text-orange-600 dark:text-orange-400">
-                      {entry.employeeName.split(" ").map(n => n[0]).join("")}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium" data-testid={`text-on-leave-name-${entry.id}`}>{entry.employeeName}</p>
-                      <p className="text-xs text-muted-foreground">{entry.employeePosition}</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
-                      {entry.leaveTypeName}
-                    </span>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Returns {new Date(entry.endDate).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Upcoming Birthdays - Admin only */}
-      {role === "admin" && (
-        <Card data-testid="card-upcoming-birthdays">
+      {/* Contract: Pending Tasks (standalone) */}
+      {role === "contract" && (
+        <Card data-testid="card-pending-tasks">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
-              <CardTitle className="text-lg">Upcoming Birthdays</CardTitle>
-              <CardDescription>Employee birthdays coming up soon</CardDescription>
+              <CardTitle className="text-lg">Your Tasks</CardTitle>
+              <CardDescription>Task items assigned to you</CardDescription>
             </div>
-            <Cake className="h-5 w-5 text-muted-foreground" />
+            <Link href="/my-tasks">
+              <Button variant="ghost" size="sm" data-testid="button-view-all-tasks">
+                My Tasks
+                <ArrowRight className="ml-1 h-4 w-4" />
+              </Button>
+            </Link>
           </CardHeader>
           <CardContent>
-            {upcomingBirthdays.length === 0 ? (
+            {myTaskAssignments.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-6 text-center">
-                <Cake className="h-8 w-8 text-muted-foreground/50 mb-2" />
-                <p className="text-sm font-medium text-muted-foreground">No upcoming birthdays</p>
-                <p className="text-xs text-muted-foreground mt-1">No employee birthdays within the reminder window.</p>
+                <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                <p className="text-sm text-muted-foreground">No tasks assigned</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {upcomingBirthdays.map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between" data-testid={`birthday-${entry.id}`}>
+                {myTaskAssignments.slice(0, 5).map((a) => {
+                  const items = parseItems(a.items);
+                  const completedIds = myTaskCompletions.filter(c => c.assignmentId === a.id && c.completed).map(c => c.itemId);
+                  const pendingCount = items.filter(item => !completedIds.includes(item.id)).length;
+                  const progressPercent = items.length > 0 ? Math.round(((items.length - pendingCount) / items.length) * 100) : 0;
+                  return (
+                    <div key={a.id} className="space-y-1" data-testid={`pending-task-${a.id}`}>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium truncate">{a.title}</p>
+                        <span className="text-xs text-muted-foreground shrink-0">{pendingCount} pending</span>
+                      </div>
+                      <Progress value={progressPercent} className="h-1.5" />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 3. Who's on Leave + Upcoming Birthdays (side by side for admin) */}
+      <div className={`grid gap-6 ${role === "admin" ? "lg:grid-cols-2" : ""}`}>
+        <Card data-testid="card-on-leave-today">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-lg">Who's on Leave</CardTitle>
+              <CardDescription>Employees currently out of office</CardDescription>
+            </div>
+            <Palmtree className="h-5 w-5 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {onLeaveToday.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <CalendarCheck className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                <p className="text-sm font-medium text-muted-foreground">No one is on leave today</p>
+                <p className="text-xs text-muted-foreground mt-1">Everyone is in the office.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {onLeaveToday.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between" data-testid={`on-leave-${entry.id}`}>
                     <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 dark:bg-pink-900/30 text-xs font-medium text-pink-600 dark:text-pink-400">
-                        {entry.firstName[0]}{entry.lastName[0]}
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-900/30 text-xs font-medium text-orange-600 dark:text-orange-400">
+                        {entry.employeeName.split(" ").map(n => n[0]).join("")}
                       </div>
                       <div>
-                        <p className="text-sm font-medium">{entry.firstName} {entry.lastName}</p>
-                        <p className="text-xs text-muted-foreground">{entry.position}</p>
+                        <p className="text-sm font-medium" data-testid={`text-on-leave-name-${entry.id}`}>{entry.employeeName}</p>
+                        <p className="text-xs text-muted-foreground">{entry.employeePosition}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                        entry.daysUntil === 0
-                          ? "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400"
-                          : "bg-muted text-muted-foreground"
-                      }`}>
-                        {entry.daysUntil === 0 ? "Today!" : entry.daysUntil === 1 ? "Tomorrow" : `In ${entry.daysUntil} days`}
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
+                        {entry.leaveTypeName}
                       </span>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {new Date(entry.birthdayDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        Returns {new Date(entry.endDate).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
@@ -589,9 +603,58 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
-      )}
 
-      {/* 4. Leave Balance / Recent Requests */}
+        {role === "admin" && (
+          <Card data-testid="card-upcoming-birthdays">
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-lg">Upcoming Birthdays</CardTitle>
+                <CardDescription>Employee birthdays coming up soon</CardDescription>
+              </div>
+              <Cake className="h-5 w-5 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              {upcomingBirthdays.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <Cake className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                  <p className="text-sm font-medium text-muted-foreground">No upcoming birthdays</p>
+                  <p className="text-xs text-muted-foreground mt-1">No employee birthdays within the reminder window.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {upcomingBirthdays.map((entry) => (
+                    <div key={entry.id} className="flex items-center justify-between" data-testid={`birthday-${entry.id}`}>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-pink-100 dark:bg-pink-900/30 text-xs font-medium text-pink-600 dark:text-pink-400">
+                          {entry.firstName[0]}{entry.lastName[0]}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{entry.firstName} {entry.lastName}</p>
+                          <p className="text-xs text-muted-foreground">{entry.position}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                          entry.daysUntil === 0
+                            ? "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400"
+                            : "bg-muted text-muted-foreground"
+                        }`}>
+                          {entry.daysUntil === 0 ? "Today!" : entry.daysUntil === 1 ? "Tomorrow" : `In ${entry.daysUntil} days`}
+                        </span>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {new Date(entry.birthdayDate).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* 4. Employee Quick Actions */}
       {role === "employee" && (
         <Card data-testid="card-quick-actions">
           <CardHeader>
@@ -635,8 +698,9 @@ export default function Dashboard() {
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {canAccessLeave(role) && (
+      {/* 5. Leave Balance + companion card (role-specific pairing) */}
+      {canAccessLeave(role) && (
+        <div className="grid gap-6 lg:grid-cols-2">
           <Card data-testid="card-leave-balance">
             <CardHeader className="flex flex-row items-center justify-between gap-2">
               <div>
@@ -677,63 +741,150 @@ export default function Dashboard() {
               )}
             </CardContent>
           </Card>
-        )}
 
-        {role === "employee" && (
-          <Card data-testid="card-recent-leave">
-            <CardHeader>
-              <CardTitle className="text-lg">My Recent Requests</CardTitle>
-              <CardDescription>Your latest leave applications</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {leaveRequests.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                  <p className="text-sm font-medium text-muted-foreground">No leave requests yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">Your leave requests will appear here.</p>
+          {role === "employee" && (
+            <Card data-testid="card-recent-leave">
+              <CardHeader>
+                <CardTitle className="text-lg">My Recent Requests</CardTitle>
+                <CardDescription>Your latest leave applications</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {leaveRequests.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                    <p className="text-sm font-medium text-muted-foreground">No leave requests yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Your leave requests will appear here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {leaveRequests.slice(0, 5).map((req) => {
+                      const lt = leaveTypes.find(t => t.id === req.leaveTypeId);
+                      return (
+                        <div key={req.id} className="flex items-center justify-between" data-testid={`recent-request-${req.id}`}>
+                          <div>
+                            <p className="text-sm font-medium">{lt?.name || "Leave"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            req.status === "approved" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
+                            req.status === "rejected" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                            req.status === "cancelled" ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" :
+                            req.status === "manager_approved" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                            "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                          }`}>
+                            {req.status === "manager_approved" ? "Awaiting Admin" : req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {role === "manager" && (
+            <Card data-testid="card-team-members">
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-lg">Your Team</CardTitle>
+                  <CardDescription>Direct reports</CardDescription>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {leaveRequests.slice(0, 5).map((req) => {
-                    const lt = leaveTypes.find(t => t.id === req.leaveTypeId);
-                    return (
-                      <div key={req.id} className="flex items-center justify-between" data-testid={`recent-request-${req.id}`}>
+                <Link href="/employees">
+                  <Button variant="ghost" size="sm" data-testid="button-view-all-team">
+                    View All
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </CardHeader>
+              <CardContent>
+                {teamMembers.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                    <p className="text-sm font-medium text-muted-foreground">No team members yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Team members assigned to you will appear here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {teamMembers.slice(0, 5).map((member) => (
+                      <div 
+                        key={member.id} 
+                        className="flex items-center gap-3"
+                        data-testid={`team-member-${member.id}`}
+                      >
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
+                          {member.firstName[0]}{member.lastName[0]}
+                        </div>
                         <div>
-                          <p className="text-sm font-medium">{lt?.name || "Leave"}</p>
+                          <p className="text-sm font-medium">{member.firstName} {member.lastName}</p>
+                          <p className="text-xs text-muted-foreground">{member.position}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {role === "admin" && (
+            <Card data-testid="card-my-appraisals">
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-lg">Active Review Cycles</CardTitle>
+                  <CardDescription>Organization-wide reviews</CardDescription>
+                </div>
+                <Link href="/appraisals">
+                  <Button variant="ghost" size="sm" data-testid="button-view-all-appraisals">
+                    View All
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </CardHeader>
+              <CardContent>
+                {activeCycles.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                    <p className="text-sm font-medium text-muted-foreground">No active review cycles</p>
+                    <p className="text-xs text-muted-foreground mt-1">Review cycles will appear here once created.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {activeCycles.slice(0, 5).map((cycle) => (
+                      <div key={cycle.id} className="flex items-center justify-between" data-testid={`cycle-row-${cycle.id}`}>
+                        <div>
+                          <p className="text-sm font-medium" data-testid={`text-cycle-name-${cycle.id}`}>{cycle.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {new Date(req.startDate).toLocaleDateString()} - {new Date(req.endDate).toLocaleDateString()}
+                            {new Date(cycle.startDate).toLocaleDateString()} - {new Date(cycle.endDate).toLocaleDateString()}
                           </p>
                         </div>
-                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          req.status === "approved" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" :
-                          req.status === "rejected" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
-                          req.status === "cancelled" ? "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" :
-                          req.status === "manager_approved" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
-                          "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                        }`}>
-                          {req.status === "manager_approved" ? "Awaiting Admin" : req.status.charAt(0).toUpperCase() + req.status.slice(1)}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="default">Active</Badge>
+                          <Link href={`/appraisals/cycles/${cycle.id}`}>
+                            <Button variant="ghost" size="icon" data-testid={`button-view-cycle-${cycle.id}`}>
+                              <ArrowRight className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
-      {/* 5. Appraisals / Review Cycles */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/* 6. Appraisals for Employee / Review Cycles for Manager */}
+      {role === "employee" && (
         <Card data-testid="card-my-appraisals">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
-              <CardTitle className="text-lg">
-                {role === "employee" ? "My Appraisals" : "Active Review Cycles"}
-              </CardTitle>
-              <CardDescription>
-                {role === "employee" ? "Your performance review status" : "Organization-wide reviews"}
-              </CardDescription>
+              <CardTitle className="text-lg">My Appraisals</CardTitle>
+              <CardDescription>Your performance review status</CardDescription>
             </div>
             <Link href="/appraisals">
               <Button variant="ghost" size="sm" data-testid="button-view-all-appraisals">
@@ -743,166 +894,138 @@ export default function Dashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            {role === "employee" ? (
-              myAppraisals.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                  <p className="text-sm font-medium text-muted-foreground">No appraisals yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">Your performance reviews will appear here.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {myAppraisals.slice(0, 5).map((appraisal) => (
-                    <div key={appraisal.id} className="flex items-center justify-between" data-testid={`appraisal-row-${appraisal.id}`}>
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Performance Review</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={appraisal.status === "completed" ? "default" : appraisal.status === "pending" || appraisal.status === "in_progress" ? "outline" : "secondary"}>
-                          {appraisal.status === "in_progress" ? "In Progress" : appraisal.status.charAt(0).toUpperCase() + appraisal.status.slice(1)}
-                        </Badge>
-                        <Link href={`/appraisals/${appraisal.id}/results`}>
-                          <Button variant="ghost" size="icon" data-testid={`button-view-appraisal-${appraisal.id}`}>
-                            <ArrowRight className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
+            {myAppraisals.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">No appraisals yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Your performance reviews will appear here.</p>
+              </div>
             ) : (
-              activeCycles.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                  <p className="text-sm font-medium text-muted-foreground">No active review cycles</p>
-                  <p className="text-xs text-muted-foreground mt-1">Review cycles will appear here once created.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {activeCycles.slice(0, 5).map((cycle) => (
-                    <div key={cycle.id} className="flex items-center justify-between" data-testid={`cycle-row-${cycle.id}`}>
-                      <div>
-                        <p className="text-sm font-medium" data-testid={`text-cycle-name-${cycle.id}`}>{cycle.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(cycle.startDate).toLocaleDateString()} - {new Date(cycle.endDate).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="default">Active</Badge>
-                        <Link href={`/appraisals/cycles/${cycle.id}`}>
-                          <Button variant="ghost" size="icon" data-testid={`button-view-cycle-${cycle.id}`}>
-                            <ArrowRight className="h-4 w-4" />
-                          </Button>
-                        </Link>
-                      </div>
+              <div className="space-y-3">
+                {myAppraisals.slice(0, 5).map((appraisal) => (
+                  <div key={appraisal.id} className="flex items-center justify-between" data-testid={`appraisal-row-${appraisal.id}`}>
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium">Performance Review</span>
                     </div>
-                  ))}
-                </div>
-              )
+                    <div className="flex items-center gap-2">
+                      <Badge variant={appraisal.status === "completed" ? "default" : appraisal.status === "pending" || appraisal.status === "in_progress" ? "outline" : "secondary"}>
+                        {appraisal.status === "in_progress" ? "In Progress" : appraisal.status.charAt(0).toUpperCase() + appraisal.status.slice(1)}
+                      </Badge>
+                      <Link href={`/appraisals/${appraisal.id}/results`}>
+                        <Button variant="ghost" size="icon" data-testid={`button-view-appraisal-${appraisal.id}`}>
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </CardContent>
         </Card>
+      )}
 
-        {/* 6. Team / Admin Quick Links */}
-        {role === "manager" && (
-          <Card data-testid="card-team-members">
-            <CardHeader className="flex flex-row items-center justify-between gap-2">
-              <div>
-                <CardTitle className="text-lg">Your Team</CardTitle>
-                <CardDescription>Direct reports</CardDescription>
+      {role === "manager" && (
+        <Card data-testid="card-my-appraisals">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <div>
+              <CardTitle className="text-lg">Active Review Cycles</CardTitle>
+              <CardDescription>Organization-wide reviews</CardDescription>
+            </div>
+            <Link href="/appraisals">
+              <Button variant="ghost" size="sm" data-testid="button-view-all-appraisals">
+                View All
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {activeCycles.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">No active review cycles</p>
+                <p className="text-xs text-muted-foreground mt-1">Review cycles will appear here once created.</p>
               </div>
+            ) : (
+              <div className="space-y-3">
+                {activeCycles.slice(0, 5).map((cycle) => (
+                  <div key={cycle.id} className="flex items-center justify-between" data-testid={`cycle-row-${cycle.id}`}>
+                    <div>
+                      <p className="text-sm font-medium" data-testid={`text-cycle-name-${cycle.id}`}>{cycle.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(cycle.startDate).toLocaleDateString()} - {new Date(cycle.endDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="default">Active</Badge>
+                      <Link href={`/appraisals/cycles/${cycle.id}`}>
+                        <Button variant="ghost" size="icon" data-testid={`button-view-cycle-${cycle.id}`}>
+                          <ArrowRight className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 7. Admin Quick Links */}
+      {role === "admin" && (
+        <Card data-testid="card-admin-quick-links">
+          <CardHeader>
+            <CardTitle className="text-lg">Admin Quick Links</CardTitle>
+            <CardDescription>Manage your organization</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <Link href="/employees">
-                <Button variant="ghost" size="sm" data-testid="button-view-all-team">
-                  View All
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                <Button 
+                  variant="outline" 
+                  className="w-full h-auto flex-col gap-2 py-4"
+                  data-testid="button-admin-employees"
+                >
+                  <Users className="h-5 w-5 text-primary" />
+                  <span>Manage Employees</span>
                 </Button>
               </Link>
-            </CardHeader>
-            <CardContent>
-              {teamMembers.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                  <p className="text-sm font-medium text-muted-foreground">No team members yet</p>
-                  <p className="text-xs text-muted-foreground mt-1">Team members assigned to you will appear here.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {teamMembers.slice(0, 5).map((member) => (
-                    <div 
-                      key={member.id} 
-                      className="flex items-center gap-3"
-                      data-testid={`team-member-${member.id}`}
-                    >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                        {member.firstName[0]}{member.lastName[0]}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">{member.firstName} {member.lastName}</p>
-                        <p className="text-xs text-muted-foreground">{member.position}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {role === "admin" && (
-          <Card data-testid="card-admin-quick-links">
-            <CardHeader>
-              <CardTitle className="text-lg">Admin Quick Links</CardTitle>
-              <CardDescription>Manage your organization</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Link href="/employees">
-                  <Button 
-                    variant="outline" 
-                    className="w-full h-auto flex-col gap-2 py-4"
-                    data-testid="button-admin-employees"
-                  >
-                    <Users className="h-5 w-5 text-primary" />
-                    <span>Manage Employees</span>
-                  </Button>
-                </Link>
-                <Link href="/departments">
-                  <Button 
-                    variant="outline" 
-                    className="w-full h-auto flex-col gap-2 py-4"
-                    data-testid="button-admin-departments"
-                  >
-                    <Building2 className="h-5 w-5 text-primary" />
-                    <span>Manage Departments</span>
-                  </Button>
-                </Link>
-                <Link href="/recruitment/jobs">
-                  <Button 
-                    variant="outline" 
-                    className="w-full h-auto flex-col gap-2 py-4"
-                    data-testid="button-admin-recruitment"
-                  >
-                    <ClipboardList className="h-5 w-5 text-primary" />
-                    <span>Recruitment</span>
-                  </Button>
-                </Link>
-                <Link href="/reports">
-                  <Button 
-                    variant="outline" 
-                    className="w-full h-auto flex-col gap-2 py-4"
-                    data-testid="button-admin-reports"
-                  >
-                    <TrendingUp className="h-5 w-5 text-primary" />
-                    <span>View Reports</span>
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+              <Link href="/departments">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-auto flex-col gap-2 py-4"
+                  data-testid="button-admin-departments"
+                >
+                  <Building2 className="h-5 w-5 text-primary" />
+                  <span>Manage Departments</span>
+                </Button>
+              </Link>
+              <Link href="/recruitment/jobs">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-auto flex-col gap-2 py-4"
+                  data-testid="button-admin-recruitment"
+                >
+                  <ClipboardList className="h-5 w-5 text-primary" />
+                  <span>Recruitment</span>
+                </Button>
+              </Link>
+              <Link href="/reports">
+                <Button 
+                  variant="outline" 
+                  className="w-full h-auto flex-col gap-2 py-4"
+                  data-testid="button-admin-reports"
+                >
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  <span>View Reports</span>
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
