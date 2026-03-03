@@ -2302,10 +2302,7 @@ export async function registerRoutes(
       let postings = await storage.getJobPostingsByCompany(companyId);
 
       if (role === "manager") {
-        const employee = await storage.getEmployee(employeeId);
-        if (employee) {
-          postings = postings.filter(p => p.departmentId === employee.departmentId || p.assignedManagerId === employeeId);
-        }
+        postings = postings.filter(p => p.assignedManagerId === employeeId);
       }
 
       return res.json(postings);
