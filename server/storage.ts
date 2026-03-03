@@ -1023,7 +1023,7 @@ export class DatabaseStorage implements IStorage {
   async unarchiveJobPosting(id: string): Promise<JobPosting | undefined> {
     const [posting] = await db.update(jobPostings).set({ status: "active" }).where(eq(jobPostings.id, id)).returning();
     if (posting) {
-      await db.update(candidates).set({ stage: "applied" }).where(and(eq(candidates.jobId, id), eq(candidates.stage, "archived")));
+      await db.update(candidates).set({ stage: "new" }).where(and(eq(candidates.jobId, id), eq(candidates.stage, "archived")));
     }
     return posting;
   }
