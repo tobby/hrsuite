@@ -237,7 +237,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
       gender: undefined,
       linkedinUrl: "",
       website: "",
-      source: "website",
+      source: "",
       coverLetter: "",
       resumeFileName: "",
       ndpaConsent: false,
@@ -389,7 +389,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           name="firstName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>First Name *</FormLabel>
+              <FormLabel>First Name <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <Input placeholder="John" {...field} data-testid="input-first-name" />
               </FormControl>
@@ -402,7 +402,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           name="lastName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Last Name *</FormLabel>
+              <FormLabel>Last Name <span className="text-red-500">*</span></FormLabel>
               <FormControl>
                 <Input placeholder="Doe" {...field} data-testid="input-last-name" />
               </FormControl>
@@ -417,7 +417,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
         name="email"
         render={({ field }) => (
           <FormItem>
-            <FormLabel>Email *</FormLabel>
+            <FormLabel>Email <span className="text-red-500">*</span></FormLabel>
             <FormControl>
               <Input type="email" placeholder="john.doe@example.com" {...field} data-testid="input-email" />
             </FormControl>
@@ -432,7 +432,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           name="phone"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Phone{isRequired(fieldsConfig, "phone") ? " *" : ""}</FormLabel>
+              <FormLabel>Phone{isRequired(fieldsConfig, "phone") && <span className="text-red-500 ml-1">*</span>}</FormLabel>
               <FormControl>
                 <Input placeholder="+1 (555) 123-4567" {...field} data-testid="input-phone" />
               </FormControl>
@@ -448,7 +448,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           name="location"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Location{isRequired(fieldsConfig, "location") ? " *" : ""}</FormLabel>
+              <FormLabel>Location{isRequired(fieldsConfig, "location") && <span className="text-red-500 ml-1">*</span>}</FormLabel>
               <FormControl>
                 <Input placeholder="City, State" {...field} data-testid="input-location" />
               </FormControl>
@@ -464,7 +464,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           name="gender"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Gender{isRequired(fieldsConfig, "gender") ? " *" : ""}</FormLabel>
+              <FormLabel>Gender{isRequired(fieldsConfig, "gender") && <span className="text-red-500 ml-1">*</span>}</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger data-testid="select-gender">
@@ -499,7 +499,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
               </FormControl>
               <div className="space-y-1 leading-none">
                 <FormLabel className="text-sm font-normal">
-                  I consent to the processing of my personal data in accordance with the Nigeria Data Protection Act (NDPA){isRequired(fieldsConfig, "ndpaConsent") ? " *" : ""}
+                  I consent to the processing of my personal data in accordance with the Nigeria Data Protection Act (NDPA){isRequired(fieldsConfig, "ndpaConsent") && <span className="text-red-500 ml-1">*</span>}
                 </FormLabel>
                 <FormMessage />
               </div>
@@ -518,7 +518,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           name="linkedinUrl"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>LinkedIn Profile{isRequired(fieldsConfig, "linkedinUrl") ? " *" : ""}</FormLabel>
+              <FormLabel>LinkedIn Profile{isRequired(fieldsConfig, "linkedinUrl") && <span className="text-red-500 ml-1">*</span>}</FormLabel>
               <FormControl>
                 <Input placeholder="https://linkedin.com/in/yourprofile" {...field} data-testid="input-linkedin" />
               </FormControl>
@@ -534,7 +534,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           name="website"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Website{isRequired(fieldsConfig, "website") ? " *" : ""}</FormLabel>
+              <FormLabel>Website{isRequired(fieldsConfig, "website") && <span className="text-red-500 ml-1">*</span>}</FormLabel>
               <FormControl>
                 <Input placeholder="https://yourwebsite.com" {...field} data-testid="input-website" />
               </FormControl>
@@ -550,7 +550,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           name="source"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>How did you hear about us?{isRequired(fieldsConfig, "source") ? " *" : ""}</FormLabel>
+              <FormLabel>How did you hear about us?{isRequired(fieldsConfig, "source") && <span className="text-red-500 ml-1">*</span>}</FormLabel>
               <Select onValueChange={field.onChange} value={field.value}>
                 <FormControl>
                   <SelectTrigger data-testid="select-source">
@@ -579,7 +579,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           name="coverLetter"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Cover Letter{isRequired(fieldsConfig, "coverLetter") ? " *" : ""}</FormLabel>
+              <FormLabel>Cover Letter{isRequired(fieldsConfig, "coverLetter") && <span className="text-red-500 ml-1">*</span>}</FormLabel>
               <FormControl>
                 <Textarea
                   placeholder="Tell us why you're interested in this role and what makes you a great fit..."
@@ -600,7 +600,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
     <>
       {isVisible(fieldsConfig, "resume") && (
         <div>
-          <FormLabel>Resume / CV{isRequired(fieldsConfig, "resume") ? " *" : ""}</FormLabel>
+          <FormLabel>Resume / CV{isRequired(fieldsConfig, "resume") && <span className="text-red-500 ml-1">*</span>}</FormLabel>
           <div className="mt-2">
             <Input
               type="file"
@@ -749,7 +749,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              <form onSubmit={(e) => { e.preventDefault(); if (isLastStep) { form.handleSubmit(handleSubmit)(); } else { handleNext(); } }} className="space-y-4">
                 {renderCurrentStep()}
 
                 <div className="flex items-center justify-between gap-4 pt-4 border-t">
