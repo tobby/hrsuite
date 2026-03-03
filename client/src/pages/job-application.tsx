@@ -682,13 +682,21 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
     </>
   );
 
-  const renderCurrentStep = () => {
-    if (!currentStepConfig) return null;
-    if (currentStepConfig.key === 1) return renderStep1();
-    if (currentStepConfig.key === 2) return renderStep2();
-    if (currentStepConfig.key === 3) return renderReviewStep();
-    return null;
-  };
+  const renderAllSteps = () => (
+    <>
+      <div style={{ display: currentStepConfig?.key === 1 ? "block" : "none" }}>
+        {renderStep1()}
+      </div>
+      {hasStep2Fields && (
+        <div style={{ display: currentStepConfig?.key === 2 ? "block" : "none" }}>
+          {renderStep2()}
+        </div>
+      )}
+      <div style={{ display: currentStepConfig?.key === 3 ? "block" : "none" }}>
+        {renderReviewStep()}
+      </div>
+    </>
+  );
 
   return (
     <div className="min-h-screen bg-background py-8" data-testid="page-job-application">
@@ -748,7 +756,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           <CardContent>
             <Form {...form}>
               <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
-                {renderCurrentStep()}
+                {renderAllSteps()}
 
                 <div className="flex items-center justify-between gap-4 pt-4 border-t">
                   {step > 1 ? (
