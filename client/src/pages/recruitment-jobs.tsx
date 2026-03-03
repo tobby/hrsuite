@@ -74,6 +74,31 @@ export default function RecruitmentJobs() {
   const [newResponsibility, setNewResponsibility] = useState("");
   const [newHiringProcess, setNewHiringProcess] = useState("");
 
+  type FieldVisibility = "hidden" | "optional" | "required";
+  type AppFieldsConfig = Record<string, FieldVisibility>;
+
+  const defaultAppFields: AppFieldsConfig = {
+    phone: "optional",
+    location: "optional",
+    gender: "optional",
+    linkedinUrl: "optional",
+    source: "optional",
+    coverLetter: "optional",
+    resume: "optional",
+  };
+
+  const appFieldLabels: Record<string, string> = {
+    phone: "Phone Number",
+    location: "Location",
+    gender: "Gender",
+    linkedinUrl: "LinkedIn Profile",
+    source: "How Did You Hear About Us",
+    coverLetter: "Cover Letter",
+    resume: "Resume / CV",
+  };
+
+  const [applicationFieldsConfig, setApplicationFieldsConfig] = useState<AppFieldsConfig>({ ...defaultAppFields });
+
   const { currentPage, totalPages, paginatedItems: paginatedJobs, setCurrentPage, totalItems, pageSize } = usePagination(jobs, 10);
 
   const form = useForm<JobFormData>({
@@ -203,6 +228,12 @@ export default function RecruitmentJobs() {
         setRequirementItems((job.requirements || "").split("\n").filter(s => s.trim()).map(s => s.replace(/^[-•*]\s*/, "").trim()));
         setResponsibilityItems((job.responsibilities || "").split("\n").filter(s => s.trim()).map(s => s.replace(/^[-•*]\s*/, "").trim()));
         setHiringProcessItems((job.hiringProcess || "").split("\n").filter(s => s.trim()).map(s => s.replace(/^[-•*]\s*/, "").trim()));
+        try {
+          const parsed = job.applicationFields ? JSON.parse(job.applicationFields) : null;
+          setApplicationFieldsConfig(parsed ? { ...defaultAppFields, ...parsed } : { ...defaultAppFields });
+        } catch {
+          setApplicationFieldsConfig({ ...defaultAppFields });
+        }
         setEditingJob(jobId);
       }
     } else {
@@ -227,6 +258,7 @@ export default function RecruitmentJobs() {
       setRequirementItems([]);
       setResponsibilityItems([]);
       setHiringProcessItems([]);
+      setApplicationFieldsConfig({ ...defaultAppFields });
       setEditingJob(null);
     }
     setNewRequirement("");
@@ -248,6 +280,7 @@ export default function RecruitmentJobs() {
       requirements: finalRequirements.length > 0 ? finalRequirements.join("\n") : null,
       responsibilities: finalResponsibilities.length > 0 ? finalResponsibilities.join("\n") : null,
       hiringProcess: finalHiringProcess.length > 0 ? finalHiringProcess.join("\n") : null,
+      applicationFields: JSON.stringify(applicationFieldsConfig),
       assignedManagerId: data.assignedManagerId || null,
       salaryMin: data.salaryMin || null,
       salaryMax: data.salaryMax || null,
@@ -907,6 +940,31 @@ export default function RecruitmentJobs() {
                     ))}
                   </ul>
                 )}
+              </div>
+
+              <div className="space-y-3">
+                <FormLabel>Application Form Fields</FormLabel>
+                <p className="text-xs text-muted-foreground">Configure which fields candidates see when applying. First Name, Last Name, and Email are always required.</p>
+                <div className="border rounded-md divide-y">
+                  {Object.entries(appFieldLabels).map(([key, label]) => (
+                    <div key={key} className="flex items-center justify-between px-3 py-2">
+                      <span className="text-sm">{label}</span>
+                      <Select
+                        value={applicationFieldsConfig[key]}
+                        onValueChange={(val: string) => setApplicationFieldsConfig(prev => ({ ...prev, [key]: val as FieldVisibility }))}
+                      >
+                        <SelectTrigger className="w-[120px] h-8 text-xs" data-testid={`select-appfield-${key}`}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="required">Required</SelectItem>
+                          <SelectItem value="optional">Optional</SelectItem>
+                          <SelectItem value="hidden">Hidden</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <DialogFooter>
