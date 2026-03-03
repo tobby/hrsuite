@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TablePagination, usePagination } from "@/components/ui/table-pagination";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Briefcase, Plus, LayoutGrid, List, MapPin, Clock, Users, Copy, MoreHorizontal, Pencil, Trash2, ExternalLink, Inbox, Loader2, DollarSign, Calendar, Building2, X, Archive } from "lucide-react";
+import { Briefcase, Plus, LayoutGrid, List, MapPin, Clock, Users, Copy, MoreHorizontal, Pencil, Trash2, ExternalLink, Inbox, Loader2, DollarSign, Calendar, Building2, X, Archive, ArchiveRestore } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 
@@ -191,6 +191,25 @@ export default function RecruitmentJobs() {
 
   const handleArchive = (jobId: string) => {
     archiveMutation.mutate(jobId);
+  };
+
+  const unarchiveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("POST", `/api/job-postings/${id}/unarchive`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/job-postings'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/candidates'] });
+      toast({ title: "Job Restored", description: "The job posting has been restored to draft status." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleUnarchive = (jobId: string) => {
+    unarchiveMutation.mutate(jobId);
   };
 
   const getDepartmentName = (id: string) => departments.find((d) => d.id === id)?.name || "Unknown";
@@ -446,10 +465,15 @@ export default function RecruitmentJobs() {
                             <ExternalLink className="h-4 w-4 mr-2" />
                             Preview
                           </DropdownMenuItem>
-                          {job.status !== "archived" && (
+                          {job.status !== "archived" ? (
                             <DropdownMenuItem onClick={() => handleArchive(job.id)} data-testid={`button-archive-job-${job.id}`}>
                               <Archive className="h-4 w-4 mr-2" />
                               Archive
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={() => handleUnarchive(job.id)} data-testid={`button-unarchive-job-${job.id}`}>
+                              <ArchiveRestore className="h-4 w-4 mr-2" />
+                              Unarchive
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem onClick={() => handleDelete(job.id)} className="text-destructive" data-testid={`button-delete-job-${job.id}`}>
@@ -549,10 +573,15 @@ export default function RecruitmentJobs() {
                               <Copy className="h-4 w-4 mr-2" />
                               Copy Link
                             </DropdownMenuItem>
-                            {job.status !== "archived" && (
+                            {job.status !== "archived" ? (
                               <DropdownMenuItem onClick={() => handleArchive(job.id)} data-testid={`button-table-archive-job-${job.id}`}>
                                 <Archive className="h-4 w-4 mr-2" />
                                 Archive
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => handleUnarchive(job.id)} data-testid={`button-table-unarchive-job-${job.id}`}>
+                                <ArchiveRestore className="h-4 w-4 mr-2" />
+                                Unarchive
                               </DropdownMenuItem>
                             )}
                             <DropdownMenuItem onClick={() => handleDelete(job.id)} className="text-destructive" data-testid={`button-table-delete-job-${job.id}`}>

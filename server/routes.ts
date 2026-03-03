@@ -2541,6 +2541,24 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/job-postings/:id/unarchive", async (req, res) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (!companyId) return res.status(401).json({ message: "Not authenticated" });
+      if (role !== "admin") return res.status(403).json({ message: "Only admins can unarchive job postings" });
+
+      const existing = await storage.getJobPosting(req.params.id);
+      if (!existing || existing.companyId !== companyId) return res.status(404).json({ message: "Job posting not found" });
+      if (existing.status !== "archived") return res.status(400).json({ message: "Job posting is not archived" });
+
+      const restored = await storage.unarchiveJobPosting(req.params.id);
+      return res.json(restored);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // ==================== RECRUITMENT - CANDIDATES ====================
 
   async function canManagerAccessCandidate(employeeId: string, companyId: string, candidate: { jobId: string; assignedManagerId: string | null }): Promise<boolean> {

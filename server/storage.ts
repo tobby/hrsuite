@@ -207,6 +207,7 @@ export interface IStorage {
   updateJobPosting(id: string, data: Partial<InsertJobPosting>): Promise<JobPosting | undefined>;
   deleteJobPosting(id: string): Promise<boolean>;
   archiveJobPosting(id: string): Promise<JobPosting | undefined>;
+  unarchiveJobPosting(id: string): Promise<JobPosting | undefined>;
   getActiveJobPostingsByCompany(companyId: string): Promise<JobPosting[]>;
   getAllActiveJobPostings(): Promise<JobPosting[]>;
 
@@ -1015,6 +1016,14 @@ export class DatabaseStorage implements IStorage {
     const [posting] = await db.update(jobPostings).set({ status: "archived" }).where(eq(jobPostings.id, id)).returning();
     if (posting) {
       await db.update(candidates).set({ stage: "archived" }).where(eq(candidates.jobId, id));
+    }
+    return posting;
+  }
+
+  async unarchiveJobPosting(id: string): Promise<JobPosting | undefined> {
+    const [posting] = await db.update(jobPostings).set({ status: "draft" }).where(eq(jobPostings.id, id)).returning();
+    if (posting) {
+      await db.update(candidates).set({ stage: "applied" }).where(and(eq(candidates.jobId, id), eq(candidates.stage, "archived")));
     }
     return posting;
   }
