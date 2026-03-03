@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import type { Employee, Department, TaskAssignment, JobPosting, Candidate, HrQuery } from "@shared/schema";
+import type { Employee, Department, TaskAssignment, JobPosting, Candidate, HrQuery, LeaveRequest, LeaveType } from "@shared/schema";
 import {
   PieChart,
   Users,
@@ -59,6 +59,8 @@ export default function Reports() {
 
   const { data: employees = [] } = useQuery<Employee[]>({ queryKey: ['/api/employees'] });
   const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
+  const { data: leaveRequests = [] } = useQuery<LeaveRequest[]>({ queryKey: ['/api/leave-requests/all'] });
+  const { data: leaveTypes = [] } = useQuery<LeaveType[]>({ queryKey: ['/api/leave-types'] });
 
   if (!canEditOrgSettings(role)) {
     navigate("/");
@@ -82,15 +84,29 @@ export default function Reports() {
     value: filteredEmployees.filter((e) => e.departmentId === dept.id).length,
   }));
 
-  const leaveByType: { name: string; approved: number; pending: number; rejected: number }[] = [];
-
-  const leaveByDept: { name: string; days: number }[] = [];
-
   const leaveStatusCounts = {
-    approved: 0,
-    pending: 0,
-    rejected: 0,
+    approved: leaveRequests.filter((r) => r.status === "approved").length,
+    pending: leaveRequests.filter((r) => r.status === "pending").length,
+    rejected: leaveRequests.filter((r) => r.status === "rejected").length,
   };
+
+  const leaveByType = leaveTypes.map((lt) => {
+    const typeRequests = leaveRequests.filter((r) => r.leaveTypeId === lt.id);
+    return {
+      name: lt.name,
+      approved: typeRequests.filter((r) => r.status === "approved").reduce((sum, r) => sum + (r.totalDays || 0), 0),
+      pending: typeRequests.filter((r) => r.status === "pending").reduce((sum, r) => sum + (r.totalDays || 0), 0),
+      rejected: typeRequests.filter((r) => r.status === "rejected").reduce((sum, r) => sum + (r.totalDays || 0), 0),
+    };
+  });
+
+  const leaveByDept = departments.map((dept) => {
+    const deptEmployeeIds = employees.filter((e) => e.departmentId === dept.id).map((e) => e.id);
+    const days = leaveRequests
+      .filter((r) => r.status === "approved" && deptEmployeeIds.includes(r.employeeId))
+      .reduce((sum, r) => sum + (r.totalDays || 0), 0);
+    return { name: dept.name, days };
+  }).filter((d) => d.days > 0);
 
   const openJobs = jobs.filter((j) => j.status === "active").length;
   const totalCandidates = candidates.length;
