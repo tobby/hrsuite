@@ -27,6 +27,7 @@ const jobFormSchema = z.object({
   description: z.string().min(1, "Description is required"),
   requirements: z.string().optional(),
   responsibilities: z.string().optional(),
+  hiringProcess: z.string().optional(),
   departmentId: z.string().min(1, "Department is required"),
   assignedManagerId: z.string().optional(),
   location: z.string().min(1, "Location is required"),
@@ -68,8 +69,10 @@ export default function RecruitmentJobs() {
   const [editingJob, setEditingJob] = useState<string | null>(null);
   const [requirementItems, setRequirementItems] = useState<string[]>([]);
   const [responsibilityItems, setResponsibilityItems] = useState<string[]>([]);
+  const [hiringProcessItems, setHiringProcessItems] = useState<string[]>([]);
   const [newRequirement, setNewRequirement] = useState("");
   const [newResponsibility, setNewResponsibility] = useState("");
+  const [newHiringProcess, setNewHiringProcess] = useState("");
 
   const { currentPage, totalPages, paginatedItems: paginatedJobs, setCurrentPage, totalItems, pageSize } = usePagination(jobs, 10);
 
@@ -80,6 +83,7 @@ export default function RecruitmentJobs() {
       description: "",
       requirements: "",
       responsibilities: "",
+      hiringProcess: "",
       departmentId: "",
       assignedManagerId: "",
       location: "",
@@ -183,6 +187,7 @@ export default function RecruitmentJobs() {
           description: job.description,
           requirements: job.requirements || "",
           responsibilities: job.responsibilities || "",
+          hiringProcess: job.hiringProcess || "",
           departmentId: job.departmentId,
           assignedManagerId: job.assignedManagerId || "",
           location: job.location,
@@ -197,6 +202,7 @@ export default function RecruitmentJobs() {
         });
         setRequirementItems((job.requirements || "").split("\n").filter(s => s.trim()).map(s => s.replace(/^[-•*]\s*/, "").trim()));
         setResponsibilityItems((job.responsibilities || "").split("\n").filter(s => s.trim()).map(s => s.replace(/^[-•*]\s*/, "").trim()));
+        setHiringProcessItems((job.hiringProcess || "").split("\n").filter(s => s.trim()).map(s => s.replace(/^[-•*]\s*/, "").trim()));
         setEditingJob(jobId);
       }
     } else {
@@ -205,6 +211,7 @@ export default function RecruitmentJobs() {
         description: "",
         requirements: "",
         responsibilities: "",
+        hiringProcess: "",
         departmentId: "",
         assignedManagerId: "",
         location: "",
@@ -219,10 +226,12 @@ export default function RecruitmentJobs() {
       });
       setRequirementItems([]);
       setResponsibilityItems([]);
+      setHiringProcessItems([]);
       setEditingJob(null);
     }
     setNewRequirement("");
     setNewResponsibility("");
+    setNewHiringProcess("");
     setIsDialogOpen(true);
   };
 
@@ -231,11 +240,14 @@ export default function RecruitmentJobs() {
     if (newRequirement.trim()) finalRequirements.push(newRequirement.trim());
     const finalResponsibilities = [...responsibilityItems];
     if (newResponsibility.trim()) finalResponsibilities.push(newResponsibility.trim());
+    const finalHiringProcess = [...hiringProcessItems];
+    if (newHiringProcess.trim()) finalHiringProcess.push(newHiringProcess.trim());
     const payload = {
       ...data,
       companyId: currentUser.companyId,
       requirements: finalRequirements.length > 0 ? finalRequirements.join("\n") : null,
       responsibilities: finalResponsibilities.length > 0 ? finalResponsibilities.join("\n") : null,
+      hiringProcess: finalHiringProcess.length > 0 ? finalHiringProcess.join("\n") : null,
       assignedManagerId: data.assignedManagerId || null,
       salaryMin: data.salaryMin || null,
       salaryMax: data.salaryMax || null,
@@ -733,12 +745,12 @@ export default function RecruitmentJobs() {
               />
 
               <div className="space-y-2">
-                <FormLabel>Requirements</FormLabel>
+                <FormLabel>Skills & Competencies</FormLabel>
                 <div className="flex gap-2">
                   <Input
                     value={newRequirement}
                     onChange={(e) => setNewRequirement(e.target.value)}
-                    placeholder="Add a requirement..."
+                    placeholder="Add a skill or competency..."
                     data-testid="input-new-requirement"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -788,12 +800,12 @@ export default function RecruitmentJobs() {
               </div>
 
               <div className="space-y-2">
-                <FormLabel>Responsibilities</FormLabel>
+                <FormLabel>Key Responsibilities</FormLabel>
                 <div className="flex gap-2">
                   <Input
                     value={newResponsibility}
                     onChange={(e) => setNewResponsibility(e.target.value)}
-                    placeholder="Add a responsibility..."
+                    placeholder="Add a key responsibility..."
                     data-testid="input-new-responsibility"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -833,6 +845,61 @@ export default function RecruitmentJobs() {
                           className="h-6 w-6 shrink-0"
                           onClick={() => setResponsibilityItems(responsibilityItems.filter((_, idx) => idx !== i))}
                           data-testid={`button-remove-responsibility-${i}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <FormLabel>What to Expect in the Hiring Process</FormLabel>
+                <div className="flex gap-2">
+                  <Input
+                    value={newHiringProcess}
+                    onChange={(e) => setNewHiringProcess(e.target.value)}
+                    placeholder="Add a hiring process step..."
+                    data-testid="input-new-hiring-process"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (newHiringProcess.trim()) {
+                          setHiringProcessItems([...hiringProcessItems, newHiringProcess.trim()]);
+                          setNewHiringProcess("");
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      if (newHiringProcess.trim()) {
+                        setHiringProcessItems([...hiringProcessItems, newHiringProcess.trim()]);
+                        setNewHiringProcess("");
+                      }
+                    }}
+                    data-testid="button-add-hiring-process"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                {hiringProcessItems.length > 0 && (
+                  <ul className="space-y-1" data-testid="list-hiring-process">
+                    {hiringProcessItems.map((item, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm p-2 rounded-md border bg-muted/30">
+                        <span className="text-muted-foreground text-xs w-5 shrink-0">{i + 1}.</span>
+                        <span className="flex-1" data-testid={`text-hiring-process-${i}`}>{item}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          onClick={() => setHiringProcessItems(hiringProcessItems.filter((_, idx) => idx !== i))}
+                          data-testid={`button-remove-hiring-process-${i}`}
                         >
                           <X className="h-3 w-3" />
                         </Button>

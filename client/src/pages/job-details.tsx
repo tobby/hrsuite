@@ -145,7 +145,7 @@ export default function JobDetails() {
 
           {job.responsibilities && (
             <section>
-              <h2 className="text-base font-semibold mb-3">Responsibilities</h2>
+              <h2 className="text-base font-semibold mb-3">Key Responsibilities</h2>
               <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground" data-testid="text-responsibilities">
                 {job.responsibilities.split("\n").filter(line => line.trim()).map((line, i) => (
                   <li key={i}>{line.replace(/^[-•*]\s*/, "").trim()}</li>
@@ -156,12 +156,23 @@ export default function JobDetails() {
 
           {job.requirements && (
             <section>
-              <h2 className="text-base font-semibold mb-3">Requirements</h2>
+              <h2 className="text-base font-semibold mb-3">Skills & Competencies</h2>
               <ul className="list-disc pl-5 space-y-2 text-sm text-muted-foreground" data-testid="text-requirements">
                 {job.requirements.split("\n").filter(line => line.trim()).map((line, i) => (
                   <li key={i}>{line.replace(/^[-•*]\s*/, "").trim()}</li>
                 ))}
               </ul>
+            </section>
+          )}
+
+          {job.hiringProcess && (
+            <section>
+              <h2 className="text-base font-semibold mb-3">What to Expect in the Hiring Process</h2>
+              <ol className="list-decimal pl-5 space-y-2 text-sm text-muted-foreground" data-testid="text-hiring-process">
+                {job.hiringProcess.split("\n").filter(line => line.trim()).map((line, i) => (
+                  <li key={i}>{line.replace(/^[-•*\d.]\s*/, "").trim()}</li>
+                ))}
+              </ol>
             </section>
           )}
 
