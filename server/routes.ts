@@ -2407,13 +2407,10 @@ export async function registerRoutes(
   // ==================== RECRUITMENT - CANDIDATES ====================
 
   async function canManagerAccessCandidate(employeeId: string, companyId: string, candidate: { jobId: string; assignedManagerId: string | null }): Promise<boolean> {
-    const employee = await storage.getEmployee(employeeId);
     const posting = await storage.getJobPosting(candidate.jobId);
-    if (!employee) return false;
     return (
       candidate.assignedManagerId === employeeId ||
-      (!!posting && posting.assignedManagerId === employeeId) ||
-      (!!posting && posting.departmentId === employee.departmentId)
+      (!!posting && posting.assignedManagerId === employeeId)
     );
   }
 

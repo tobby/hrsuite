@@ -152,7 +152,7 @@ export function AppSidebar() {
   const showLeave = canAccessLeave(role);
   const showLeaveSubItems = canEditOrgSettings(role);
   const showAppraisalsSubItems = canEditOrgSettings(role);
-  const showRecruitment = role === "admin" || role === "manager";
+  const showRecruitment = role === "admin";
   const showOnboardingSubItems = canEditOrgSettings(role);
 
   const filterByRole = (items: NavItem[]) => items.filter(item => item.roles.includes(role));
@@ -360,6 +360,21 @@ export function AppSidebar() {
                     <Link href="/appraisals" data-testid="nav-appraisals">
                       <ClipboardCheck className="h-4 w-4" />
                       <span>Appraisals</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
+              {role === "manager" && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location === "/recruitment/candidates"}
+                    className="transition-all duration-150"
+                  >
+                    <Link href="/recruitment/candidates" data-testid="nav-manager-candidates">
+                      <UserPlus className="h-4 w-4" />
+                      <span>Candidates</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
