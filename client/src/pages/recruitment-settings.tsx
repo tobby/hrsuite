@@ -186,7 +186,7 @@ export default function RecruitmentSettings() {
               No pipeline stages configured. Add stages to get started.
             </div>
           ) : (
-            <div className="space-y-1" data-testid="stage-list">
+            <div className="divide-y" data-testid="stage-list">
               {stages.map((stage, index) => (
                 <div
                   key={stage.key}
@@ -195,39 +195,36 @@ export default function RecruitmentSettings() {
                   onDragOver={(e) => handleDragOver(e, index)}
                   onDrop={(e) => handleDrop(e, index)}
                   onDragEnd={handleDragEnd}
-                  className={`flex items-center gap-3 p-3 rounded-md border transition-colors ${
+                  className={`flex items-center gap-2.5 py-2 px-1 transition-colors ${
                     dragIndex === index ? "opacity-50" : ""
-                  } ${dragOverIndex === index && dragIndex !== index ? "border-primary bg-primary/5" : ""}
+                  } ${dragOverIndex === index && dragIndex !== index ? "bg-primary/5" : ""}
                   hover:bg-muted/50`}
                   data-testid={`stage-row-${stage.key}`}
                 >
-                  <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab flex-shrink-0" />
+                  <GripVertical className="h-3.5 w-3.5 text-muted-foreground cursor-grab flex-shrink-0" />
                   <div
-                    className="h-3 w-3 rounded-full flex-shrink-0"
+                    className="h-2.5 w-2.5 rounded-full flex-shrink-0"
                     style={{ backgroundColor: stage.color }}
                   />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate" data-testid={`stage-label-${stage.key}`}>{stage.label}</p>
-                    <p className="text-xs text-muted-foreground">{stage.key}</p>
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
+                  <span className="text-sm font-medium truncate flex-1" data-testid={`stage-label-${stage.key}`}>{stage.label}</span>
+                  <div className="flex items-center gap-0.5 flex-shrink-0">
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8"
+                      className="h-7 w-7"
                       onClick={() => handleOpenEdit(index)}
                       data-testid={`button-edit-stage-${stage.key}`}
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      <Pencil className="h-3 w-3" />
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
                       onClick={() => handleDelete(index)}
                       data-testid={`button-delete-stage-${stage.key}`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
                 </div>
