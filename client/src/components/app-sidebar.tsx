@@ -152,7 +152,7 @@ export function AppSidebar() {
   const showLeave = canAccessLeave(role);
   const showLeaveSubItems = canEditOrgSettings(role);
   const showAppraisalsSubItems = canEditOrgSettings(role);
-  const showRecruitment = canEditOrgSettings(role);
+  const showRecruitment = role === "admin" || role === "manager";
   const showOnboardingSubItems = canEditOrgSettings(role);
 
   const filterByRole = (items: NavItem[]) => items.filter(item => item.roles.includes(role));
@@ -405,6 +405,7 @@ export function AppSidebar() {
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        {role === "admin" && (
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton
                             asChild
@@ -417,6 +418,7 @@ export function AppSidebar() {
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        )}
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </SidebarMenuItem>
