@@ -356,11 +356,11 @@ export default function Dashboard() {
               <div>
                 <CardTitle className="text-lg">Pending Tasks</CardTitle>
                 <CardDescription>
-                  {role === "employee" ? "Your incomplete task items" : "Active task assignments"}
+                  {role === "admin" ? "Active task assignments" : "Your incomplete task items"}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-1">
-                {role !== "employee" && (
+                {role === "admin" && (
                   <Link href="/my-tasks">
                     <Button variant="ghost" size="sm" data-testid="button-view-my-tasks">
                       My Tasks
@@ -368,44 +368,16 @@ export default function Dashboard() {
                     </Button>
                   </Link>
                 )}
-                <Link href={role === "employee" ? "/my-tasks" : "/onboarding/tracker"}>
+                <Link href={role === "admin" ? "/onboarding/tracker" : "/my-tasks"}>
                   <Button variant="ghost" size="sm" data-testid="button-view-all-tasks">
-                    {role === "employee" ? "My Tasks" : "Tracker"}
+                    {role === "admin" ? "Tracker" : "My Tasks"}
                     <ArrowRight className="ml-1 h-4 w-4" />
                   </Button>
                 </Link>
               </div>
             </CardHeader>
             <CardContent>
-              {role === "employee" ? (
-                myTaskAssignments.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-6 text-center">
-                    <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
-                    <p className="text-sm text-muted-foreground">No tasks assigned</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {myTaskAssignments.slice(0, 5).map((a) => {
-                      const items = parseItems(a.items);
-                      const completedIds = myTaskCompletions.filter(c => c.assignmentId === a.id && c.completed).map(c => c.itemId);
-                      const pendingCount = items.filter(item => !completedIds.includes(item.id)).length;
-                      const progressPercent = items.length > 0 ? Math.round(((items.length - pendingCount) / items.length) * 100) : 0;
-                      return (
-                        <div key={a.id} className="space-y-1" data-testid={`pending-task-${a.id}`}>
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm font-medium truncate">{a.title}</p>
-                            <span className="text-xs text-muted-foreground shrink-0">{pendingCount} pending</span>
-                          </div>
-                          <Progress value={progressPercent} className="h-1.5" />
-                        </div>
-                      );
-                    })}
-                    {myPendingTaskItems > 0 && (
-                      <p className="text-xs text-muted-foreground">{myPendingTaskItems} total items remaining</p>
-                    )}
-                  </div>
-                )
-              ) : (
+              {role === "admin" ? (
                 <div className="space-y-4">
                   {myTaskAssignments.length > 0 && (
                     <div>
@@ -458,6 +430,34 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
+              ) : (
+                myTaskAssignments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                    <p className="text-sm text-muted-foreground">No tasks assigned</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {myTaskAssignments.slice(0, 5).map((a) => {
+                      const items = parseItems(a.items);
+                      const completedIds = myTaskCompletions.filter(c => c.assignmentId === a.id && c.completed).map(c => c.itemId);
+                      const pendingCount = items.filter(item => !completedIds.includes(item.id)).length;
+                      const progressPercent = items.length > 0 ? Math.round(((items.length - pendingCount) / items.length) * 100) : 0;
+                      return (
+                        <div key={a.id} className="space-y-1" data-testid={`pending-task-${a.id}`}>
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium truncate">{a.title}</p>
+                            <span className="text-xs text-muted-foreground shrink-0">{pendingCount} pending</span>
+                          </div>
+                          <Progress value={progressPercent} className="h-1.5" />
+                        </div>
+                      );
+                    })}
+                    {myPendingTaskItems > 0 && (
+                      <p className="text-xs text-muted-foreground">{myPendingTaskItems} total items remaining</p>
+                    )}
+                  </div>
+                )
               )}
             </CardContent>
           </Card>
