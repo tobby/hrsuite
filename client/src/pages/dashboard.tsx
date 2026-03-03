@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { 
@@ -17,10 +18,17 @@ import {
   Inbox,
   Loader2,
   Palmtree,
+  AlertTriangle,
+  CheckCircle2,
+  MessageSquareWarning,
 } from "lucide-react";
 import { useRole, canApproveLeave, canAccessLeave } from "@/lib/role-context";
-import type { Employee, Department, LeaveRequest, LeaveBalance, LeaveType, AppraisalCycle, Appraisal, AppraisalFeedback } from "@shared/schema";
+import type { Employee, Department, LeaveRequest, LeaveBalance, LeaveType, AppraisalCycle, Appraisal, HrQuery, TaskAssignment, TaskCompletion } from "@shared/schema";
 import { Badge } from "@/components/ui/badge";
+
+function parseItems(str: string): { id: string; title: string }[] {
+  try { return JSON.parse(str); } catch { return []; }
+}
 
 export default function Dashboard() {
   const { role, currentUser } = useRole();
@@ -69,6 +77,26 @@ export default function Dashboard() {
     enabled: role === "employee",
   });
 
+  const { data: hrQueries = [] } = useQuery<HrQuery[]>({
+    queryKey: ['/api/hr-queries'],
+    enabled: role !== "contract",
+  });
+
+  const { data: taskAssignments = [] } = useQuery<TaskAssignment[]>({
+    queryKey: ['/api/task-assignments'],
+    enabled: role === "admin" || role === "manager",
+  });
+
+  const { data: myTaskAssignments = [] } = useQuery<TaskAssignment[]>({
+    queryKey: ['/api/my-task-assignments'],
+    enabled: role === "employee",
+  });
+
+  const { data: myTaskCompletions = [] } = useQuery<TaskCompletion[]>({
+    queryKey: ['/api/my-task-completions'],
+    enabled: role === "employee",
+  });
+
   const isLoading = isLoadingEmployees || isLoadingDepartments;
 
   const activeEmployees = employees.filter(e => e.status === "active").length;
@@ -82,6 +110,23 @@ export default function Dashboard() {
   const activeAppraisalCount = role === "employee"
     ? myAppraisals.filter(a => a.status === "pending" || a.status === "in_progress").length
     : activeCycles.length;
+
+  const pendingHrQueries = hrQueries.filter(q => q.status === "open" || q.status === "pending" || q.status === "in_progress");
+  const myPendingQueries = role === "employee"
+    ? hrQueries.filter(q => q.employeeId === currentUser.id && (q.status === "open" || q.status === "pending" || q.status === "in_progress"))
+    : pendingHrQueries;
+
+  const pendingTaskAssignments = (role === "admin" || role === "manager")
+    ? taskAssignments
+    : myTaskAssignments;
+
+  const myPendingTaskItems = role === "employee"
+    ? myTaskAssignments.reduce((sum, a) => {
+        const items = parseItems(a.items);
+        const completedIds = myTaskCompletions.filter(c => c.assignmentId === a.id && c.completed).map(c => c.itemId);
+        return sum + items.filter(item => !completedIds.includes(item.id)).length;
+      }, 0)
+    : 0;
 
   const getGreeting = () => {
     switch (role) {
@@ -124,6 +169,7 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* 1. Stats Overview */}
       <div className={`grid gap-4 md:grid-cols-2 ${role === "admin" ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
         {role === "employee" && (
           <>
@@ -229,6 +275,185 @@ export default function Dashboard() {
         )}
       </div>
 
+      {/* 2. Pending Items Requiring Action */}
+      {role !== "contract" && (
+        <div className="grid gap-6 lg:grid-cols-3">
+          {canApproveLeave(role) && (
+            <Card data-testid="card-pending-approvals">
+              <CardHeader className="flex flex-row items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-lg">Pending Leave</CardTitle>
+                  <CardDescription>
+                    {role === "manager" ? "Team requests to review" : "Requests awaiting approval"}
+                  </CardDescription>
+                </div>
+                <Link href="/leave">
+                  <Button variant="ghost" size="sm" data-testid="button-view-all-approvals">
+                    Review
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </CardHeader>
+              <CardContent>
+                {pendingRequests.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                    <p className="text-sm text-muted-foreground">No pending approvals</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {pendingRequests.slice(0, 5).map((req) => {
+                      const emp = employees.find(e => e.id === req.employeeId);
+                      const lt = leaveTypes.find(t => t.id === req.leaveTypeId);
+                      return (
+                        <div key={req.id} className="flex items-center justify-between" data-testid={`pending-approval-${req.id}`}>
+                          <div>
+                            <p className="text-sm font-medium">{emp ? `${emp.firstName} ${emp.lastName}` : "Employee"}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {lt?.name || "Leave"} &middot; {req.totalDays} day{req.totalDays !== 1 ? "s" : ""}
+                            </p>
+                          </div>
+                          <Link href="/leave">
+                            <Button variant="outline" size="sm" data-testid={`button-review-${req.id}`}>
+                              Review
+                            </Button>
+                          </Link>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <Card data-testid="card-pending-tasks">
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-lg">Pending Tasks</CardTitle>
+                <CardDescription>
+                  {role === "employee" ? "Your incomplete task items" : "Active task assignments"}
+                </CardDescription>
+              </div>
+              <Link href={role === "employee" ? "/onboarding/my-tasks" : "/onboarding/tracker"}>
+                <Button variant="ghost" size="sm" data-testid="button-view-all-tasks">
+                  {role === "employee" ? "My Tasks" : "Tracker"}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent>
+              {role === "employee" ? (
+                myTaskAssignments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                    <p className="text-sm text-muted-foreground">No tasks assigned</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {myTaskAssignments.slice(0, 5).map((a) => {
+                      const items = parseItems(a.items);
+                      const completedIds = myTaskCompletions.filter(c => c.assignmentId === a.id && c.completed).map(c => c.itemId);
+                      const pendingCount = items.filter(item => !completedIds.includes(item.id)).length;
+                      const progressPercent = items.length > 0 ? Math.round(((items.length - pendingCount) / items.length) * 100) : 0;
+                      return (
+                        <div key={a.id} className="space-y-1" data-testid={`pending-task-${a.id}`}>
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-medium truncate">{a.title}</p>
+                            <span className="text-xs text-muted-foreground shrink-0">{pendingCount} pending</span>
+                          </div>
+                          <Progress value={progressPercent} className="h-1.5" />
+                        </div>
+                      );
+                    })}
+                    {myPendingTaskItems > 0 && (
+                      <p className="text-xs text-muted-foreground">{myPendingTaskItems} total items remaining</p>
+                    )}
+                  </div>
+                )
+              ) : (
+                pendingTaskAssignments.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-6 text-center">
+                    <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                    <p className="text-sm text-muted-foreground">No active assignments</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {pendingTaskAssignments.slice(0, 5).map((a) => {
+                      const items = parseItems(a.items);
+                      const target = a.targetEmployeeId ? employees.find(e => e.id === a.targetEmployeeId) : null;
+                      return (
+                        <div key={a.id} className="flex items-center justify-between" data-testid={`pending-task-${a.id}`}>
+                          <div>
+                            <p className="text-sm font-medium truncate">{a.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {target ? `${target.firstName} ${target.lastName}` : a.assignmentType} &middot; {items.length} items
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-xs shrink-0">{a.priority}</Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )
+              )}
+            </CardContent>
+          </Card>
+
+          <Card data-testid="card-pending-queries">
+            <CardHeader className="flex flex-row items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-lg">Pending Queries</CardTitle>
+                <CardDescription>
+                  {role === "employee" ? "Queries requiring your response" : "Open HR queries"}
+                </CardDescription>
+              </div>
+              <Link href="/queries">
+                <Button variant="ghost" size="sm" data-testid="button-view-all-queries">
+                  View All
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent>
+              {myPendingQueries.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-6 text-center">
+                  <CheckCircle2 className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                  <p className="text-sm text-muted-foreground">No pending queries</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {myPendingQueries.slice(0, 5).map((q) => {
+                    const emp = employees.find(e => e.id === q.employeeId);
+                    return (
+                      <div key={q.id} className="flex items-center justify-between" data-testid={`pending-query-${q.id}`}>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{q.subject}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {role !== "employee" && emp ? `${emp.firstName} ${emp.lastName} · ` : ""}{q.category}
+                          </p>
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={`text-xs shrink-0 ${
+                            q.priority === "high" || q.priority === "urgent"
+                              ? "border-red-200 text-red-700 dark:border-red-800 dark:text-red-400"
+                              : ""
+                          }`}
+                        >
+                          {q.priority}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* 3. Who's on Leave */}
       <Card data-testid="card-on-leave-today">
         <CardHeader className="flex flex-row items-center justify-between gap-2">
           <div>
@@ -272,6 +497,7 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* 4. Leave Balance / Recent Requests */}
       {role === "employee" && (
         <Card data-testid="card-quick-actions">
           <CardHeader>
@@ -401,58 +627,9 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
-
-        {canApproveLeave(role) && (
-          <Card data-testid="card-pending-approvals">
-            <CardHeader className="flex flex-row items-center justify-between gap-2">
-              <div>
-                <CardTitle className="text-lg">Pending Approvals</CardTitle>
-                <CardDescription>
-                  {role === "manager" ? "Team requests awaiting your review" : "All pending leave requests"}
-                </CardDescription>
-              </div>
-              <Link href="/leave">
-                <Button variant="ghost" size="sm" data-testid="button-view-all-approvals">
-                  Review All
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            </CardHeader>
-            <CardContent>
-              {pendingRequests.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Inbox className="h-10 w-10 text-muted-foreground/50 mb-3" />
-                  <p className="text-sm font-medium text-muted-foreground">No pending approvals</p>
-                  <p className="text-xs text-muted-foreground mt-1">Leave requests needing your review will appear here.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {pendingRequests.slice(0, 5).map((req) => {
-                    const emp = employees.find(e => e.id === req.employeeId);
-                    const lt = leaveTypes.find(t => t.id === req.leaveTypeId);
-                    return (
-                      <div key={req.id} className="flex items-center justify-between" data-testid={`pending-approval-${req.id}`}>
-                        <div>
-                          <p className="text-sm font-medium">{emp ? `${emp.firstName} ${emp.lastName}` : "Employee"}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {lt?.name || "Leave"} &middot; {req.totalDays} day{req.totalDays !== 1 ? "s" : ""}
-                          </p>
-                        </div>
-                        <Link href="/leave">
-                          <Button variant="outline" size="sm" data-testid={`button-review-${req.id}`}>
-                            Review
-                          </Button>
-                        </Link>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
       </div>
 
+      {/* 5. Appraisals / Review Cycles */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card data-testid="card-my-appraisals">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
@@ -534,6 +711,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
+        {/* 6. Team / Admin Quick Links */}
         {role === "manager" && (
           <Card data-testid="card-team-members">
             <CardHeader className="flex flex-row items-center justify-between gap-2">

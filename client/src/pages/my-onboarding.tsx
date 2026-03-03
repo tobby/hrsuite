@@ -7,11 +7,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useRole } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { TaskAssignment, TaskCompletion } from "@shared/schema";
-import { ClipboardList, CheckCircle2, Clock, AlertTriangle, UserCheck, Building2, Users, Globe, CalendarDays, ShieldCheck, FileText, ExternalLink } from "lucide-react";
+import { ClipboardList, CheckCircle2, Clock, AlertTriangle, UserCheck, Building2, Users, Globe, CalendarDays, ShieldCheck, FileText, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -89,10 +90,12 @@ function TaskAssignmentCard({ assignment, myCompletions, employeeName }: {
     },
   });
 
+  const [expanded, setExpanded] = useState(false);
   const isItemCompleted = (itemId: string) => myItemCompletions.some(c => c.itemId === itemId);
   const getCompletion = (itemId: string) => myCompletions.find(c => c.assignmentId === assignment.id && c.itemId === itemId);
 
   return (
+    <Collapsible open={expanded} onOpenChange={setExpanded}>
     <Card data-testid={`card-my-assignment-${assignment.id}`} className={isFullyCompleted ? "opacity-70" : ""}>
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
@@ -131,13 +134,22 @@ function TaskAssignmentCard({ assignment, myCompletions, employeeName }: {
           </div>
           <Progress value={progressPercent} className="h-2" />
         </div>
-        {assignment.dueDate && (
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-            <CalendarDays className="h-3 w-3" />
-            Due: {format(new Date(assignment.dueDate), "MMM d, yyyy")}
-          </div>
-        )}
+        <div className="flex items-center justify-between mt-1">
+          {assignment.dueDate ? (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <CalendarDays className="h-3 w-3" />
+              Due: {format(new Date(assignment.dueDate), "MMM d, yyyy")}
+            </div>
+          ) : <div />}
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" data-testid={`button-toggle-items-${assignment.id}`}>
+              {expanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
+              {expanded ? "Hide Items" : "Show Items"}
+            </Button>
+          </CollapsibleTrigger>
+        </div>
       </CardHeader>
+      <CollapsibleContent>
       <CardContent>
         <div className="space-y-1">
           {items.map((item) => {
@@ -221,6 +233,7 @@ function TaskAssignmentCard({ assignment, myCompletions, employeeName }: {
           })}
         </div>
       </CardContent>
+      </CollapsibleContent>
 
       <Dialog open={!!ackDialogItem} onOpenChange={(open) => !open && setAckDialogItem(null)}>
         <DialogContent>
@@ -266,6 +279,7 @@ function TaskAssignmentCard({ assignment, myCompletions, employeeName }: {
         </DialogContent>
       </Dialog>
     </Card>
+    </Collapsible>
   );
 }
 

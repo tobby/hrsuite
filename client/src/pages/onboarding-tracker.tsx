@@ -10,13 +10,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Employee, Department, TaskTemplate, TaskAssignment, TaskCompletion } from "@shared/schema";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Users, CheckCircle2, Clock, AlertTriangle, UserCheck, Building2, Globe, Trash2, ClipboardList, CalendarDays, ShieldCheck, FileText, Upload, X } from "lucide-react";
+import { Plus, Users, CheckCircle2, Clock, AlertTriangle, UserCheck, Building2, Globe, Trash2, ClipboardList, CalendarDays, ShieldCheck, FileText, Upload, X, ChevronDown, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -418,6 +419,8 @@ function AssignmentCard({ assignment, employees, departments }: {
 
   const isOverdue = assignment.dueDate && new Date(assignment.dueDate) < new Date() && progressPercent < 100;
 
+  const [expanded, setExpanded] = useState(false);
+
   const deleteMutation = useMutation({
     mutationFn: async () => { await apiRequest("DELETE", `/api/task-assignments/${assignment.id}`); },
     onSuccess: () => {
@@ -427,6 +430,7 @@ function AssignmentCard({ assignment, employees, departments }: {
   });
 
   return (
+    <Collapsible open={expanded} onOpenChange={setExpanded}>
     <Card data-testid={`card-assignment-${assignment.id}`}>
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
@@ -473,19 +477,49 @@ function AssignmentCard({ assignment, employees, departments }: {
           </div>
           <Progress value={progressPercent} className="h-2" />
         </div>
-        <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground mt-1">
-          {assignedBy && <span>Assigned by: {assignedBy.firstName} {assignedBy.lastName}</span>}
-          <span>Created: {format(new Date(assignment.createdAt!), "MMM d, yyyy")}</span>
-          {assignment.dueDate && (
-            <span className="flex items-center gap-1">
-              <CalendarDays className="h-3 w-3" />
-              Due: {format(new Date(assignment.dueDate), "MMM d, yyyy")}
-            </span>
-          )}
-          <span>{items.length} checklist items</span>
+        <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
+            {assignedBy && <span>Assigned by: {assignedBy.firstName} {assignedBy.lastName}</span>}
+            <span>Created: {format(new Date(assignment.createdAt!), "MMM d, yyyy")}</span>
+            {assignment.dueDate && (
+              <span className="flex items-center gap-1">
+                <CalendarDays className="h-3 w-3" />
+                Due: {format(new Date(assignment.dueDate), "MMM d, yyyy")}
+              </span>
+            )}
+          </div>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" data-testid={`button-toggle-items-${assignment.id}`}>
+              {expanded ? <ChevronDown className="h-3.5 w-3.5 mr-1" /> : <ChevronRight className="h-3.5 w-3.5 mr-1" />}
+              {expanded ? "Hide Items" : `${items.length} Items`}
+            </Button>
+          </CollapsibleTrigger>
         </div>
       </CardHeader>
+      <CollapsibleContent>
+        <CardContent>
+          <div className="space-y-1">
+            {items.map((item) => {
+              const itemCompletions = completions.filter(c => c.itemId === item.id && c.completed);
+              const itemCompletedCount = itemCompletions.length;
+              const itemTotal = assignment.assignmentType === "individual" ? 1 : relevantEmployees.length;
+              return (
+                <div key={item.id} className="flex items-center justify-between gap-2 p-2 rounded-md border" data-testid={`tracker-item-${item.id}`}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
+                    <span className="text-sm truncate">{item.title}</span>
+                    {item.isRequired && <Badge variant="outline" className="text-xs shrink-0">Required</Badge>}
+                    {item.requiresAcknowledgment && <Badge variant="secondary" className="text-xs shrink-0"><ShieldCheck className="h-3 w-3 mr-1" />Acknowledgment</Badge>}
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">{itemCompletedCount}/{itemTotal}</span>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </CollapsibleContent>
     </Card>
+    </Collapsible>
   );
 }
 
