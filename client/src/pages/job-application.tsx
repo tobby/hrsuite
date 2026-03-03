@@ -72,9 +72,7 @@ function buildSchema(config: AppFieldsConfig) {
       : z.enum(["male", "female", "other", "prefer_not_to_say"]).optional();
   }
   if (isVisible(config, "ndpaConsent")) {
-    step1.ndpaConsent = isRequired(config, "ndpaConsent")
-      ? z.boolean().refine(val => val === true, { message: "You must consent to proceed" })
-      : z.boolean().optional();
+    step1.ndpaConsent = z.boolean().refine(val => val === true, { message: "You must consent to proceed" });
   }
 
   const step2: Record<string, z.ZodTypeAny> = {};
@@ -237,7 +235,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
       gender: undefined,
       linkedinUrl: "",
       website: "",
-      source: "",
+      source: undefined,
       coverLetter: "",
       resumeFileName: "",
       ndpaConsent: false,
@@ -499,7 +497,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
               </FormControl>
               <div className="space-y-1 leading-none">
                 <FormLabel className="text-sm font-normal">
-                  I consent to the processing of my personal data in accordance with the Nigeria Data Protection Act (NDPA){isRequired(fieldsConfig, "ndpaConsent") && <span className="text-red-500 ml-1">*</span>}
+                  I consent to the processing of my personal data in accordance with the Nigeria Data Protection Act (NDPA) <span className="text-red-500">*</span>
                 </FormLabel>
                 <FormMessage />
               </div>
@@ -749,7 +747,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={(e) => { e.preventDefault(); if (isLastStep) { form.handleSubmit(handleSubmit)(); } else { handleNext(); } }} className="space-y-4">
+              <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
                 {renderCurrentStep()}
 
                 <div className="flex items-center justify-between gap-4 pt-4 border-t">
@@ -768,7 +766,7 @@ function JobApplicationForm({ job }: { job: JobPosting }) {
                       <ArrowRight className="h-4 w-4 ml-2" />
                     </Button>
                   ) : (
-                    <Button type="submit" disabled={isSubmitting} data-testid="button-submit-application">
+                    <Button type="button" disabled={isSubmitting} onClick={form.handleSubmit(handleSubmit)} data-testid="button-submit-application">
                       {isSubmitting ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
