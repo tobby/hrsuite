@@ -14,7 +14,7 @@ import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Department, TaskTemplate } from "@shared/schema";
-import { Plus, FileText, Trash2, GripVertical, ClipboardList, Building2, Users, UserCheck, Globe } from "lucide-react";
+import { Plus, FileText, Trash2, GripVertical, ClipboardList, Building2, Users, UserCheck, Globe, Upload, X, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const categoryLabels: Record<string, string> = {
@@ -54,6 +54,9 @@ interface TaskItem {
   title: string;
   description: string;
   isRequired: boolean;
+  requiresAcknowledgment?: boolean;
+  documentUrl?: string;
+  documentName?: string;
 }
 
 function parseItems(itemsStr: string): TaskItem[] {
@@ -73,6 +76,10 @@ function CreateTemplateDialog() {
   const [itemTitle, setItemTitle] = useState("");
   const [itemDesc, setItemDesc] = useState("");
   const [itemRequired, setItemRequired] = useState(true);
+  const [itemRequiresAck, setItemRequiresAck] = useState(false);
+  const [itemDocUrl, setItemDocUrl] = useState("");
+  const [itemDocName, setItemDocName] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const createMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -94,12 +101,43 @@ function CreateTemplateDialog() {
     setName(""); setDescription(""); setCategory("general");
     setDepartmentId("none"); setDefaultAssignmentType("individual");
     setItems([]); setItemTitle(""); setItemDesc("");
+    setItemRequiresAck(false); setItemDocUrl(""); setItemDocName("");
   };
 
   const addItem = () => {
     if (!itemTitle.trim()) return;
-    setItems([...items, { title: itemTitle.trim(), description: itemDesc.trim(), isRequired: itemRequired }]);
+    setItems([...items, {
+      title: itemTitle.trim(),
+      description: itemDesc.trim(),
+      isRequired: itemRequired,
+      ...(itemRequiresAck ? {
+        requiresAcknowledgment: true,
+        ...(itemDocUrl ? { documentUrl: itemDocUrl, documentName: itemDocName } : {}),
+      } : {}),
+    }]);
     setItemTitle(""); setItemDesc(""); setItemRequired(true);
+    setItemRequiresAck(false); setItemDocUrl(""); setItemDocName("");
+  };
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("files", file);
+      const res = await fetch("/api/uploads", { method: "POST", body: formData, credentials: "include" });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setItemDocUrl(data[0].fileUrl);
+        setItemDocName(data[0].fileName || file.name);
+      }
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const removeItem = (index: number) => setItems(items.filter((_, i) => i !== index));
@@ -201,11 +239,35 @@ function CreateTemplateDialog() {
                 <Checkbox id="item-required" checked={itemRequired} onCheckedChange={(v) => setItemRequired(!!v)} data-testid="checkbox-item-required" />
                 <Label htmlFor="item-required" className="text-sm">Required</Label>
               </div>
-              <Button type="button" size="sm" onClick={addItem} disabled={!itemTitle.trim()} data-testid="button-add-item">
-                <Plus className="h-3 w-3 mr-1" />
-                Add Item
-              </Button>
+              <div className="flex items-center gap-2">
+                <Checkbox id="item-ack" checked={itemRequiresAck} onCheckedChange={(v) => setItemRequiresAck(!!v)} data-testid="checkbox-item-acknowledgment" />
+                <Label htmlFor="item-ack" className="text-sm">Requires Acknowledgment</Label>
+              </div>
             </div>
+            {itemRequiresAck && (
+              <div className="space-y-2 rounded-md border border-dashed p-3">
+                <p className="text-xs text-muted-foreground">Attach a document employees must read before acknowledging (optional)</p>
+                {itemDocUrl ? (
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm truncate">{itemDocName}</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => { setItemDocUrl(""); setItemDocName(""); }} data-testid="button-remove-doc">
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <Label className="flex items-center gap-2 cursor-pointer text-sm text-primary hover:underline">
+                    <Upload className="h-3.5 w-3.5" />
+                    {uploading ? "Uploading..." : "Upload Document"}
+                    <input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" onChange={handleDocUpload} disabled={uploading} data-testid="input-doc-upload" />
+                  </Label>
+                )}
+              </div>
+            )}
+            <Button type="button" size="sm" onClick={addItem} disabled={!itemTitle.trim()} data-testid="button-add-item">
+              <Plus className="h-3 w-3 mr-1" />
+              Add Item
+            </Button>
           </div>
 
           {items.length > 0 && (
@@ -218,6 +280,8 @@ function CreateTemplateDialog() {
                       <GripVertical className="h-3 w-3 text-muted-foreground shrink-0" />
                       <span className="text-sm truncate">{item.title}</span>
                       {item.isRequired && <Badge variant="outline" className="text-xs shrink-0">Required</Badge>}
+                      {item.requiresAcknowledgment && <Badge variant="secondary" className="text-xs shrink-0"><ShieldCheck className="h-3 w-3 mr-1" />Acknowledgment</Badge>}
+                      {item.documentName && <Badge variant="outline" className="text-xs shrink-0"><FileText className="h-3 w-3 mr-1" />{item.documentName}</Badge>}
                     </div>
                     <Button variant="ghost" size="icon" onClick={() => removeItem(i)} data-testid={`button-remove-item-${i}`}>
                       <Trash2 className="h-3 w-3" />
@@ -300,6 +364,7 @@ function TemplateCard({ template }: { template: TaskTemplate }) {
               <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
               <span className="text-muted-foreground truncate">{item.title}</span>
               {item.isRequired && <span className="text-xs text-destructive">*</span>}
+              {item.requiresAcknowledgment && <ShieldCheck className="h-3 w-3 text-amber-500 shrink-0" />}
             </div>
           ))}
         </div>

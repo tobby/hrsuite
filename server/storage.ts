@@ -198,7 +198,7 @@ export interface IStorage {
   // Task Completions
   getTaskCompletionsByAssignment(assignmentId: string): Promise<TaskCompletion[]>;
   getTaskCompletionsByEmployee(employeeId: string): Promise<TaskCompletion[]>;
-  toggleTaskCompletion(assignmentId: string, employeeId: string, itemId: string): Promise<TaskCompletion>;
+  toggleTaskCompletion(assignmentId: string, employeeId: string, itemId: string, acknowledgment?: { acknowledged: boolean; acknowledgedByName: string }): Promise<TaskCompletion>;
 
   // Job Postings
   createJobPosting(data: InsertJobPosting): Promise<JobPosting>;
@@ -932,7 +932,7 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(taskCompletions).where(eq(taskCompletions.employeeId, employeeId));
   }
 
-  async toggleTaskCompletion(assignmentId: string, employeeId: string, itemId: string): Promise<TaskCompletion> {
+  async toggleTaskCompletion(assignmentId: string, employeeId: string, itemId: string, acknowledgment?: { acknowledged: boolean; acknowledgedByName: string }): Promise<TaskCompletion> {
     const [existing] = await db.select().from(taskCompletions).where(
       and(
         eq(taskCompletions.assignmentId, assignmentId),
@@ -942,6 +942,16 @@ export class DatabaseStorage implements IStorage {
     );
 
     if (existing) {
+      if (acknowledgment) {
+        const [updated] = await db.update(taskCompletions).set({
+          completed: true,
+          completedAt: new Date(),
+          acknowledged: true,
+          acknowledgedAt: new Date(),
+          acknowledgedByName: acknowledgment.acknowledgedByName,
+        }).where(eq(taskCompletions.id, existing.id)).returning();
+        return updated;
+      }
       const newCompleted = !existing.completed;
       const [updated] = await db.update(taskCompletions).set({
         completed: newCompleted,
@@ -949,12 +959,18 @@ export class DatabaseStorage implements IStorage {
       }).where(eq(taskCompletions.id, existing.id)).returning();
       return updated;
     } else {
+      const now = new Date();
       const [created] = await db.insert(taskCompletions).values({
         assignmentId,
         employeeId,
         itemId,
         completed: true,
-        completedAt: new Date(),
+        completedAt: now,
+        ...(acknowledgment ? {
+          acknowledged: true,
+          acknowledgedAt: now,
+          acknowledgedByName: acknowledgment.acknowledgedByName,
+        } : {}),
       }).returning();
       return created;
     }

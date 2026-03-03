@@ -2286,11 +2286,43 @@ export async function registerRoutes(
       const companyId = (req.session as any).companyId;
       if (!employeeId || !companyId) return res.status(401).json({ message: "Not authenticated" });
 
-      const { itemId } = req.body;
+      const { itemId, acknowledge } = req.body;
       if (!itemId) return res.status(400).json({ message: "itemId is required" });
 
       const assignment = await storage.getTaskAssignment(req.params.id);
       if (!assignment || assignment.companyId !== companyId) return res.status(404).json({ message: "Assignment not found" });
+
+      let items: any[] = [];
+      try { items = JSON.parse(assignment.items); } catch {}
+      const item = items.find((i: any) => i.id === itemId);
+      if (!item) return res.status(400).json({ message: "Item not found in this assignment" });
+
+      if (item.requiresAcknowledgment && !acknowledge) {
+        return res.status(400).json({ message: "This item requires acknowledgment. Use the Acknowledge & Sign flow." });
+      }
+
+      if (acknowledge) {
+        const existingCompletions = await storage.getTaskCompletionsByAssignment(req.params.id);
+        const existing = existingCompletions.find(c => c.employeeId === employeeId && c.itemId === itemId);
+        if (existing?.acknowledged) {
+          return res.status(400).json({ message: "This item has already been acknowledged and cannot be changed" });
+        }
+
+        const employee = await storage.getEmployee(employeeId);
+        const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : "Unknown";
+
+        const completion = await storage.toggleTaskCompletion(req.params.id, employeeId, itemId, {
+          acknowledged: true,
+          acknowledgedByName: employeeName,
+        });
+        return res.json(completion);
+      }
+
+      const existingCompletions = await storage.getTaskCompletionsByAssignment(req.params.id);
+      const existing = existingCompletions.find(c => c.employeeId === employeeId && c.itemId === itemId);
+      if (existing?.acknowledged) {
+        return res.status(400).json({ message: "This item has been acknowledged and cannot be unchecked" });
+      }
 
       const completion = await storage.toggleTaskCompletion(req.params.id, employeeId, itemId);
       return res.json(completion);

@@ -15,7 +15,8 @@ import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Employee, Department, TaskTemplate, TaskAssignment, TaskCompletion } from "@shared/schema";
-import { Plus, Users, CheckCircle2, Clock, AlertTriangle, UserCheck, Building2, Globe, Trash2, ClipboardList, CalendarDays } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Users, CheckCircle2, Clock, AlertTriangle, UserCheck, Building2, Globe, Trash2, ClipboardList, CalendarDays, ShieldCheck, FileText, Upload, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -24,6 +25,9 @@ interface TaskItem {
   title: string;
   description: string;
   isRequired: boolean;
+  requiresAcknowledgment?: boolean;
+  documentUrl?: string;
+  documentName?: string;
 }
 
 function parseItems(str: string): TaskItem[] {
@@ -73,9 +77,13 @@ function AssignTaskDialog() {
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
   const [dueDate, setDueDate] = useState("");
-  const [customItems, setCustomItems] = useState<{ title: string; description: string; isRequired: boolean }[]>([]);
+  const [customItems, setCustomItems] = useState<{ title: string; description: string; isRequired: boolean; requiresAcknowledgment?: boolean; documentUrl?: string; documentName?: string }[]>([]);
   const [itemTitle, setItemTitle] = useState("");
   const [itemDesc, setItemDesc] = useState("");
+  const [itemRequiresAck, setItemRequiresAck] = useState(false);
+  const [itemDocUrl, setItemDocUrl] = useState("");
+  const [itemDocName, setItemDocName] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const selectedTemplate = templates.find(t => t.id === templateId);
 
@@ -103,8 +111,38 @@ function AssignTaskDialog() {
 
   const addItem = () => {
     if (!itemTitle.trim()) return;
-    setCustomItems([...customItems, { title: itemTitle.trim(), description: itemDesc.trim(), isRequired: true }]);
+    setCustomItems([...customItems, {
+      title: itemTitle.trim(),
+      description: itemDesc.trim(),
+      isRequired: true,
+      ...(itemRequiresAck ? {
+        requiresAcknowledgment: true,
+        ...(itemDocUrl ? { documentUrl: itemDocUrl, documentName: itemDocName } : {}),
+      } : {}),
+    }]);
     setItemTitle(""); setItemDesc("");
+    setItemRequiresAck(false); setItemDocUrl(""); setItemDocName("");
+  };
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("files", file);
+      const res = await fetch("/api/uploads", { method: "POST", body: formData, credentials: "include" });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setItemDocUrl(data[0].fileUrl);
+        setItemDocName(data[0].fileName || file.name);
+      }
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleSubmit = () => {
@@ -255,10 +293,34 @@ function AssignTaskDialog() {
           {templateId === "none" && (
             <div className="border-t pt-4 space-y-3">
               <h4 className="font-medium text-sm">Custom Checklist Items</h4>
-              <div className="flex items-end gap-2">
-                <div className="flex-1 space-y-1">
-                  <Input value={itemTitle} onChange={(e) => setItemTitle(e.target.value)} placeholder="Item title" data-testid="input-custom-item-title" />
+              <div className="space-y-2">
+                <Input value={itemTitle} onChange={(e) => setItemTitle(e.target.value)} placeholder="Item title" data-testid="input-custom-item-title" />
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="tracker-item-ack" checked={itemRequiresAck} onCheckedChange={(v) => setItemRequiresAck(!!v)} data-testid="checkbox-custom-item-ack" />
+                    <Label htmlFor="tracker-item-ack" className="text-sm">Requires Acknowledgment</Label>
+                  </div>
                 </div>
+                {itemRequiresAck && (
+                  <div className="space-y-2 rounded-md border border-dashed p-3">
+                    <p className="text-xs text-muted-foreground">Attach a document (optional)</p>
+                    {itemDocUrl ? (
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span className="text-sm truncate">{itemDocName}</span>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => { setItemDocUrl(""); setItemDocName(""); }}>
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Label className="flex items-center gap-2 cursor-pointer text-sm text-primary hover:underline">
+                        <Upload className="h-3.5 w-3.5" />
+                        {uploading ? "Uploading..." : "Upload Document"}
+                        <input type="file" className="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" onChange={handleDocUpload} disabled={uploading} />
+                      </Label>
+                    )}
+                  </div>
+                )}
                 <Button type="button" size="sm" onClick={addItem} disabled={!itemTitle.trim()} data-testid="button-add-custom-item">
                   <Plus className="h-3 w-3 mr-1" /> Add
                 </Button>
@@ -267,7 +329,11 @@ function AssignTaskDialog() {
                 <div className="space-y-1">
                   {customItems.map((item, i) => (
                     <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-md border text-sm">
-                      <span>{item.title}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="truncate">{item.title}</span>
+                        {item.requiresAcknowledgment && <ShieldCheck className="h-3 w-3 text-amber-500 shrink-0" />}
+                        {item.documentName && <Badge variant="outline" className="text-xs shrink-0"><FileText className="h-3 w-3 mr-1" />{item.documentName}</Badge>}
+                      </div>
                       <Button variant="ghost" size="icon" onClick={() => setCustomItems(customItems.filter((_, j) => j !== i))}>
                         <Trash2 className="h-3 w-3" />
                       </Button>

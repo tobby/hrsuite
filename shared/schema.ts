@@ -615,6 +615,9 @@ export const taskCompletions = pgTable("task_completions", {
   itemId: text("item_id").notNull(),
   completed: boolean("completed").notNull().default(false),
   completedAt: timestamp("completed_at"),
+  acknowledged: boolean("acknowledged").notNull().default(false),
+  acknowledgedAt: timestamp("acknowledged_at"),
+  acknowledgedByName: text("acknowledged_by_name"),
 });
 
 export type TaskCompletion = typeof taskCompletions.$inferSelect;

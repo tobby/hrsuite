@@ -1,15 +1,17 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useRole } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { TaskAssignment, TaskCompletion } from "@shared/schema";
-import { ClipboardList, CheckCircle2, Clock, AlertTriangle, UserCheck, Building2, Users, Globe, CalendarDays } from "lucide-react";
+import { ClipboardList, CheckCircle2, Clock, AlertTriangle, UserCheck, Building2, Users, Globe, CalendarDays, ShieldCheck, FileText, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 
@@ -18,6 +20,9 @@ interface TaskItem {
   title: string;
   description: string;
   isRequired: boolean;
+  requiresAcknowledgment?: boolean;
+  documentUrl?: string;
+  documentName?: string;
 }
 
 function parseItems(str: string): TaskItem[] {
@@ -52,13 +57,15 @@ const priorityColors: Record<string, string> = {
   urgent: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
 };
 
-function TaskAssignmentCard({ assignment, myCompletions }: {
+function TaskAssignmentCard({ assignment, myCompletions, employeeName }: {
   assignment: TaskAssignment;
   myCompletions: TaskCompletion[];
+  employeeName: string;
 }) {
   const { toast } = useToast();
   const items = parseItems(assignment.items);
   const AssignIcon = assignmentTypeIcons[assignment.assignmentType] || UserCheck;
+  const [ackDialogItem, setAckDialogItem] = useState<TaskItem | null>(null);
 
   const myItemCompletions = myCompletions.filter(c => c.assignmentId === assignment.id && c.completed);
   const completedCount = myItemCompletions.length;
@@ -68,13 +75,14 @@ function TaskAssignmentCard({ assignment, myCompletions }: {
   const isOverdue = assignment.dueDate && new Date(assignment.dueDate) < new Date() && !isFullyCompleted;
 
   const toggleMutation = useMutation({
-    mutationFn: async (itemId: string) => {
-      const res = await apiRequest("POST", `/api/task-assignments/${assignment.id}/toggle`, { itemId });
+    mutationFn: async ({ itemId, acknowledge }: { itemId: string; acknowledge?: boolean }) => {
+      const res = await apiRequest("POST", `/api/task-assignments/${assignment.id}/toggle`, { itemId, acknowledge });
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/my-task-completions'] });
       queryClient.invalidateQueries({ queryKey: ['/api/task-assignments', assignment.id, 'completions'] });
+      setAckDialogItem(null);
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -82,6 +90,7 @@ function TaskAssignmentCard({ assignment, myCompletions }: {
   });
 
   const isItemCompleted = (itemId: string) => myItemCompletions.some(c => c.itemId === itemId);
+  const getCompletion = (itemId: string) => myCompletions.find(c => c.assignmentId === assignment.id && c.itemId === itemId);
 
   return (
     <Card data-testid={`card-my-assignment-${assignment.id}`} className={isFullyCompleted ? "opacity-70" : ""}>
@@ -133,11 +142,66 @@ function TaskAssignmentCard({ assignment, myCompletions }: {
         <div className="space-y-1">
           {items.map((item) => {
             const completed = isItemCompleted(item.id);
+            const completion = getCompletion(item.id);
+            const isAcknowledged = completion?.acknowledged;
+
+            if (item.requiresAcknowledgment) {
+              return (
+                <div key={item.id} className="p-3 rounded-md border space-y-2" data-testid={`ack-item-${item.id}`}>
+                  <div className="flex items-start gap-2">
+                    <ShieldCheck className={`h-4 w-4 mt-0.5 shrink-0 ${isAcknowledged ? "text-green-600" : "text-amber-500"}`} />
+                    <div className="flex-1 min-w-0">
+                      <span className={`text-sm font-medium ${isAcknowledged ? "text-muted-foreground" : ""}`}>
+                        {item.title}
+                      </span>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{item.description}</p>
+                      )}
+                    </div>
+                    {item.isRequired && !isAcknowledged && (
+                      <Badge variant="outline" className="text-xs shrink-0">Required</Badge>
+                    )}
+                  </div>
+                  {item.documentUrl && (
+                    <a
+                      href={item.documentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline ml-6"
+                      data-testid={`link-doc-${item.id}`}
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      {item.documentName || "View Document"}
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  )}
+                  {isAcknowledged ? (
+                    <div className="flex items-center gap-2 ml-6 text-xs text-green-600 dark:text-green-500" data-testid={`ack-signed-${item.id}`}>
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>Acknowledged by {completion?.acknowledgedByName} on {completion?.acknowledgedAt ? format(new Date(completion.acknowledgedAt), "MMM d, yyyy 'at' h:mm a") : ""}</span>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="ml-6"
+                      onClick={() => setAckDialogItem(item)}
+                      disabled={toggleMutation.isPending}
+                      data-testid={`button-acknowledge-${item.id}`}
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5 mr-1.5" />
+                      Acknowledge & Sign
+                    </Button>
+                  )}
+                </div>
+              );
+            }
+
             return (
               <div key={item.id} className="flex items-center gap-2 p-2 rounded-md hover-elevate">
                 <Checkbox
                   checked={completed}
-                  onCheckedChange={() => toggleMutation.mutate(item.id)}
+                  onCheckedChange={() => toggleMutation.mutate({ itemId: item.id })}
                   disabled={toggleMutation.isPending}
                   data-testid={`checkbox-item-${item.id}`}
                 />
@@ -157,6 +221,50 @@ function TaskAssignmentCard({ assignment, myCompletions }: {
           })}
         </div>
       </CardContent>
+
+      <Dialog open={!!ackDialogItem} onOpenChange={(open) => !open && setAckDialogItem(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Acknowledge & Sign</DialogTitle>
+            <DialogDescription>
+              {ackDialogItem?.documentUrl
+                ? "Please confirm that you have read and understood the attached document."
+                : "Please confirm that you have read and understood this item."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="p-3 rounded-md bg-muted">
+              <p className="text-sm font-medium">{ackDialogItem?.title}</p>
+              {ackDialogItem?.description && <p className="text-xs text-muted-foreground mt-1">{ackDialogItem.description}</p>}
+            </div>
+            {ackDialogItem?.documentUrl && (
+              <a
+                href={ackDialogItem.documentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+              >
+                <FileText className="h-3.5 w-3.5" />
+                {ackDialogItem.documentName || "View Document"}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+            <p className="text-sm text-muted-foreground">
+              By clicking confirm, I, <span className="font-medium text-foreground">{employeeName}</span>, acknowledge that I have read and understood this item.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAckDialogItem(null)}>Cancel</Button>
+            <Button
+              onClick={() => ackDialogItem && toggleMutation.mutate({ itemId: ackDialogItem.id, acknowledge: true })}
+              disabled={toggleMutation.isPending}
+              data-testid="button-confirm-acknowledge"
+            >
+              {toggleMutation.isPending ? "Signing..." : "Confirm & Sign"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
@@ -292,6 +400,7 @@ export default function MyOnboarding() {
               key={assignment.id}
               assignment={assignment}
               myCompletions={myCompletions}
+              employeeName={currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : ""}
             />
           ))}
         </div>
