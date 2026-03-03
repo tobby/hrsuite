@@ -2406,6 +2406,17 @@ export async function registerRoutes(
 
   // ==================== RECRUITMENT - CANDIDATES ====================
 
+  async function canManagerAccessCandidate(employeeId: string, companyId: string, candidate: { jobId: string; assignedManagerId: string | null }): Promise<boolean> {
+    const employee = await storage.getEmployee(employeeId);
+    const posting = await storage.getJobPosting(candidate.jobId);
+    if (!employee) return false;
+    return (
+      candidate.assignedManagerId === employeeId ||
+      (!!posting && posting.assignedManagerId === employeeId) ||
+      (!!posting && posting.departmentId === employee.departmentId)
+    );
+  }
+
   app.get("/api/candidates", async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
@@ -2416,10 +2427,8 @@ export async function registerRoutes(
       let cands = await storage.getCandidatesByCompany(companyId);
 
       if (role === "manager") {
-        const employee = await storage.getEmployee(employeeId);
-        const postings = await storage.getJobPostingsByCompany(companyId);
-        const deptJobIds = postings.filter(p => p.departmentId === employee?.departmentId || p.assignedManagerId === employeeId).map(p => p.id);
-        cands = cands.filter(c => deptJobIds.includes(c.jobId) || c.assignedManagerId === employeeId);
+        const results = await Promise.all(cands.map(c => canManagerAccessCandidate(employeeId, companyId, c)));
+        cands = cands.filter((_, i) => results[i]);
       }
 
       return res.json(cands);
@@ -2431,9 +2440,17 @@ export async function registerRoutes(
   app.get("/api/candidates/:id", async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const employeeId = (req.session as any).employeeId;
       if (!companyId) return res.status(401).json({ message: "Not authenticated" });
       const candidate = await storage.getCandidate(req.params.id);
       if (!candidate || candidate.companyId !== companyId) return res.status(404).json({ message: "Candidate not found" });
+
+      if (role === "manager") {
+        const hasAccess = await canManagerAccessCandidate(employeeId, companyId, candidate);
+        if (!hasAccess) return res.status(404).json({ message: "Candidate not found" });
+      }
+
       return res.json(candidate);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
