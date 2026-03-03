@@ -61,6 +61,7 @@ export default function Reports() {
   const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
   const { data: leaveRequests = [] } = useQuery<LeaveRequest[]>({ queryKey: ['/api/leave-requests/all'] });
   const { data: leaveTypes = [] } = useQuery<LeaveType[]>({ queryKey: ['/api/leave-types'] });
+  const { data: onLeaveToday = [] } = useQuery<LeaveRequest[]>({ queryKey: ['/api/leave-requests/on-leave-today'] });
 
   if (!canEditOrgSettings(role)) {
     navigate("/");
@@ -71,8 +72,12 @@ export default function Reports() {
     ? employees
     : employees.filter((e) => e.departmentId === departmentFilter);
 
-  const activeCount = filteredEmployees.filter((e) => e.status === "active").length;
-  const onLeaveCount = filteredEmployees.filter((e) => e.status === "on_leave").length;
+  const onLeaveEmployeeIds = new Set(onLeaveToday.map((r) => r.employeeId));
+  const filteredOnLeaveIds = new Set(
+    filteredEmployees.filter((e) => onLeaveEmployeeIds.has(e.id)).map((e) => e.id)
+  );
+  const onLeaveCount = filteredOnLeaveIds.size;
+  const activeCount = filteredEmployees.filter((e) => e.status === "active" && !filteredOnLeaveIds.has(e.id)).length;
   const inactiveCount = filteredEmployees.filter((e) => e.status === "inactive").length;
 
   const filteredDepartments = departmentFilter === "all"
