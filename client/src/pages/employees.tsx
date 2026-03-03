@@ -51,6 +51,8 @@ import {
   Hash,
   AlertTriangle,
   ExternalLink,
+  Cake,
+  MapPin,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -117,6 +119,8 @@ const editEmployeeSchema = z.object({
   status: z.enum(["invited", "active", "inactive", "on_leave"]),
   employeeId: z.string().nullable(),
   role: z.enum(["employee", "manager", "admin", "contract"]),
+  dateOfBirth: z.string().nullable().optional(),
+  homeAddress: z.string().nullable().optional(),
 });
 
 type EditEmployeeForm = z.infer<typeof editEmployeeSchema>;
@@ -751,6 +755,25 @@ export default function Employees() {
                     </div>
                   </div>
 
+                  {role === "admin" && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Date of Birth</Label>
+                        <div className="flex items-center gap-2 text-sm" data-testid="text-detail-dob">
+                          <Cake className="h-4 w-4 text-muted-foreground" />
+                          {emp.dateOfBirth ? new Date(emp.dateOfBirth).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "Not set"}
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Home Address</Label>
+                        <div className="flex items-center gap-2 text-sm" data-testid="text-detail-address">
+                          <MapPin className="h-4 w-4 text-muted-foreground" />
+                          {emp.homeAddress || "Not set"}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {(role === "admin" || (role === "manager" && emp.managerId === currentUser.id)) && (
                     <>
                       <EmployeeAppraisalsSection employeeId={emp.id} />
@@ -969,6 +992,7 @@ function EditEmployeeDialog({
   onSave: (id: string, data: EditEmployeeForm) => void;
   isSaving: boolean;
 }) {
+  const { role } = useRole();
   const form = useForm<EditEmployeeForm>({
     resolver: zodResolver(editEmployeeSchema),
     values: employee
@@ -984,13 +1008,20 @@ function EditEmployeeDialog({
           status: employee.status as "invited" | "active" | "inactive" | "on_leave",
           employeeId: employee.employeeId,
           role: employee.role as "employee" | "manager" | "admin" | "contract",
+          dateOfBirth: (employee as any).dateOfBirth ?? null,
+          homeAddress: (employee as any).homeAddress ?? null,
         }
       : undefined,
   });
 
   const onSubmit = (data: EditEmployeeForm) => {
     if (employee) {
-      onSave(employee.id, { ...data, hireDate: data.hireDate || null });
+      onSave(employee.id, {
+        ...data,
+        hireDate: data.hireDate || null,
+        dateOfBirth: data.dateOfBirth || null,
+        homeAddress: data.homeAddress || null,
+      });
     }
   };
 
@@ -1128,6 +1159,30 @@ function EditEmployeeDialog({
               </SelectContent>
             </Select>
           </div>
+          {role === "admin" && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="edit-dateOfBirth">Date of Birth</Label>
+                <Input
+                  id="edit-dateOfBirth"
+                  type="date"
+                  {...form.register("dateOfBirth")}
+                  data-testid="input-edit-dob"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-homeAddress">Home Address</Label>
+                <textarea
+                  id="edit-homeAddress"
+                  {...form.register("homeAddress")}
+                  rows={2}
+                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Enter home address"
+                  data-testid="input-edit-address"
+                />
+              </div>
+            </>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Status</Label>
