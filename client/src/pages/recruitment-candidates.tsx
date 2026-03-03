@@ -220,7 +220,7 @@ export default function RecruitmentCandidates() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Candidate Pipeline</h1>
+          <h1 className="text-lg font-semibold tracking-tight" data-testid="text-page-title">Candidate Pipeline</h1>
           <p className="text-muted-foreground">Track and manage your candidates through the hiring process</p>
         </div>
         <div className="flex items-center gap-2">

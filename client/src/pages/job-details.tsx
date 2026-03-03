@@ -136,7 +136,7 @@ export default function JobDetails() {
 
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold mb-2" data-testid="text-job-title">{job.title}</h1>
+              <h1 className="text-lg font-semibold tracking-tight mb-2" data-testid="text-job-title">{job.title}</h1>
               <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground mt-2">
                 {departmentName && (
                   <span className="flex items-center gap-1" data-testid="text-department">
@@ -171,7 +171,7 @@ export default function JobDetails() {
         <div className="grid gap-8 md:grid-cols-3">
           <div className="md:col-span-2 space-y-8">
             <section>
-              <h2 className="text-xl font-semibold mb-4">About This Role</h2>
+              <h2 className="text-base font-semibold mb-4">About This Role</h2>
               <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-line" data-testid="text-job-description">
                 {job.description}
               </div>
@@ -179,7 +179,7 @@ export default function JobDetails() {
 
             {job.responsibilities && (
               <section>
-                <h2 className="text-xl font-semibold mb-4">Responsibilities</h2>
+                <h2 className="text-base font-semibold mb-4">Responsibilities</h2>
                 <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-line" data-testid="text-responsibilities">
                   {job.responsibilities}
                 </div>
@@ -188,7 +188,7 @@ export default function JobDetails() {
 
             {job.requirements && (
               <section>
-                <h2 className="text-xl font-semibold mb-4">Requirements</h2>
+                <h2 className="text-base font-semibold mb-4">Requirements</h2>
                 <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-line" data-testid="text-requirements">
                   {job.requirements}
                 </div>

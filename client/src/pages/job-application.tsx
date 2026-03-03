@@ -248,7 +248,7 @@ export default function JobApplication() {
             <div className="h-16 w-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
-            <h3 className="text-xl font-medium mb-2" data-testid="text-success-title">Application Submitted!</h3>
+            <h3 className="text-lg font-medium mb-2" data-testid="text-success-title">Application Submitted!</h3>
             <p className="text-muted-foreground mb-6">
               Thank you for applying for the <strong>{job.title}</strong> position. We've received your application and will review it shortly.
             </p>
@@ -282,7 +282,7 @@ export default function JobApplication() {
         <Card className="mb-6">
           <CardHeader>
             <div className="space-y-2">
-              <CardTitle className="text-2xl" data-testid="text-job-title">{job.title}</CardTitle>
+              <CardTitle className="text-lg" data-testid="text-job-title">{job.title}</CardTitle>
               <CardDescription className="flex flex-wrap items-center gap-3 text-sm">
                 <span className="flex items-center gap-1">
                   <MapPin className="h-3 w-3" />

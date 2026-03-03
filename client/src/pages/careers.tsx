@@ -83,7 +83,7 @@ export default function Careers() {
           <div className="flex items-center justify-center gap-2 mb-4">
             <Briefcase className="h-8 w-8 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold mb-3" data-testid="text-careers-title">
+          <h1 className="text-lg font-semibold tracking-tight mb-3" data-testid="text-careers-title">
             Career Opportunities
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
@@ -177,7 +177,7 @@ export default function Careers() {
                   <CardHeader>
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                       <div className="space-y-1 min-w-0">
-                        <CardTitle className="text-xl" data-testid={`text-job-title-${job.id}`}>{job.title}</CardTitle>
+                        <CardTitle className="text-lg" data-testid={`text-job-title-${job.id}`}>{job.title}</CardTitle>
                         <CardDescription className="flex flex-wrap items-center gap-3 text-sm">
                           <span className="flex items-center gap-1">
                             <MapPin className="h-3 w-3 shrink-0" />

@@ -303,7 +303,7 @@ export default function CandidateDetail() {
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold" data-testid="text-candidate-name">
+            <h1 className="text-lg font-semibold tracking-tight" data-testid="text-candidate-name">
               {candidate.firstName} {candidate.lastName}
             </h1>
             <Badge variant={getStageBadgeVariant(candidate.stage)} data-testid="badge-stage">

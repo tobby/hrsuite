@@ -269,7 +269,7 @@ export default function RecruitmentJobs() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold" data-testid="text-page-title">Job Postings</h1>
+          <h1 className="text-lg font-semibold tracking-tight" data-testid="text-page-title">Job Postings</h1>
           <p className="text-muted-foreground">Manage your open positions and job listings</p>
         </div>
         <div className="flex items-center gap-2">
