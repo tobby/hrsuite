@@ -23,7 +23,7 @@ export function setupGoogleAuth(app: Express) {
       {
         clientID,
         clientSecret,
-        callbackURL: "/api/auth/google/callback",
+        callbackURL: `${process.env.APP_URL || ""}/api/auth/google/callback`,
         scope: ["profile", "email"],
       },
       (_accessToken, _refreshToken, profile, done) => {
