@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { useRole, UserRole, canEditOrgSettings, canAccessLeave } from "@/lib/role-context";
+import { useRole, UserRole, canEditOrgSettings, canAccessLeave, canAccessLD } from "@/lib/role-context";
 import { queryClient } from "@/lib/queryClient";
 import {
   LayoutDashboard,
@@ -18,6 +18,8 @@ import {
   HelpCircle,
   ClipboardList,
   BookOpen,
+  GraduationCap,
+  Banknote,
   PieChart,
   LogOut,
   Shield,
@@ -130,6 +132,8 @@ export function AppSidebar() {
   const { login, logout } = useAuth();
   const getInitialExpanded = (): string | null => {
     if (location.startsWith("/leave")) return "leave";
+    if (location.startsWith("/ld-requests")) return "ld";
+    if (location.startsWith("/loan-requests")) return "loans";
     if (location.startsWith("/appraisals")) return "appraisals";
     if (location.startsWith("/recruitment")) return "recruitment";
     if (location.startsWith("/onboarding")) return "onboarding";
@@ -150,6 +154,10 @@ export function AppSidebar() {
   const isRecruitmentActive = location.startsWith("/recruitment");
   const isOnboardingActive = location.startsWith("/onboarding") || location.startsWith("/my-tasks");
   const showLeave = canAccessLeave(role);
+  const showLD = canAccessLD(role);
+  const isLDActive = location.startsWith("/ld-requests");
+  const showLoans = canAccessLD(role);
+  const isLoansActive = location.startsWith("/loan-requests");
   const showLeaveSubItems = canEditOrgSettings(role);
   const showAppraisalsSubItems = canEditOrgSettings(role);
   const showRecruitment = role === "admin";
@@ -168,9 +176,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4 pb-2">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 text-primary-foreground font-bold text-sm shadow-sm">
-            HR
-          </div>
+          <img src="/favicon.svg" alt="HRFlow" className="h-7 w-7 rounded-md shadow-sm" />
           <div className="flex flex-col">
             <span className="font-semibold text-sm tracking-tight">HRFlow</span>
             <span className="text-[11px] text-muted-foreground/70">HR Platform</span>
@@ -277,6 +283,124 @@ export function AppSidebar() {
                     <Link href="/leave" data-testid="nav-leave-management">
                       <CalendarDays className="h-4 w-4" />
                       <span>Leave Management</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+
+              {showLD && (role === "admin" ? (
+                <Collapsible open={expandedSection === "ld"} onOpenChange={() => toggleSection("ld")}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        isActive={isLDActive}
+                        className="transition-all duration-150"
+                        data-testid="nav-ld-management"
+                      >
+                        <GraduationCap className="h-4 w-4" />
+                        <span>Learning & Dev</span>
+                        <ChevronDown className={`ml-auto h-3.5 w-3.5 text-muted-foreground/50 transition-transform duration-200 ${expandedSection === "ld" ? "" : "-rotate-90"}`} />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="border-l-2 border-muted ml-4 pl-2">
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/ld-requests"}
+                            className="transition-all duration-150"
+                          >
+                            <Link href="/ld-requests" data-testid="nav-ld-requests">
+                              <GraduationCap className="h-3 w-3" />
+                              <span>Requests</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/ld-requests/analytics"}
+                            className="transition-all duration-150"
+                          >
+                            <Link href="/ld-requests/analytics" data-testid="nav-ld-analytics">
+                              <BarChart3 className="h-3 w-3" />
+                              <span>Analytics</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ) : (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isLDActive}
+                    className="transition-all duration-150"
+                  >
+                    <Link href="/ld-requests" data-testid="nav-ld-requests">
+                      <GraduationCap className="h-4 w-4" />
+                      <span>Learning & Dev</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+
+              {showLoans && (role === "admin" ? (
+                <Collapsible open={expandedSection === "loans"} onOpenChange={() => toggleSection("loans")}>
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton
+                        isActive={isLoansActive}
+                        className="transition-all duration-150"
+                        data-testid="nav-loan-management"
+                      >
+                        <Banknote className="h-4 w-4" />
+                        <span>Loan Requests</span>
+                        <ChevronDown className={`ml-auto h-3.5 w-3.5 text-muted-foreground/50 transition-transform duration-200 ${expandedSection === "loans" ? "" : "-rotate-90"}`} />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub className="border-l-2 border-muted ml-4 pl-2">
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/loan-requests"}
+                            className="transition-all duration-150"
+                          >
+                            <Link href="/loan-requests" data-testid="nav-loan-requests">
+                              <Banknote className="h-3 w-3" />
+                              <span>Requests</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/loan-requests/analytics"}
+                            className="transition-all duration-150"
+                          >
+                            <Link href="/loan-requests/analytics" data-testid="nav-loan-analytics">
+                              <BarChart3 className="h-3 w-3" />
+                              <span>Analytics</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ) : (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isLoansActive}
+                    className="transition-all duration-150"
+                  >
+                    <Link href="/loan-requests" data-testid="nav-loan-requests">
+                      <Banknote className="h-4 w-4" />
+                      <span>Loan Requests</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

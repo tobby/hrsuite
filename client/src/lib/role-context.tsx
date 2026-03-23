@@ -55,3 +55,7 @@ export function canEditOrgSettings(role: UserRole): boolean {
 export function canAccessLeave(role: UserRole): boolean {
   return role !== "contract";
 }
+
+export function canAccessLD(role: UserRole): boolean {
+  return role !== "contract";
+}

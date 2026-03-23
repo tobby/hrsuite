@@ -260,6 +260,73 @@ export const competencyQuestions = pgTable("competency_questions", {
 
 export type CompetencyQuestion = typeof competencyQuestions.$inferSelect;
 
+// ==================== LEARNING & DEVELOPMENT ====================
+
+export const ldRequests = pgTable("ld_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  courseTitle: text("course_title").notNull(),
+  trainingProvider: text("training_provider").notNull(),
+  courseType: text("course_type").notNull(),
+  courseTypeOther: text("course_type_other"),
+  deliveryMode: text("delivery_mode").notNull(),
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  courseLink: text("course_link"),
+  learningObjectives: text("learning_objectives").notNull(),
+  status: text("status").notNull().default("pending"),
+  managerComment: text("manager_comment"),
+  managerId: varchar("manager_id"),
+  assignedTo: varchar("assigned_to"),
+  adminComment: text("admin_comment"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertLdRequestSchema = createInsertSchema(ldRequests).omit({
+  id: true, status: true, managerComment: true, managerId: true, assignedTo: true, adminComment: true, createdAt: true,
+}).extend({
+  courseTitle: z.string().min(1, "Course title is required"),
+  trainingProvider: z.string().min(1, "Training provider is required"),
+  courseType: z.enum(["professional_certification", "technical_skill_development", "leadership_management", "other"]),
+  courseTypeOther: z.string().optional().nullable(),
+  deliveryMode: z.enum(["physical", "virtual", "hybrid"]),
+  startDate: z.string().min(1, "Start date is required"),
+  endDate: z.string().min(1, "End date is required"),
+  courseLink: z.string().optional().nullable(),
+  learningObjectives: z.string().min(1, "Learning objectives are required"),
+});
+export type InsertLdRequest = z.infer<typeof insertLdRequestSchema>;
+export type LdRequest = typeof ldRequests.$inferSelect;
+
+// ==================== LOAN REQUESTS ====================
+
+export const loanRequests = pgTable("loan_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull(),
+  employeeId: varchar("employee_id").notNull(),
+  purpose: text("purpose").notNull(),
+  amountRequested: integer("amount_requested").notNull(),
+  repaymentDuration: integer("repayment_duration").notNull(),
+  monthlyInstallment: integer("monthly_installment").notNull(),
+  status: text("status").notNull().default("pending"),
+  adminComment: text("admin_comment"),
+  reviewedBy: varchar("reviewed_by"),
+  assignedTo: varchar("assigned_to"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertLoanRequestSchema = createInsertSchema(loanRequests).omit({
+  id: true, status: true, adminComment: true, reviewedBy: true, assignedTo: true, createdAt: true,
+}).extend({
+  purpose: z.string().min(1, "Purpose is required"),
+  amountRequested: z.number().min(1, "Amount must be greater than 0"),
+  repaymentDuration: z.number().min(1, "Repayment duration must be at least 1 month"),
+  monthlyInstallment: z.number().min(1, "Monthly installment must be greater than 0"),
+});
+export type InsertLoanRequest = z.infer<typeof insertLoanRequestSchema>;
+export type LoanRequest = typeof loanRequests.$inferSelect;
+
 // ==================== COMPANY HOLIDAYS ====================
 
 export const companyHolidays = pgTable("company_holidays", {

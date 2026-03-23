@@ -96,6 +96,14 @@ export default function Appraisals() {
   const completedReviews = pendingFeedback.filter((f) => f.status === "completed" || f.status === "submitted");
   const pendingReviews = pendingFeedback.filter((f) => f.status !== "completed" && f.status !== "submitted");
 
+  const completedByType = completedReviews.reduce((acc: Record<string, any[]>, f: any) => {
+    const type = f.reviewerType || "other";
+    if (!acc[type]) acc[type] = [];
+    acc[type].push(f);
+    return acc;
+  }, {});
+  const completedGroupOrder = ["self", "peer", ...Object.keys(completedByType).filter(t => t !== "self" && t !== "peer")];
+
   const myAppraisals = appraisals.filter((a) => a.employeeId === currentUser.id);
 
   const subtitle = isAdmin
@@ -258,6 +266,57 @@ export default function Appraisals() {
           </div>
         )}
       </div>
+
+      {completedReviews.length > 0 && (
+        <div className="space-y-2">
+          <h2 className="text-lg font-semibold flex items-center gap-2" data-testid="text-completed-reviews-heading">
+            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+            Completed Reviews
+          </h2>
+          <div className="space-y-4">
+            {completedGroupOrder
+              .filter(type => completedByType[type]?.length > 0)
+              .map(type => (
+                <div key={type} className="space-y-2">
+                  <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                    {reviewTypeLabels[type] || type}
+                    <Badge variant="secondary" className="text-xs">{completedByType[type].length}</Badge>
+                  </h3>
+                  <div className="space-y-2">
+                    {completedByType[type].map((feedback: any) => (
+                      <Card key={feedback.id} className="hover-elevate" data-testid={`card-completed-review-${feedback.id}`}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between gap-4 flex-wrap">
+                            <div className="space-y-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium">
+                                  {feedback.employeeName || "Unknown"}
+                                </span>
+                                <Badge variant="secondary">
+                                  {reviewTypeLabels[feedback.reviewerType] || feedback.reviewerType}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {feedback.cycleName || "Review"}
+                              </p>
+                            </div>
+                            <Link href={`/appraisals/review/${feedback.id}`}>
+                              <Button variant="outline">
+                                <CheckCircle2 className="h-4 w-4 mr-2" />
+                                View Review
+                                <ArrowRight className="h-4 w-4 ml-2" />
+                              </Button>
+                            </Link>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-2">
         <h2 className="text-lg font-semibold flex items-center gap-2" data-testid="text-my-appraisals-heading">

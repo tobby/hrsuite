@@ -63,9 +63,9 @@ import {
 import { useRole, canManageEmployees } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Employee, Department, HrQuery, Appraisal, AppraisalCycle } from "@shared/schema";
-import { Star, ClipboardList } from "lucide-react";
-import { Link as WouterLink } from "wouter";
+import type { Employee, Department, HrQuery, Appraisal, AppraisalCycle, LeaveRequest, LeaveType, LdRequest, LoanRequest } from "@shared/schema";
+import { Star, ClipboardList, CalendarDays, GraduationCap, Banknote } from "lucide-react";
+import { Link as WouterLink, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -141,6 +141,186 @@ const queryPriorityStyles: Record<string, string> = {
   high: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
   critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
 };
+
+function EmployeeLeaveSection({ employeeId }: { employeeId: string }) {
+  const { data: requests = [], isLoading } = useQuery<LeaveRequest[]>({
+    queryKey: ['/api/employees', employeeId, 'leave-requests'],
+    queryFn: async () => {
+      const res = await fetch(`/api/employees/${employeeId}/leave-requests`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    retry: false,
+  });
+
+  const { data: leaveTypes = [] } = useQuery<LeaveType[]>({
+    queryKey: ['/api/leave-types'],
+  });
+
+  function getLeaveTypeName(id: string) {
+    return leaveTypes.find(t => t.id === id)?.name || "Leave";
+  }
+
+  const leaveStatusStyles: Record<string, string> = {
+    pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+    manager_approved: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+    approved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+    rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    cancelled: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+  };
+
+  return (
+    <div className="space-y-3 border-t pt-4">
+      <div className="flex items-center gap-2">
+        <CalendarDays className="h-4 w-4 text-muted-foreground" />
+        <Label className="text-sm font-medium">Leave Requests</Label>
+        {!isLoading && <Badge variant="secondary">{requests.length}</Badge>}
+      </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+      ) : requests.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-2">No leave requests found.</p>
+      ) : (
+        <div className="space-y-2">
+          {requests.slice(0, 5).map((r) => (
+            <Card key={r.id} className="p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="space-y-1 min-w-0 flex-1">
+                  <p className="text-sm font-medium">{getLeaveTypeName(r.leaveTypeId)}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="secondary" className={`text-xs ${leaveStatusStyles[r.status] || ""}`}>
+                      {r.status.replace(/_/g, " ")}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {r.startDate} — {r.endDate}
+                    </span>
+                    {r.totalDays != null && <span className="text-xs text-muted-foreground">({r.totalDays}d)</span>}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+          {requests.length > 5 && <p className="text-xs text-muted-foreground">+ {requests.length - 5} more</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmployeeLdSection({ employeeId }: { employeeId: string }) {
+  const { data: requests = [], isLoading } = useQuery<LdRequest[]>({
+    queryKey: ['/api/employees', employeeId, 'ld-requests'],
+    queryFn: async () => {
+      const res = await fetch(`/api/employees/${employeeId}/ld-requests`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    retry: false,
+  });
+
+  const ldStatusStyles: Record<string, string> = {
+    pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+    manager_approved: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+    approved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+    rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    cancelled: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+  };
+
+  return (
+    <div className="space-y-3 border-t pt-4">
+      <div className="flex items-center gap-2">
+        <GraduationCap className="h-4 w-4 text-muted-foreground" />
+        <Label className="text-sm font-medium">L&D Requests</Label>
+        {!isLoading && <Badge variant="secondary">{requests.length}</Badge>}
+      </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+      ) : requests.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-2">No L&D requests found.</p>
+      ) : (
+        <div className="space-y-2">
+          {requests.slice(0, 5).map((r) => (
+            <Card key={r.id} className="p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="space-y-1 min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{r.courseTitle}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="secondary" className={`text-xs ${ldStatusStyles[r.status] || ""}`}>
+                      {r.status.replace(/_/g, " ")}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">{r.trainingProvider}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {r.startDate} — {r.endDate}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+          {requests.length > 5 && <p className="text-xs text-muted-foreground">+ {requests.length - 5} more</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmployeeLoanSection({ employeeId }: { employeeId: string }) {
+  const { data: requests = [], isLoading } = useQuery<LoanRequest[]>({
+    queryKey: ['/api/employees', employeeId, 'loan-requests'],
+    queryFn: async () => {
+      const res = await fetch(`/api/employees/${employeeId}/loan-requests`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    retry: false,
+  });
+
+  const loanStatusStyles: Record<string, string> = {
+    pending: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+    approved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+    rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+    cancelled: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400",
+  };
+
+  function formatCurrency(amount: number) {
+    return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 0 }).format(amount);
+  }
+
+  return (
+    <div className="space-y-3 border-t pt-4">
+      <div className="flex items-center gap-2">
+        <Banknote className="h-4 w-4 text-muted-foreground" />
+        <Label className="text-sm font-medium">Loan Requests</Label>
+        {!isLoading && <Badge variant="secondary">{requests.length}</Badge>}
+      </div>
+      {isLoading ? (
+        <div className="flex items-center justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+      ) : requests.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-2">No loan requests found.</p>
+      ) : (
+        <div className="space-y-2">
+          {requests.slice(0, 5).map((r) => (
+            <Card key={r.id} className="p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="space-y-1 min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{r.purpose}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge variant="secondary" className={`text-xs ${loanStatusStyles[r.status] || ""}`}>
+                      {r.status}
+                    </Badge>
+                    <span className="text-xs font-medium">{formatCurrency(r.amountRequested)}</span>
+                    <span className="text-xs text-muted-foreground">{r.repaymentDuration}mo</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          ))}
+          {requests.length > 5 && <p className="text-xs text-muted-foreground">+ {requests.length - 5} more</p>}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function EmployeeAppraisalsSection({ employeeId }: { employeeId: string }) {
   const { data: appraisals = [], isLoading } = useQuery<Appraisal[]>({
@@ -288,7 +468,8 @@ export default function Employees() {
   const [departmentFilter, setDepartmentFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  // Detail dialog removed — profile is now a full page at /employees/:id
+  const setIsDetailOpen = (_v: boolean) => {};
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
@@ -356,9 +537,10 @@ export default function Employees() {
 
   const { currentPage, totalPages, paginatedItems, setCurrentPage, totalItems, pageSize } = usePagination(filteredEmployees, 10);
 
+  const [, navigate] = useLocation();
+
   const openEmployeeDetail = (employee: Employee) => {
-    setSelectedEmployee(employee);
-    setIsDetailOpen(true);
+    navigate(`/employees/${employee.id}`);
   };
 
   const openEditDialog = (employee: Employee) => {
@@ -372,9 +554,9 @@ export default function Employees() {
     setIsDeleteOpen(true);
   };
 
-  function OrgNode({ employee, depth, departmentId }: { employee: Employee; depth: number; departmentId: string }) {
+  function OrgNode({ employee, depth }: { employee: Employee; depth: number }) {
     const dept = employee.departmentId ? getDepartmentById(employee.departmentId) : null;
-    const reports = allEmployees.filter((e) => e.managerId === employee.id && e.departmentId === departmentId);
+    const reports = allEmployees.filter((e) => e.managerId === employee.id);
     const deptColor = (employee.departmentId && deptColors[employee.departmentId]) || "bg-muted text-muted-foreground";
 
     return (
@@ -419,7 +601,7 @@ export default function Employees() {
               {reports.map((r) => (
                 <div key={r.id} className="flex flex-col items-center">
                   <div className="w-px h-6 bg-border" />
-                  <OrgNode employee={r} depth={depth + 1} departmentId={departmentId} />
+                  <OrgNode employee={r} depth={depth + 1} />
                 </div>
               ))}
             </div>
@@ -639,169 +821,21 @@ export default function Employees() {
         </TabsContent>
 
         <TabsContent value="organogram">
-          <div className="space-y-8">
-            {departments.map((dept) => {
-              const deptColor = deptColors[dept.id] || "bg-muted text-muted-foreground";
-              const deptRoots = allEmployees.filter(
-                (e) => e.departmentId === dept.id && (e.managerId === null || !allEmployees.find((m) => m.id === e.managerId && m.departmentId === dept.id))
-              );
-              if (deptRoots.length === 0) return null;
-              return (
-                <Card key={dept.id} data-testid={`org-department-${dept.id}`}>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center gap-3 mb-6">
-                      <Badge variant="secondary" className={deptColor} data-testid={`org-dept-header-${dept.id}`}>
-                        {dept.name}
-                      </Badge>
-                      <span className="text-sm text-muted-foreground">
-                        {allEmployees.filter((e) => e.departmentId === dept.id).length} members
-                      </span>
-                    </div>
-                    <div className="overflow-auto pb-4">
-                      <div className="flex gap-16 justify-center min-w-max py-4">
-                        {deptRoots.map((root) => (
-                          <OrgNode key={root.id} employee={root} depth={0} departmentId={dept.id} />
-                        ))}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="overflow-auto pb-4">
+                <div className="flex gap-16 justify-center min-w-max py-4">
+                  {allEmployees
+                    .filter((e) => !e.managerId || !allEmployees.find((m) => m.id === e.managerId))
+                    .map((root) => (
+                      <OrgNode key={root.id} employee={root} depth={0} />
+                    ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
-
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="dialog-employee-detail">
-          {selectedEmployee && (() => {
-            const emp = getEmployee(selectedEmployee.id) || selectedEmployee;
-            return (
-              <>
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-3">
-                    <Avatar className="h-12 w-12">
-                      <AvatarFallback className="bg-primary text-primary-foreground text-lg">
-                        {emp.firstName[0]}{emp.lastName[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div data-testid="text-detail-employee-name">{emp.firstName} {emp.lastName}</div>
-                      <DialogDescription className="font-normal">
-                        {emp.position}
-                      </DialogDescription>
-                    </div>
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 pt-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Employee ID</Label>
-                      <div className="flex items-center gap-2 text-sm font-mono" data-testid="text-detail-employee-id">
-                        <Hash className="h-4 w-4 text-muted-foreground" />
-                        {emp.employeeId || "—"}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Email</Label>
-                      <div className="flex items-center gap-2 text-sm" data-testid="text-detail-email">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        {emp.email}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Phone</Label>
-                      <div className="flex items-center gap-2 text-sm" data-testid="text-detail-phone">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
-                        {emp.phone}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Department</Label>
-                      <div className="flex items-center gap-2 text-sm" data-testid="text-detail-department">
-                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                        {emp.departmentId ? getDepartmentById(emp.departmentId)?.name : "—"}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Status</Label>
-                      <div>
-                        <Badge variant="secondary" className={statusStyles[emp.status]} data-testid="text-detail-status">
-                          {statusLabels[emp.status]}
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Hire Date</Label>
-                      <div className="flex items-center gap-2 text-sm" data-testid="text-detail-hire-date">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        {emp.hireDate ? new Date(emp.hireDate).toLocaleDateString() : "—"}
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Manager</Label>
-                      <p className="text-sm" data-testid="text-detail-manager">
-                        {emp.managerId
-                          ? (() => {
-                              const mgr = getEmployee(emp.managerId);
-                              return mgr ? `${mgr.firstName} ${mgr.lastName}` : "---";
-                            })()
-                          : "---"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {role === "admin" && (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Date of Birth</Label>
-                        <div className="flex items-center gap-2 text-sm" data-testid="text-detail-dob">
-                          <Cake className="h-4 w-4 text-muted-foreground" />
-                          {emp.dateOfBirth ? new Date(emp.dateOfBirth).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }) : "Not set"}
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs text-muted-foreground">Home Address</Label>
-                        <div className="flex items-center gap-2 text-sm" data-testid="text-detail-address">
-                          <MapPin className="h-4 w-4 text-muted-foreground" />
-                          {emp.homeAddress || "Not set"}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {(role === "admin" || (role === "manager" && emp.managerId === currentUser.id)) && (
-                    <>
-                      <EmployeeAppraisalsSection employeeId={emp.id} />
-                      <EmployeeQueriesSection employeeId={emp.id} />
-                    </>
-                  )}
-
-                  <div className="flex gap-2 pt-4">
-                    {canManageEmployees(role) && (
-                      <Button
-                        className="flex-1"
-                        onClick={() => openEditDialog(emp)}
-                        data-testid="button-edit-employee"
-                      >
-                        <Pencil className="mr-2 h-4 w-4" />
-                        Edit Profile
-                      </Button>
-                    )}
-                    <Button variant="outline" onClick={() => setIsDetailOpen(false)} data-testid="button-close-detail">
-                      Close
-                    </Button>
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
 
       <EditEmployeeDialog
         employee={selectedEmployee ? getEmployee(selectedEmployee.id) || selectedEmployee : null}

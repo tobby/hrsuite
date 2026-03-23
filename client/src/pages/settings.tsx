@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -18,12 +18,14 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { 
+import {
   User,
   Building2,
   Save,
   Loader2,
+  Camera,
 } from "lucide-react";
+import { useRef } from "react";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -95,6 +97,36 @@ export default function Settings() {
     },
   });
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const photoMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("photo", file);
+      const res = await fetch("/api/profile/photo", { method: "POST", body: formData, credentials: "include" });
+      if (!res.ok) throw new Error("Failed to upload photo");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      toast({ title: "Photo Updated", description: "Your profile photo has been updated." });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message || "Failed to upload photo.", variant: "destructive" });
+    },
+  });
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Max size is 2MB.", variant: "destructive" });
+      return;
+    }
+    photoMutation.mutate(file);
+  };
+
   const onSubmit = (data: ProfileFormValues) => {
     profileMutation.mutate(data);
   };
@@ -135,13 +167,30 @@ export default function Settings() {
             <CardContent className="space-y-6">
               <div className="flex items-center gap-6">
                 <Avatar className="h-20 w-20">
+                  {(currentUser as any).profileImageUrl && (
+                    <AvatarImage src={(currentUser as any).profileImageUrl} alt={`${currentUser.firstName} ${currentUser.lastName}`} />
+                  )}
                   <AvatarFallback className="bg-primary text-primary-foreground text-2xl" data-testid="avatar-user">
                     {currentUser.firstName[0]}{currentUser.lastName[0]}
                   </AvatarFallback>
                 </Avatar>
                 <div className="space-y-2">
-                  <Button variant="outline" size="sm" data-testid="button-change-photo">
-                    Change Photo
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif"
+                    className="hidden"
+                    onChange={handlePhotoChange}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={photoMutation.isPending}
+                    data-testid="button-change-photo"
+                  >
+                    {photoMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+                    {photoMutation.isPending ? "Uploading..." : "Change Photo"}
                   </Button>
                   <p className="text-xs text-muted-foreground">
                     JPG, PNG or GIF. Max size 2MB.

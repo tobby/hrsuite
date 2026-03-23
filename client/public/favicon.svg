@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect width="64" height="64" rx="14" fill="url(#bg)"/>
+  <!-- Central person silhouette -->
+  <circle cx="32" cy="22" r="8" fill="white"/>
+  <path d="M18 46c0-7.732 6.268-14 14-14s14 6.268 14 14" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <!-- Left small person -->
+  <circle cx="16" cy="28" r="4.5" fill="white" opacity="0.6"/>
+  <path d="M8 42c0-4.418 3.582-8 8-8" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6"/>
+  <!-- Right small person -->
+  <circle cx="48" cy="28" r="4.5" fill="white" opacity="0.6"/>
+  <path d="M56 42c0-4.418-3.582-8-8-8" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.6"/>
+  <!-- Bottom accent bar -->
+  <rect x="20" y="50" width="24" height="4" rx="2" fill="white" opacity="0.9"/>
+</svg>

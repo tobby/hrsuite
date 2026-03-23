@@ -15,6 +15,7 @@ import Setup from "@/pages/setup";
 import Invite from "@/pages/invite";
 import Dashboard from "@/pages/dashboard";
 import Employees from "@/pages/employees";
+import EmployeeProfile from "@/pages/employee-profile";
 import Departments from "@/pages/departments";
 import Leave from "@/pages/leave";
 import LeaveAnalytics from "@/pages/leave-analytics";
@@ -37,6 +38,10 @@ import OnboardingTracker from "@/pages/onboarding-tracker";
 import MyOnboarding from "@/pages/my-onboarding";
 import CompetencyLibrary from "@/pages/competency-library";
 import Reports from "@/pages/reports";
+import LdRequests from "@/pages/ld-requests";
+import LdAnalytics from "@/pages/ld-analytics";
+import LoanRequests from "@/pages/loan-requests";
+import LoanAnalytics from "@/pages/loan-analytics";
 import Careers from "@/pages/careers";
 import JobDetails from "@/pages/job-details";
 import JobApplication from "@/pages/job-application";
@@ -65,10 +70,15 @@ function PrivateRouter() {
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/employees" component={Employees} />
+      <Route path="/employees/:id" component={EmployeeProfile} />
       <Route path="/departments" component={Departments} />
       <Route path="/leave">{() => <ContractGuard component={Leave} />}</Route>
       <Route path="/leave/analytics">{() => <ContractGuard component={LeaveAnalytics} />}</Route>
       <Route path="/leave/settings">{() => <ContractGuard component={LeaveSettings} />}</Route>
+      <Route path="/ld-requests">{() => <ContractGuard component={LdRequests} />}</Route>
+      <Route path="/ld-requests/analytics">{() => <ContractGuard component={LdAnalytics} />}</Route>
+      <Route path="/loan-requests">{() => <ContractGuard component={LoanRequests} />}</Route>
+      <Route path="/loan-requests/analytics">{() => <ContractGuard component={LoanAnalytics} />}</Route>
       <Route path="/appraisals" component={Appraisals} />
       <Route path="/appraisals/review/:id" component={AppraisalReview} />
       <Route path="/appraisals/results/:id" component={AppraisalResults} />

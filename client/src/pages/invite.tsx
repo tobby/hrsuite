@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useLocation, useParams } from "wouter";
+import { useState, useEffect } from "react";
+import { useLocation, useParams, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import { GoogleSignInButton } from "@/components/google-sign-in-button";
 
 export default function Invite() {
   const params = useParams<{ token: string }>();
@@ -19,6 +20,24 @@ export default function Invite() {
   const [isAccepted, setIsAccepted] = useState(false);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const search = useSearch();
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const error = params.get("error");
+    if (!error) return;
+
+    const messages: Record<string, string> = {
+      email_mismatch: "The Google account email doesn't match the invited email. Please use the correct Google account.",
+      google_auth_failed: "Google authentication failed. Please try again.",
+      server_error: "An unexpected error occurred. Please try again.",
+    };
+    toast({
+      title: "Activation failed",
+      description: messages[error] || "An error occurred.",
+      variant: "destructive",
+    });
+  }, [search, toast]);
 
   const { data: invite, isLoading: isValidating, error } = useQuery<{
     firstName: string;
@@ -130,6 +149,19 @@ export default function Invite() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <GoogleSignInButton
+              context="invite"
+              inviteToken={token}
+              label="Complete with Google"
+            />
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">Or set a password</span>
+              </div>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label>Email</Label>

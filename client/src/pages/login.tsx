@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
+import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Loader2, Shield, Users, User, Briefcase } from "lucide-react";
+import { GoogleSignInButton } from "@/components/google-sign-in-button";
 
 const DEV_ACCOUNTS = [
   { email: "admin@test.com", password: "password123", role: "Admin", icon: Shield, color: "text-red-500" },
@@ -24,6 +25,28 @@ export default function Login() {
   const { login } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const search = useSearch();
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const error = params.get("error");
+    if (!error) return;
+
+    const messages: Record<string, string> = {
+      no_account: "No account found with this email. Please contact your administrator.",
+      account_deactivated: "Your account has been deactivated.",
+      google_auth_failed: "Google authentication failed. Please try again.",
+      server_error: "An unexpected error occurred. Please try again.",
+      invalid_state: "Authentication error. Please try again.",
+    };
+    toast({
+      title: "Sign in failed",
+      description: messages[error] || "An error occurred during sign in.",
+      variant: "destructive",
+    });
+    // Clean up the URL
+    window.history.replaceState({}, "", "/login");
+  }, [search, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +102,15 @@ export default function Login() {
             <CardDescription>Enter your email and password to access your account</CardDescription>
           </CardHeader>
           <CardContent>
+            <GoogleSignInButton context="login" label="Sign in with Google" />
+            <div className="relative my-4">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
+              </div>
+            </div>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>

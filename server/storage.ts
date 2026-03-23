@@ -34,6 +34,8 @@ import {
   candidateCommunications, type CandidateCommunication,
   emailTemplates, type EmailTemplate, type InsertEmailTemplate,
   recruitmentSettings, type RecruitmentSetting,
+  ldRequests, type LdRequest, type InsertLdRequest,
+  loanRequests, type LoanRequest, type InsertLoanRequest,
 } from "@shared/schema";
 import { randomUUID, randomBytes } from "crypto";
 
@@ -255,6 +257,25 @@ export interface IStorage {
   // Recruitment Settings
   getRecruitmentSettings(companyId: string): Promise<RecruitmentSetting[]>;
   upsertRecruitmentSetting(companyId: string, key: string, value: string): Promise<RecruitmentSetting>;
+
+  // L&D Requests
+  createLdRequest(data: InsertLdRequest): Promise<LdRequest>;
+  getLdRequest(id: string): Promise<LdRequest | undefined>;
+  getLdRequestsByEmployee(employeeId: string): Promise<LdRequest[]>;
+  getLdRequestsByCompany(companyId: string): Promise<LdRequest[]>;
+  getPendingLdRequestsByCompany(companyId: string): Promise<LdRequest[]>;
+  getManagerApprovedLdRequestsByCompany(companyId: string): Promise<LdRequest[]>;
+  getLdRequestsAssignedTo(employeeId: string): Promise<LdRequest[]>;
+  updateLdRequest(id: string, data: Partial<LdRequest>): Promise<LdRequest | undefined>;
+
+  // Loan Requests
+  createLoanRequest(data: InsertLoanRequest): Promise<LoanRequest>;
+  getLoanRequest(id: string): Promise<LoanRequest | undefined>;
+  getLoanRequestsByEmployee(employeeId: string): Promise<LoanRequest[]>;
+  getLoanRequestsByCompany(companyId: string): Promise<LoanRequest[]>;
+  getPendingLoanRequestsByCompany(companyId: string): Promise<LoanRequest[]>;
+  getLoanRequestsAssignedTo(employeeId: string): Promise<LoanRequest[]>;
+  updateLoanRequest(id: string, data: Partial<LoanRequest>): Promise<LoanRequest | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1186,6 +1207,86 @@ export class DatabaseStorage implements IStorage {
     }
     const [created] = await db.insert(recruitmentSettings).values({ companyId, key, value }).returning();
     return created;
+  }
+
+  // ==================== L&D REQUESTS ====================
+
+  async createLdRequest(data: InsertLdRequest): Promise<LdRequest> {
+    const [request] = await db.insert(ldRequests).values(data).returning();
+    return request;
+  }
+
+  async getLdRequest(id: string): Promise<LdRequest | undefined> {
+    const [request] = await db.select().from(ldRequests).where(eq(ldRequests.id, id));
+    return request;
+  }
+
+  async getLdRequestsByEmployee(employeeId: string): Promise<LdRequest[]> {
+    return db.select().from(ldRequests).where(eq(ldRequests.employeeId, employeeId)).orderBy(desc(ldRequests.createdAt));
+  }
+
+  async getLdRequestsByCompany(companyId: string): Promise<LdRequest[]> {
+    return db.select().from(ldRequests).where(eq(ldRequests.companyId, companyId)).orderBy(desc(ldRequests.createdAt));
+  }
+
+  async getPendingLdRequestsByCompany(companyId: string): Promise<LdRequest[]> {
+    return db.select().from(ldRequests).where(
+      and(eq(ldRequests.companyId, companyId), eq(ldRequests.status, "pending"))
+    ).orderBy(desc(ldRequests.createdAt));
+  }
+
+  async getManagerApprovedLdRequestsByCompany(companyId: string): Promise<LdRequest[]> {
+    return db.select().from(ldRequests).where(
+      and(eq(ldRequests.companyId, companyId), eq(ldRequests.status, "manager_approved"))
+    ).orderBy(desc(ldRequests.createdAt));
+  }
+
+  async getLdRequestsAssignedTo(employeeId: string): Promise<LdRequest[]> {
+    return db.select().from(ldRequests).where(
+      and(eq(ldRequests.assignedTo, employeeId), eq(ldRequests.status, "approved"))
+    ).orderBy(desc(ldRequests.createdAt));
+  }
+
+  async updateLdRequest(id: string, data: Partial<LdRequest>): Promise<LdRequest | undefined> {
+    const [request] = await db.update(ldRequests).set(data).where(eq(ldRequests.id, id)).returning();
+    return request;
+  }
+
+  // ==================== LOAN REQUESTS ====================
+
+  async createLoanRequest(data: InsertLoanRequest): Promise<LoanRequest> {
+    const [request] = await db.insert(loanRequests).values(data).returning();
+    return request;
+  }
+
+  async getLoanRequest(id: string): Promise<LoanRequest | undefined> {
+    const [request] = await db.select().from(loanRequests).where(eq(loanRequests.id, id));
+    return request;
+  }
+
+  async getLoanRequestsByEmployee(employeeId: string): Promise<LoanRequest[]> {
+    return db.select().from(loanRequests).where(eq(loanRequests.employeeId, employeeId)).orderBy(desc(loanRequests.createdAt));
+  }
+
+  async getLoanRequestsByCompany(companyId: string): Promise<LoanRequest[]> {
+    return db.select().from(loanRequests).where(eq(loanRequests.companyId, companyId)).orderBy(desc(loanRequests.createdAt));
+  }
+
+  async getPendingLoanRequestsByCompany(companyId: string): Promise<LoanRequest[]> {
+    return db.select().from(loanRequests).where(
+      and(eq(loanRequests.companyId, companyId), eq(loanRequests.status, "pending"))
+    ).orderBy(desc(loanRequests.createdAt));
+  }
+
+  async getLoanRequestsAssignedTo(employeeId: string): Promise<LoanRequest[]> {
+    return db.select().from(loanRequests).where(
+      and(eq(loanRequests.assignedTo, employeeId), eq(loanRequests.status, "approved"))
+    ).orderBy(desc(loanRequests.createdAt));
+  }
+
+  async updateLoanRequest(id: string, data: Partial<LoanRequest>): Promise<LoanRequest | undefined> {
+    const [request] = await db.update(loanRequests).set(data).where(eq(loanRequests.id, id)).returning();
+    return request;
   }
 }
 

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
+import { useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Loader2, ArrowLeft } from "lucide-react";
+import { GoogleSignInButton } from "@/components/google-sign-in-button";
 
 export default function Setup() {
   const [companyName, setCompanyName] = useState("");
@@ -19,6 +20,25 @@ export default function Setup() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const search = useSearch();
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const error = params.get("error");
+    if (!error) return;
+
+    const messages: Record<string, string> = {
+      company_name_required: "Please enter a company name before signing up with Google.",
+      google_auth_failed: "Google authentication failed. Please try again.",
+      server_error: "An unexpected error occurred. Please try again.",
+    };
+    toast({
+      title: "Setup failed",
+      description: messages[error] || "An error occurred.",
+      variant: "destructive",
+    });
+    window.history.replaceState({}, "", "/setup");
+  }, [search, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,6 +98,20 @@ export default function Setup() {
                   required
                   data-testid="input-company-name"
                 />
+              </div>
+              <GoogleSignInButton
+                context="setup"
+                companyName={companyName}
+                label="Sign up with Google"
+                disabled={!companyName.trim()}
+              />
+              <div className="relative my-2">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">Or continue with email</span>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">

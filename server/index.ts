@@ -1,10 +1,13 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import passport from "passport";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { pool } from "./db";
+import { setupGoogleAuth } from "./auth/google";
 
 const app = express();
 const httpServer = createServer(app);
@@ -57,6 +60,9 @@ app.use(
     },
   }),
 );
+
+app.use(passport.initialize());
+setupGoogleAuth(app);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -131,7 +137,6 @@ app.use((req, res, next) => {
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
     },
     () => {
       log(`serving on port ${port}`);

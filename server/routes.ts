@@ -1,8 +1,32 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCompanySchema, insertDepartmentSchema, insertEmployeeSchema, insertLeaveTypeSchema, insertLeaveRequestSchema, insertHrQuerySchema, insertAppraisalCycleSchema, insertJobPostingSchema, insertCandidateSchema, insertEmailTemplateSchema, insertInterviewSchema, interviewFeedbackSchema, PIPELINE_STAGES } from "@shared/schema";
+import {
+  sendInviteEmail,
+  sendLeaveRequestNotification,
+  sendLeaveApprovedEmail,
+  sendLeaveRejectedEmail,
+  sendLdRequestNotification,
+  sendLdManagerApprovedToAdmin,
+  sendLdApprovedEmail,
+  sendLdRejectedEmail,
+  sendLdAssignedEmail,
+  sendLoanRequestNotification,
+  sendLoanApprovedEmail,
+  sendLoanRejectedEmail,
+  sendLoanAssignedEmail,
+  sendAppraisalAssignedEmail,
+  sendAppraisalSelfReviewCompleteEmail,
+  sendAppraisalCompletedEmail,
+  sendQueryRaisedEmail,
+  sendQueryStatusUpdateEmail,
+  sendTaskAssignedEmail,
+  sendTaskCompletedEmail,
+} from "./email";
+import { insertCompanySchema, insertDepartmentSchema, insertEmployeeSchema, insertLeaveTypeSchema, insertLeaveRequestSchema, insertHrQuerySchema, insertAppraisalCycleSchema, insertJobPostingSchema, insertCandidateSchema, insertEmailTemplateSchema, insertInterviewSchema, interviewFeedbackSchema, PIPELINE_STAGES, insertLdRequestSchema, insertLoanRequestSchema } from "@shared/schema";
 import bcrypt from "bcryptjs";
+import passport from "passport";
+import type { GoogleUser } from "./auth/google";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -71,6 +95,135 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  // ==================== GOOGLE AUTH ROUTES ====================
+
+  app.get("/api/auth/google", (req: Request, res: Response, next: NextFunction) => {
+    const context = (req.query.context as string) || "login";
+    const inviteToken = req.query.inviteToken as string | undefined;
+    const companyName = req.query.companyName as string | undefined;
+
+    const state = Buffer.from(
+      JSON.stringify({ context, inviteToken, companyName }),
+    ).toString("base64url");
+
+    passport.authenticate("google", {
+      scope: ["profile", "email"],
+      state,
+      session: false,
+    })(req, res, next);
+  });
+
+  app.get("/api/auth/google/callback", (req: Request, res: Response, next: NextFunction) => {
+    passport.authenticate("google", { session: false }, async (err: any, googleUser: GoogleUser | false) => {
+      if (err || !googleUser) {
+        return res.redirect("/login?error=google_auth_failed");
+      }
+
+      const { email, firstName, lastName, profileImageUrl } = googleUser;
+
+      let state: { context: string; inviteToken?: string; companyName?: string };
+      try {
+        state = JSON.parse(
+          Buffer.from(req.query.state as string, "base64url").toString(),
+        );
+      } catch {
+        return res.redirect("/login?error=invalid_state");
+      }
+
+      try {
+        switch (state.context) {
+          case "login": {
+            const employee = await storage.getEmployeeByEmail(email);
+            if (!employee) {
+              return res.redirect("/login?error=no_account");
+            }
+            if (employee.status === "inactive") {
+              return res.redirect("/login?error=account_deactivated");
+            }
+            if (!employee.profileImageUrl && profileImageUrl) {
+              await storage.updateEmployee(employee.id, { profileImageUrl });
+            }
+            (req.session as any).employeeId = employee.id;
+            (req.session as any).companyId = employee.companyId;
+            (req.session as any).role = employee.role;
+            req.session.save(() => res.redirect("/"));
+            return;
+          }
+
+          case "setup": {
+            const existing = await storage.getEmployeeByEmail(email);
+            if (existing) {
+              (req.session as any).employeeId = existing.id;
+              (req.session as any).companyId = existing.companyId;
+              (req.session as any).role = existing.role;
+              req.session.save(() => res.redirect("/"));
+              return;
+            }
+            const companyName = state.companyName;
+            if (!companyName) {
+              return res.redirect("/setup?error=company_name_required");
+            }
+            const company = await storage.createCompany({ name: companyName });
+            const admin = await storage.createEmployee({
+              companyId: company.id,
+              firstName,
+              lastName,
+              email,
+              position: "Administrator",
+              role: "admin",
+              status: "active",
+            });
+            if (profileImageUrl) {
+              await storage.updateEmployee(admin.id, { profileImageUrl });
+            }
+            (req.session as any).employeeId = admin.id;
+            (req.session as any).companyId = company.id;
+            (req.session as any).role = "admin";
+            req.session.save(() => res.redirect("/"));
+            return;
+          }
+
+          case "invite": {
+            const { inviteToken } = state;
+            if (!inviteToken) {
+              return res.redirect("/login?error=missing_invite_token");
+            }
+            const employee = await storage.getEmployeeByInviteToken(inviteToken);
+            if (!employee) {
+              return res.redirect("/login?error=invalid_invite");
+            }
+            if (employee.inviteExpiresAt && new Date() > new Date(employee.inviteExpiresAt)) {
+              return res.redirect("/login?error=invite_expired");
+            }
+            if (employee.status !== "invited") {
+              return res.redirect("/login?error=invite_used");
+            }
+            if (employee.email.toLowerCase() !== email.toLowerCase()) {
+              return res.redirect(`/invite/${inviteToken}?error=email_mismatch`);
+            }
+            await storage.updateEmployee(employee.id, {
+              status: "active",
+              inviteToken: null,
+              inviteExpiresAt: null,
+              ...(profileImageUrl && !employee.profileImageUrl ? { profileImageUrl } : {}),
+            });
+            (req.session as any).employeeId = employee.id;
+            (req.session as any).companyId = employee.companyId;
+            (req.session as any).role = employee.role;
+            req.session.save(() => res.redirect("/"));
+            return;
+          }
+
+          default:
+            return res.redirect("/login?error=unknown_context");
+        }
+      } catch (error) {
+        console.error("Google auth callback error:", error);
+        return res.redirect("/login?error=server_error");
+      }
+    })(req, res, next);
+  });
 
   // ==================== AUTH ROUTES ====================
 
@@ -467,6 +620,10 @@ export async function registerRoutes(
 
       const inviteToken = await storage.generateInviteToken(employee.id);
 
+      // Fire-and-forget email notification
+      const fullInviteUrl = `${req.protocol}://${req.get("host")}/invite/${inviteToken}`;
+      sendInviteEmail(parsed.data.email, `${parsed.data.firstName} ${parsed.data.lastName}`, fullInviteUrl);
+
       const { passwordHash, inviteExpiresAt, ...safeEmployee } = employee;
       return res.status(201).json({
         employee: { ...safeEmployee, inviteToken: undefined },
@@ -494,6 +651,21 @@ export async function registerRoutes(
       return res.json({ employee: safeEmployee });
     } catch (error) {
       console.error("Error updating profile:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/profile/photo", requireAuth, upload.single("photo"), async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any)?.employeeId;
+      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+      const profileImageUrl = `/api/uploads/${req.file.filename}`;
+      const employee = await storage.updateEmployee(employeeId, { profileImageUrl });
+      if (!employee) return res.status(404).json({ message: "Employee not found" });
+      const { passwordHash, inviteToken, inviteExpiresAt, ...safeEmployee } = employee;
+      return res.json({ employee: safeEmployee });
+    } catch (error) {
+      console.error("Error uploading profile photo:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -814,6 +986,24 @@ export async function registerRoutes(
         totalDays,
         status: initialStatus,
       });
+
+      // Fire-and-forget: notify manager or admins
+      const leaveType = await storage.getLeaveType(parsed.data.leaveTypeId);
+      const leaveTypeName = leaveType?.name || "Leave";
+      const employeeName = `${employee.firstName} ${employee.lastName}`;
+      if (employee.managerId) {
+        const manager = await storage.getEmployee(employee.managerId);
+        if (manager) {
+          sendLeaveRequestNotification(manager.email, `${manager.firstName} ${manager.lastName}`, employeeName, leaveTypeName, parsed.data.startDate, parsed.data.endDate);
+        }
+      } else {
+        const allEmps = await storage.getEmployeesByCompany(companyId);
+        const admins = allEmps.filter(e => e.role === "admin");
+        for (const admin of admins) {
+          sendLeaveRequestNotification(admin.email, `${admin.firstName} ${admin.lastName}`, employeeName, leaveTypeName, parsed.data.startDate, parsed.data.endDate);
+        }
+      }
+
       return res.status(201).json(request);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
@@ -841,6 +1031,14 @@ export async function registerRoutes(
           status: "manager_approved",
           approverId,
         });
+
+        // Fire-and-forget: notify employee of manager approval
+        const empForMgr = await storage.getEmployee(request.employeeId);
+        if (empForMgr) {
+          const leaveTypeForMgr = await storage.getLeaveType(request.leaveTypeId);
+          sendLeaveApprovedEmail(empForMgr.email, `${empForMgr.firstName} ${empForMgr.lastName}`, leaveTypeForMgr?.name || "Leave", request.startDate, request.endDate, "manager");
+        }
+
         return res.json(updated);
       }
 
@@ -881,6 +1079,14 @@ export async function registerRoutes(
             year,
           });
         }
+
+        // Fire-and-forget: notify employee of admin approval
+        const empForAdmin = await storage.getEmployee(request.employeeId);
+        if (empForAdmin) {
+          const leaveTypeForAdmin = await storage.getLeaveType(request.leaveTypeId);
+          sendLeaveApprovedEmail(empForAdmin.email, `${empForAdmin.firstName} ${empForAdmin.lastName}`, leaveTypeForAdmin?.name || "Leave", request.startDate, request.endDate, "admin");
+        }
+
         return res.json(updated);
       }
 
@@ -921,6 +1127,14 @@ export async function registerRoutes(
         approverId,
         approverComment: req.body.approverComment.trim(),
       });
+
+      // Fire-and-forget: notify employee of rejection
+      const empForReject = await storage.getEmployee(request.employeeId);
+      if (empForReject) {
+        const leaveTypeForReject = await storage.getLeaveType(request.leaveTypeId);
+        sendLeaveRejectedEmail(empForReject.email, `${empForReject.firstName} ${empForReject.lastName}`, leaveTypeForReject?.name || "Leave", req.body.approverComment.trim());
+      }
+
       return res.json(updated);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
@@ -942,6 +1156,433 @@ export async function registerRoutes(
       const updated = await storage.updateLeaveRequest(req.params.id, {
         status: "cancelled",
       });
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== L&D REQUEST ROUTES ====================
+
+  app.get("/api/ld-requests", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const requests = await storage.getLdRequestsByEmployee(employeeId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/ld-requests/all", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const requests = await storage.getLdRequestsByCompany(companyId);
+      if (role === "admin") {
+        return res.json(requests);
+      }
+      // Manager only sees requests from their direct reports
+      const managerId = (req.session as any).employeeId;
+      const employees = await storage.getEmployeesByCompany(companyId);
+      const directReportIds = new Set(employees.filter(e => e.managerId === managerId).map(e => e.id));
+      return res.json(requests.filter(r => directReportIds.has(r.employeeId)));
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/ld-requests/pending", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      if (role === "admin") {
+        // Admin sees all non-final requests (pending + manager_approved)
+        const pending = await storage.getPendingLdRequestsByCompany(companyId);
+        const managerApproved = await storage.getManagerApprovedLdRequestsByCompany(companyId);
+        return res.json([...pending, ...managerApproved]);
+      }
+      // Manager only sees pending requests from their direct reports
+      const managerId = (req.session as any).employeeId;
+      const allPending = await storage.getPendingLdRequestsByCompany(companyId);
+      const employees = await storage.getEmployeesByCompany(companyId);
+      const directReportIds = new Set(employees.filter(e => e.managerId === managerId).map(e => e.id));
+      return res.json(allPending.filter(r => directReportIds.has(r.employeeId)));
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/ld-requests/manager-approved", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const requests = await storage.getManagerApprovedLdRequestsByCompany(companyId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/ld-requests/assigned-to-me", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const requests = await storage.getLdRequestsAssignedTo(employeeId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/ld-requests", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const employeeId = (req.session as any).employeeId;
+      const parsed = insertLdRequestSchema.safeParse({ ...req.body, companyId, employeeId });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+      }
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee) return res.status(401).json({ message: "Employee not found" });
+      const initialStatus = employee.managerId ? "pending" : "manager_approved";
+      const request = await storage.createLdRequest({ ...parsed.data, status: initialStatus } as any);
+
+      // Fire-and-forget: notify manager or admins
+      const ldEmployeeName = `${employee.firstName} ${employee.lastName}`;
+      if (employee.managerId) {
+        const manager = await storage.getEmployee(employee.managerId);
+        if (manager) {
+          sendLdRequestNotification(manager.email, `${manager.firstName} ${manager.lastName}`, ldEmployeeName, parsed.data.courseTitle, parsed.data.trainingProvider || "");
+        }
+      } else {
+        const allEmps = await storage.getEmployeesByCompany(companyId);
+        const admins = allEmps.filter(e => e.role === "admin");
+        for (const admin of admins) {
+          sendLdRequestNotification(admin.email, `${admin.firstName} ${admin.lastName}`, ldEmployeeName, parsed.data.courseTitle, parsed.data.trainingProvider || "");
+        }
+      }
+
+      return res.status(201).json(request);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/ld-requests/:id/approve", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const managerId = (req.session as any).employeeId;
+      const role = (req.session as any).role;
+      const request = await storage.getLdRequest(req.params.id);
+      if (!request) return res.status(404).json({ message: "L&D request not found" });
+
+      if (!req.body.managerComment || !req.body.managerComment.trim()) {
+        return res.status(400).json({ message: "Comment is required for approval" });
+      }
+
+      if (role === "manager") {
+        if (request.status !== "pending") {
+          return res.status(400).json({ message: "Only pending requests can be approved by a manager" });
+        }
+        const updated = await storage.updateLdRequest(req.params.id, {
+          status: "manager_approved",
+          managerId,
+          managerComment: req.body.managerComment.trim(),
+        });
+
+        // Fire-and-forget: notify employee of manager approval
+        const ldEmpMgr = await storage.getEmployee(request.employeeId);
+        if (ldEmpMgr) {
+          sendLdApprovedEmail(ldEmpMgr.email, `${ldEmpMgr.firstName} ${ldEmpMgr.lastName}`, request.courseTitle, "manager");
+        }
+        // Fire-and-forget: notify admins that manager approved
+        const ldAllEmpsMgr = await storage.getEmployeesByCompany(request.companyId);
+        const ldAdminsMgr = ldAllEmpsMgr.filter(e => e.role === "admin");
+        const ldEmpNameMgr = ldEmpMgr ? `${ldEmpMgr.firstName} ${ldEmpMgr.lastName}` : "Employee";
+        for (const admin of ldAdminsMgr) {
+          sendLdManagerApprovedToAdmin(admin.email, `${admin.firstName} ${admin.lastName}`, ldEmpNameMgr, request.courseTitle);
+        }
+
+        return res.json(updated);
+      }
+
+      if (role === "admin") {
+        if (request.status !== "manager_approved" && request.status !== "pending") {
+          return res.status(400).json({ message: "Only pending or manager-approved requests can be approved by admin" });
+        }
+        const newStatus = request.status === "pending" ? "manager_approved" : "approved";
+        const updated = await storage.updateLdRequest(req.params.id, {
+          status: newStatus,
+          managerId,
+          managerComment: req.body.managerComment.trim(),
+        });
+
+        // Fire-and-forget: notify employee
+        const ldEmpAdmin = await storage.getEmployee(request.employeeId);
+        if (ldEmpAdmin) {
+          sendLdApprovedEmail(ldEmpAdmin.email, `${ldEmpAdmin.firstName} ${ldEmpAdmin.lastName}`, request.courseTitle, newStatus === "manager_approved" ? "manager" : "admin");
+        }
+
+        return res.json(updated);
+      }
+
+      return res.status(403).json({ message: "Unauthorized" });
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/ld-requests/:id/reject", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+    try {
+      const managerId = (req.session as any).employeeId;
+      const role = (req.session as any).role;
+      const request = await storage.getLdRequest(req.params.id);
+      if (!request) return res.status(404).json({ message: "L&D request not found" });
+
+      if (!req.body.managerComment || !req.body.managerComment.trim()) {
+        return res.status(400).json({ message: "Comment is required for rejection" });
+      }
+
+      if (role === "manager" && request.status !== "pending") {
+        return res.status(400).json({ message: "Managers can only reject pending requests" });
+      }
+      if (role === "admin" && request.status !== "pending" && request.status !== "manager_approved") {
+        return res.status(400).json({ message: "Only pending or manager-approved requests can be rejected" });
+      }
+
+      const updated = await storage.updateLdRequest(req.params.id, {
+        status: "rejected",
+        managerId,
+        managerComment: req.body.managerComment.trim(),
+      });
+
+      // Fire-and-forget: notify employee of rejection
+      const ldEmpReject = await storage.getEmployee(request.employeeId);
+      if (ldEmpReject) {
+        sendLdRejectedEmail(ldEmpReject.email, `${ldEmpReject.firstName} ${ldEmpReject.lastName}`, request.courseTitle, req.body.managerComment.trim());
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/ld-requests/:id/assign", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const request = await storage.getLdRequest(req.params.id);
+      if (!request) return res.status(404).json({ message: "L&D request not found" });
+
+      if (request.status !== "manager_approved" && request.status !== "approved") {
+        return res.status(400).json({ message: "Only manager-approved or approved requests can be assigned" });
+      }
+
+      const updated = await storage.updateLdRequest(req.params.id, {
+        status: "approved",
+        assignedTo: req.body.assignedTo,
+        adminComment: req.body.adminComment?.trim() || null,
+      });
+
+      // Fire-and-forget: notify assigned person
+      if (req.body.assignedTo) {
+        const ldAssignee = await storage.getEmployee(req.body.assignedTo);
+        const ldEmpAssign = await storage.getEmployee(request.employeeId);
+        if (ldAssignee && ldEmpAssign) {
+          sendLdAssignedEmail(ldAssignee.email, `${ldAssignee.firstName} ${ldAssignee.lastName}`, `${ldEmpAssign.firstName} ${ldEmpAssign.lastName}`, request.courseTitle);
+        }
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/ld-requests/:id/cancel", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const request = await storage.getLdRequest(req.params.id);
+      if (!request) return res.status(404).json({ message: "L&D request not found" });
+      if (request.employeeId !== employeeId) {
+        return res.status(403).json({ message: "You can only cancel your own requests" });
+      }
+      if (request.status !== "pending") {
+        return res.status(400).json({ message: "Only pending requests can be cancelled" });
+      }
+      const updated = await storage.updateLdRequest(req.params.id, { status: "cancelled" });
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // ==================== LOAN REQUEST ROUTES ====================
+
+  app.get("/api/loan-requests", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const requests = await storage.getLoanRequestsByEmployee(employeeId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/loan-requests/all", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const requests = await storage.getLoanRequestsByCompany(companyId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/loan-requests/pending", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const requests = await storage.getPendingLoanRequestsByCompany(companyId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/loan-requests/assigned-to-me", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const requests = await storage.getLoanRequestsAssignedTo(employeeId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/loan-requests", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = (req.session as any).companyId;
+      const employeeId = (req.session as any).employeeId;
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee) return res.status(401).json({ message: "Employee not found" });
+      if (employee.role === "contract") {
+        return res.status(403).json({ message: "Contract employees are not eligible for loans" });
+      }
+      const parsed = insertLoanRequestSchema.safeParse({ ...req.body, companyId, employeeId });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Validation failed", errors: parsed.error.flatten() });
+      }
+      const request = await storage.createLoanRequest(parsed.data);
+
+      // Fire-and-forget: notify admins
+      const loanEmployeeName = `${employee.firstName} ${employee.lastName}`;
+      const loanAmount = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" }).format(Number(parsed.data.amountRequested));
+      const allEmpsLoan = await storage.getEmployeesByCompany(companyId);
+      const adminsLoan = allEmpsLoan.filter(e => e.role === "admin");
+      for (const admin of adminsLoan) {
+        sendLoanRequestNotification(admin.email, `${admin.firstName} ${admin.lastName}`, loanEmployeeName, loanAmount, parsed.data.purpose);
+      }
+
+      return res.status(201).json(request);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/loan-requests/:id/approve", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const reviewedBy = (req.session as any).employeeId;
+      const request = await storage.getLoanRequest(req.params.id);
+      if (!request) return res.status(404).json({ message: "Loan request not found" });
+      if (request.status !== "pending") {
+        return res.status(400).json({ message: "Only pending requests can be approved" });
+      }
+      const updated = await storage.updateLoanRequest(req.params.id, {
+        status: "approved",
+        reviewedBy,
+        adminComment: req.body.adminComment?.trim() || null,
+      });
+
+      // Fire-and-forget: notify employee
+      const loanEmpApprove = await storage.getEmployee(request.employeeId);
+      if (loanEmpApprove) {
+        const loanAmtApprove = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" }).format(Number(request.amountRequested));
+        sendLoanApprovedEmail(loanEmpApprove.email, `${loanEmpApprove.firstName} ${loanEmpApprove.lastName}`, loanAmtApprove, request.purpose);
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/loan-requests/:id/reject", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const reviewedBy = (req.session as any).employeeId;
+      const request = await storage.getLoanRequest(req.params.id);
+      if (!request) return res.status(404).json({ message: "Loan request not found" });
+      if (request.status !== "pending") {
+        return res.status(400).json({ message: "Only pending requests can be rejected" });
+      }
+      if (!req.body.adminComment || !req.body.adminComment.trim()) {
+        return res.status(400).json({ message: "Comment is required for rejection" });
+      }
+      const updated = await storage.updateLoanRequest(req.params.id, {
+        status: "rejected",
+        reviewedBy,
+        adminComment: req.body.adminComment.trim(),
+      });
+
+      // Fire-and-forget: notify employee
+      const loanEmpReject = await storage.getEmployee(request.employeeId);
+      if (loanEmpReject) {
+        sendLoanRejectedEmail(loanEmpReject.email, `${loanEmpReject.firstName} ${loanEmpReject.lastName}`, request.purpose, req.body.adminComment.trim());
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/loan-requests/:id/assign", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const request = await storage.getLoanRequest(req.params.id);
+      if (!request) return res.status(404).json({ message: "Loan request not found" });
+      if (request.status !== "pending" && request.status !== "approved") {
+        return res.status(400).json({ message: "Only pending or approved requests can be assigned" });
+      }
+      const updated = await storage.updateLoanRequest(req.params.id, {
+        status: "approved",
+        assignedTo: req.body.assignedTo,
+        adminComment: req.body.adminComment?.trim() || request.adminComment,
+      });
+
+      // Fire-and-forget: notify assigned person
+      if (req.body.assignedTo) {
+        const loanAssignee = await storage.getEmployee(req.body.assignedTo);
+        const loanEmpAssign = await storage.getEmployee(request.employeeId);
+        if (loanAssignee && loanEmpAssign) {
+          const loanAmtAssign = new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN" }).format(Number(request.amountRequested));
+          sendLoanAssignedEmail(loanAssignee.email, `${loanAssignee.firstName} ${loanAssignee.lastName}`, `${loanEmpAssign.firstName} ${loanEmpAssign.lastName}`, request.purpose, loanAmtAssign);
+        }
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/loan-requests/:id/cancel", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any).employeeId;
+      const request = await storage.getLoanRequest(req.params.id);
+      if (!request) return res.status(404).json({ message: "Loan request not found" });
+      if (request.employeeId !== employeeId) {
+        return res.status(403).json({ message: "You can only cancel your own requests" });
+      }
+      if (request.status !== "pending") {
+        return res.status(400).json({ message: "Only pending requests can be cancelled" });
+      }
+      const updated = await storage.updateLoanRequest(req.params.id, { status: "cancelled" });
       return res.json(updated);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
@@ -1075,6 +1716,12 @@ export async function registerRoutes(
         actorId: employeeId,
       });
 
+      // Fire-and-forget: notify the employee that a query has been raised
+      const queryEmployee = await storage.getEmployee(parsed.data.employeeId);
+      if (queryEmployee) {
+        sendQueryRaisedEmail(queryEmployee.email, `${queryEmployee.firstName} ${queryEmployee.lastName}`, parsed.data.subject);
+      }
+
       return res.status(201).json(query);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
@@ -1119,6 +1766,12 @@ export async function registerRoutes(
         details: `Status changed to ${statusLabels[status] || status}`,
         actorId: employeeId,
       });
+
+      // Fire-and-forget: notify the employee of status change
+      const queryEmpStatus = await storage.getEmployee(query.employeeId);
+      if (queryEmpStatus) {
+        sendQueryStatusUpdateEmail(queryEmpStatus.email, `${queryEmpStatus.firstName} ${queryEmpStatus.lastName}`, query.subject, status);
+      }
 
       return res.json(updated);
     } catch (error) {
@@ -1756,6 +2409,12 @@ export async function registerRoutes(
         });
 
         const employee = await storage.getEmployee(participant.employeeId);
+
+        // Fire-and-forget: notify employee of appraisal assignment
+        if (employee) {
+          sendAppraisalAssignedEmail(employee.email, `${employee.firstName} ${employee.lastName}`, cycle.name);
+        }
+
         if (employee && employee.managerId) {
           await storage.createAppraisalFeedback({
             appraisalId: appraisal.id,
@@ -2037,14 +2696,83 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/employees/:id/leave-requests", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const currentEmployeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const targetId = req.params.id;
+
+      if (role === "admin") {
+        const employee = await storage.getEmployee(targetId);
+        if (!employee || employee.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
+      } else if (role === "manager") {
+        const employee = await storage.getEmployee(targetId);
+        if (!employee || employee.managerId !== currentEmployeeId) return res.status(403).json({ message: "Access denied" });
+      } else {
+        if (targetId !== currentEmployeeId) return res.status(403).json({ message: "Access denied" });
+      }
+
+      const requests = await storage.getLeaveRequestsByEmployee(targetId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/employees/:id/ld-requests", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const currentEmployeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const targetId = req.params.id;
+
+      if (role === "admin") {
+        const employee = await storage.getEmployee(targetId);
+        if (!employee || employee.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
+      } else if (role === "manager") {
+        const employee = await storage.getEmployee(targetId);
+        if (!employee || employee.managerId !== currentEmployeeId) return res.status(403).json({ message: "Access denied" });
+      } else {
+        if (targetId !== currentEmployeeId) return res.status(403).json({ message: "Access denied" });
+      }
+
+      const requests = await storage.getLdRequestsByEmployee(targetId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/employees/:id/loan-requests", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const currentEmployeeId = (req.session as any).employeeId;
+      const companyId = (req.session as any).companyId;
+      const role = (req.session as any).role;
+      const targetId = req.params.id;
+
+      // Loans: only admin and the employee themselves
+      if (role === "admin") {
+        const employee = await storage.getEmployee(targetId);
+        if (!employee || employee.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
+      } else {
+        if (targetId !== currentEmployeeId) return res.status(403).json({ message: "Access denied" });
+      }
+
+      const requests = await storage.getLoanRequestsByEmployee(targetId);
+      return res.json(requests);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   // ==================== FEEDBACK ====================
 
   app.get("/api/feedback/pending", requireAuth, async (req: Request, res: Response) => {
     try {
       const employeeId = (req.session as any).employeeId;
       const allFeedback = await storage.getAppraisalFeedbackByReviewer(employeeId);
-      const pending = allFeedback.filter(f => f.status === "pending");
-      const enriched = await Promise.all(pending.map(async (f) => {
+      const enriched = await Promise.all(allFeedback.map(async (f) => {
         const appraisal = await storage.getAppraisal(f.appraisalId);
         let employeeName = "Unknown";
         let cycleName = "Review";
@@ -2140,6 +2868,21 @@ export async function registerRoutes(
         submittedAt: new Date(),
       });
 
+      // Fire-and-forget: if self-review, notify manager
+      if (feedback.reviewerType === "self") {
+        const selfAppraisal = await storage.getAppraisal(feedback.appraisalId);
+        if (selfAppraisal) {
+          const selfEmployee = await storage.getEmployee(selfAppraisal.employeeId);
+          if (selfEmployee && selfEmployee.managerId) {
+            const selfManager = await storage.getEmployee(selfEmployee.managerId);
+            const selfCycle = await storage.getAppraisalCycle(selfAppraisal.cycleId);
+            if (selfManager && selfCycle) {
+              sendAppraisalSelfReviewCompleteEmail(selfManager.email, `${selfManager.firstName} ${selfManager.lastName}`, `${selfEmployee.firstName} ${selfEmployee.lastName}`, selfCycle.name);
+            }
+          }
+        }
+      }
+
       const allFeedback = await storage.getAppraisalFeedbackByAppraisal(feedback.appraisalId);
       const allSubmitted = allFeedback.every(f => f.id === feedback.id ? true : f.status === "submitted");
 
@@ -2178,6 +2921,13 @@ export async function registerRoutes(
             }
           } else {
             await storage.updateAppraisal(appraisal.id, { status: "completed" });
+          }
+
+          // Fire-and-forget: notify employee that appraisal is completed
+          const completedEmp = await storage.getEmployee(appraisal.employeeId);
+          const completedCycle = cycle || await storage.getAppraisalCycle(appraisal.cycleId);
+          if (completedEmp && completedCycle) {
+            sendAppraisalCompletedEmail(completedEmp.email, `${completedEmp.firstName} ${completedEmp.lastName}`, completedCycle.name);
           }
         }
       }
@@ -2316,6 +3066,26 @@ export async function registerRoutes(
       }
 
       const assignment = await storage.createTaskAssignment(parsed.data);
+
+      // Fire-and-forget: notify assigned employee(s)
+      if (parsed.data.assignmentType === "individual" && parsed.data.targetEmployeeId) {
+        const taskEmp = await storage.getEmployee(parsed.data.targetEmployeeId);
+        if (taskEmp) {
+          sendTaskAssignedEmail(taskEmp.email, `${taskEmp.firstName} ${taskEmp.lastName}`, parsed.data.title);
+        }
+      } else if (parsed.data.assignmentType === "department" && parsed.data.targetDepartmentId) {
+        const deptEmps = await storage.getEmployeesByCompany(companyId);
+        const deptEmployees = deptEmps.filter(e => e.departmentId === parsed.data.targetDepartmentId);
+        for (const emp of deptEmployees) {
+          sendTaskAssignedEmail(emp.email, `${emp.firstName} ${emp.lastName}`, parsed.data.title);
+        }
+      } else if (parsed.data.assignmentType === "everyone") {
+        const companyEmps = await storage.getEmployeesByCompany(companyId);
+        for (const emp of companyEmps) {
+          sendTaskAssignedEmail(emp.email, `${emp.firstName} ${emp.lastName}`, parsed.data.title);
+        }
+      }
+
       return res.json(assignment);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
@@ -2397,6 +3167,22 @@ export async function registerRoutes(
           acknowledged: true,
           acknowledgedByName: employeeName,
         });
+
+        // Fire-and-forget: if all items completed via acknowledge, notify assigner
+        if (completion.completed) {
+          const ackCompletions = await storage.getTaskCompletionsByAssignment(req.params.id);
+          const ackMyCompletions = ackCompletions.filter(c => c.employeeId === employeeId && c.completed);
+          if (ackMyCompletions.length === items.length && items.length > 0) {
+            const ackEmp = await storage.getEmployee(employeeId);
+            if (ackEmp && assignment.assignedById) {
+              const ackAssigner = await storage.getEmployee(assignment.assignedById);
+              if (ackAssigner) {
+                sendTaskCompletedEmail(ackAssigner.email, `${ackAssigner.firstName} ${ackAssigner.lastName}`, `${ackEmp.firstName} ${ackEmp.lastName}`, assignment.title);
+              }
+            }
+          }
+        }
+
         return res.json(completion);
       }
 
@@ -2407,6 +3193,22 @@ export async function registerRoutes(
       }
 
       const completion = await storage.toggleTaskCompletion(req.params.id, employeeId, itemId);
+
+      // Fire-and-forget: if all items completed, notify the assigner
+      if (completion.completed) {
+        const allCompletions = await storage.getTaskCompletionsByAssignment(req.params.id);
+        const myCompletions = allCompletions.filter(c => c.employeeId === employeeId && c.completed);
+        if (myCompletions.length === items.length && items.length > 0) {
+          const taskEmpComplete = await storage.getEmployee(employeeId);
+          if (taskEmpComplete && assignment.assignedById) {
+            const assigner = await storage.getEmployee(assignment.assignedById);
+            if (assigner) {
+              sendTaskCompletedEmail(assigner.email, `${assigner.firstName} ${assigner.lastName}`, `${taskEmpComplete.firstName} ${taskEmpComplete.lastName}`, assignment.title);
+            }
+          }
+        }
+      }
+
       return res.json(completion);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
@@ -2415,7 +3217,7 @@ export async function registerRoutes(
 
   // ==================== RECRUITMENT - JOB POSTINGS ====================
 
-  app.get("/api/job-postings", async (req, res) => {
+  app.get("/api/job-postings", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2434,7 +3236,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/job-postings/active", async (req, res) => {
+  app.get("/api/job-postings/active", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       if (!companyId) return res.status(401).json({ message: "Not authenticated" });
@@ -2463,7 +3265,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/job-postings/:id", async (req, res) => {
+  app.get("/api/job-postings/:id", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const posting = await storage.getJobPosting(req.params.id);
       if (!posting) return res.status(404).json({ message: "Job posting not found" });
@@ -2473,7 +3275,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/job-postings", async (req, res) => {
+  app.post("/api/job-postings", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2490,7 +3292,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/job-postings/:id", async (req, res) => {
+  app.patch("/api/job-postings/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2507,7 +3309,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/job-postings/:id", async (req, res) => {
+  app.delete("/api/job-postings/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2524,7 +3326,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/job-postings/:id/archive", async (req, res) => {
+  app.post("/api/job-postings/:id/archive", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2541,7 +3343,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/job-postings/:id/unarchive", async (req, res) => {
+  app.post("/api/job-postings/:id/unarchive", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2569,7 +3371,7 @@ export async function registerRoutes(
     );
   }
 
-  app.get("/api/candidates", async (req, res) => {
+  app.get("/api/candidates", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2589,7 +3391,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/candidates/:id", async (req, res) => {
+  app.get("/api/candidates/:id", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2609,7 +3411,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/candidates", async (req, res) => {
+  app.post("/api/candidates", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2670,7 +3472,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/candidates/:id", async (req, res) => {
+  app.patch("/api/candidates/:id", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2713,7 +3515,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/candidates/:id", async (req, res) => {
+  app.delete("/api/candidates/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2732,7 +3534,7 @@ export async function registerRoutes(
 
   // ==================== CANDIDATE ACTIVITIES ====================
 
-  app.get("/api/candidates/:id/activities", async (req, res) => {
+  app.get("/api/candidates/:id/activities", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       if (!companyId) return res.status(401).json({ message: "Not authenticated" });
@@ -2745,7 +3547,7 @@ export async function registerRoutes(
 
   // ==================== CANDIDATE NOTES ====================
 
-  app.get("/api/candidates/:id/notes", async (req, res) => {
+  app.get("/api/candidates/:id/notes", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       if (!companyId) return res.status(401).json({ message: "Not authenticated" });
@@ -2756,7 +3558,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/candidates/:id/notes", async (req, res) => {
+  app.post("/api/candidates/:id/notes", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const employeeId = (req.session as any).employeeId;
@@ -2787,7 +3589,7 @@ export async function registerRoutes(
 
   // ==================== CANDIDATE ASSESSMENTS ====================
 
-  app.get("/api/candidates/:id/assessments", async (req, res) => {
+  app.get("/api/candidates/:id/assessments", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       if (!companyId) return res.status(401).json({ message: "Not authenticated" });
@@ -2798,7 +3600,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/candidates/:id/assessments", async (req, res) => {
+  app.post("/api/candidates/:id/assessments", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const employeeId = (req.session as any).employeeId;
@@ -2822,7 +3624,7 @@ export async function registerRoutes(
 
   // ==================== CANDIDATE INTERVIEWS ====================
 
-  app.get("/api/interviews", async (req, res) => {
+  app.get("/api/interviews", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2841,7 +3643,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/candidates/:id/interviews", async (req, res) => {
+  app.get("/api/candidates/:id/interviews", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       if (!companyId) return res.status(401).json({ message: "Not authenticated" });
@@ -2852,7 +3654,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/candidates/:id/interviews", async (req, res) => {
+  app.post("/api/candidates/:id/interviews", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2881,7 +3683,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/interviews/:id/feedback", async (req, res) => {
+  app.patch("/api/interviews/:id/feedback", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const employeeId = (req.session as any).employeeId;
@@ -2917,7 +3719,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/interviews/:id", async (req, res) => {
+  app.delete("/api/interviews/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -2933,7 +3735,7 @@ export async function registerRoutes(
 
   // ==================== CANDIDATE COMMUNICATIONS ====================
 
-  app.get("/api/candidates/:id/communications", async (req, res) => {
+  app.get("/api/candidates/:id/communications", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       if (!companyId) return res.status(401).json({ message: "Not authenticated" });
@@ -2944,7 +3746,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/candidates/:id/communications", async (req, res) => {
+  app.post("/api/candidates/:id/communications", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const employeeId = (req.session as any).employeeId;
@@ -2989,7 +3791,7 @@ export async function registerRoutes(
     { key: "withdrawn", label: "Withdrawn", color: "#6b7280" },
   ];
 
-  app.get("/api/recruitment/pipeline-stages", requireAuth, async (req, res) => {
+  app.get("/api/recruitment/pipeline-stages", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       if (!companyId) return res.status(401).json({ message: "Not authenticated" });
@@ -3026,7 +3828,7 @@ export async function registerRoutes(
 
   // ==================== EMAIL TEMPLATES ====================
 
-  app.get("/api/email-templates", async (req, res) => {
+  app.get("/api/email-templates", requireAuth, requireManagerOrAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       if (!companyId) return res.status(401).json({ message: "Not authenticated" });
@@ -3037,7 +3839,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/email-templates", async (req, res) => {
+  app.post("/api/email-templates", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -3054,7 +3856,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/email-templates/:id", async (req, res) => {
+  app.patch("/api/email-templates/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
@@ -3071,7 +3873,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/email-templates/:id", async (req, res) => {
+  app.delete("/api/email-templates/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
