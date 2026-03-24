@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
 
-echo "Starting HRSuite..."
+echo "Running database migrations..."
+node dist/migrate.cjs
 
-# Run the application (migrations run automatically at startup)
+echo "Starting HRSuite..."
 exec node dist/index.cjs "$@"

@@ -6,7 +6,7 @@ import passport from "passport";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { pool, runMigrations } from "./db";
+import { pool } from "./db";
 import { setupGoogleAuth } from "./auth/google";
 
 const app = express();
@@ -91,7 +91,6 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await runMigrations();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

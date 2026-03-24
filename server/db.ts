@@ -1,7 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
-import path from "path";
 import * as schema from "@shared/schema";
 
 const { Pool } = pg;
@@ -14,8 +12,3 @@ if (!process.env.DATABASE_URL) {
 
 export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 export const db = drizzle(pool, { schema });
-
-export async function runMigrations() {
-  const migrationsFolder = path.resolve(__dirname, "..", "migrations");
-  await migrate(db, { migrationsFolder });
-}

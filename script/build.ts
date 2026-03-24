@@ -47,19 +47,30 @@ async function buildAll() {
   ];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
-  await esbuild({
-    entryPoints: ["server/index.ts"],
-    platform: "node",
+  const sharedOptions = {
+    platform: "node" as const,
     bundle: true,
-    format: "cjs",
-    outfile: "dist/index.cjs",
+    format: "cjs" as const,
     define: {
       "process.env.NODE_ENV": '"production"',
     },
     minify: true,
     external: externals,
-    logLevel: "info",
-  });
+    logLevel: "info" as const,
+  };
+
+  await Promise.all([
+    esbuild({
+      ...sharedOptions,
+      entryPoints: ["server/index.ts"],
+      outfile: "dist/index.cjs",
+    }),
+    esbuild({
+      ...sharedOptions,
+      entryPoints: ["server/migrate.ts"],
+      outfile: "dist/migrate.cjs",
+    }),
+  ]);
 }
 
 buildAll().catch((err) => {
