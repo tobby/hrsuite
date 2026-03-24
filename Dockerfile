@@ -1,4 +1,4 @@
-FROM node:20 AS build
+FROM node:22-slim AS build
 
 WORKDIR /app
 
@@ -8,7 +8,7 @@ RUN npm ci
 COPY . .
 RUN mkdir -p migrations && npm run build
 
-FROM node:20-slim AS production
+FROM node:22-slim AS production
 
 WORKDIR /app
 
