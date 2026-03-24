@@ -6,7 +6,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+RUN mkdir -p migrations && npm run build
 
 FROM node:20-slim AS production
 
@@ -16,7 +16,7 @@ COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
-COPY migrations ./migrations
+COPY --from=build /app/migrations ./migrations
 COPY docker-entrypoint.sh ./
 
 RUN mkdir -p /app/uploads && \
