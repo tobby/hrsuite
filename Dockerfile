@@ -17,6 +17,7 @@ RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
+COPY docker-entrypoint.sh ./
 
 RUN mkdir -p /app/uploads && \
     addgroup --system appgroup && \
@@ -29,4 +30,4 @@ EXPOSE 3000
 
 ENV NODE_ENV=production
 
-CMD ["node", "dist/index.cjs"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
