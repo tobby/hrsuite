@@ -1,9 +1,19 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, date, timestamp, boolean } from "drizzle-orm/pg-core";
+import { index, pgTable, text, varchar, integer, date, timestamp, boolean, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export * from "./models/auth";
+// ==================== SESSIONS ====================
+
+export const userSessions = pgTable(
+  "user_sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: json("sess").notNull(),
+    expire: timestamp("expire", { precision: 6 }).notNull(),
+  },
+  (table) => [index("IDX_user_sessions_expire").on(table.expire)]
+);
 
 // ==================== COMPANIES ====================
 

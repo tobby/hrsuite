@@ -6,7 +6,7 @@ import passport from "passport";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import { pool } from "./db";
+import { pool, runMigrations } from "./db";
 import { setupGoogleAuth } from "./auth/google";
 
 const app = express();
@@ -30,17 +30,6 @@ app.use(express.urlencoded({ extended: false }));
 
 const PgStore = connectPgSimple(session);
 
-async function ensureSessionTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS "user_sessions" (
-      "sid" varchar NOT NULL COLLATE "default",
-      "sess" json NOT NULL,
-      "expire" timestamp(6) NOT NULL,
-      CONSTRAINT "user_sessions_pkey" PRIMARY KEY ("sid")
-    );
-    CREATE INDEX IF NOT EXISTS "IDX_user_sessions_expire" ON "user_sessions" ("expire");
-  `);
-}
 
 app.use(
   session({
@@ -102,7 +91,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  await ensureSessionTable();
+  await runMigrations();
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -129,7 +118,7 @@ app.use((req, res, next) => {
   }
 
   // Serve the app on the port specified in the environment variable PORT.
-  // Default to 5000 if not specified.
+  // Default to 3000 if not specified.
   const port = parseInt(process.env.PORT || "3000", 10);
   httpServer.listen(
     {

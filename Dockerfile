@@ -13,11 +13,10 @@ FROM node:20-slim AS production
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev && npm install drizzle-kit tsx
+RUN npm ci --omit=dev
 
 COPY --from=build /app/dist ./dist
-COPY shared ./shared
-COPY drizzle.config.ts ./
+COPY migrations ./migrations
 
 RUN mkdir -p /app/uploads && \
     addgroup --system appgroup && \
@@ -30,4 +29,4 @@ EXPOSE 3000
 
 ENV NODE_ENV=production
 
-CMD ["sh", "-c", "npx drizzle-kit push --force && node dist/index.cjs"]
+CMD ["node", "dist/index.cjs"]
