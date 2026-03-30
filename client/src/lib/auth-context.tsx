@@ -21,6 +21,7 @@ export interface AuthEmployee {
   status: string;
   role: UserRole;
   createdAt: string;
+  hasPassword?: boolean;
 }
 
 interface AuthContextType {

@@ -16,7 +16,7 @@ export default function JobDetails() {
     async function fetchJob() {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/job-postings/${id}`);
+        const res = await fetch(`/api/job-postings/public/job/${id}`);
         if (res.ok) {
           const data = await res.json();
           setJob(data);

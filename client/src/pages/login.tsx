@@ -59,7 +59,9 @@ export default function Login() {
     } catch (error: any) {
       const message = error?.message || "Login failed";
       let description = "Please check your credentials and try again.";
-      if (message.includes("401")) {
+      if (message.includes("Google sign-in")) {
+        description = "This account uses Google sign-in. Please use the \"Sign in with Google\" button, or set a password in Settings.";
+      } else if (message.includes("401")) {
         description = "Invalid email or password.";
       } else if (message.includes("403")) {
         description = "Your account has been deactivated.";

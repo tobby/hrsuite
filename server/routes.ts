@@ -235,8 +235,11 @@ export async function registerRoutes(
       }
 
       const employee = await storage.getEmployeeByEmail(email);
-      if (!employee || !employee.passwordHash) {
+      if (!employee) {
         return res.status(401).json({ message: "Invalid email or password" });
+      }
+      if (!employee.passwordHash) {
+        return res.status(401).json({ message: "This account uses Google sign-in. Please use the \"Sign in with Google\" button, or set a password in Settings." });
       }
 
       const isValid = await bcrypt.compare(password, employee.passwordHash);
@@ -279,7 +282,7 @@ export async function registerRoutes(
     }
 
     const { passwordHash, inviteToken, inviteExpiresAt, ...safeEmployee } = employee;
-    return res.json({ employee: safeEmployee });
+    return res.json({ employee: { ...safeEmployee, hasPassword: !!passwordHash } });
   });
 
   // ==================== INVITE ROUTES ====================
@@ -666,6 +669,40 @@ export async function registerRoutes(
       return res.json({ employee: safeEmployee });
     } catch (error) {
       console.error("Error uploading profile photo:", error);
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.post("/api/profile/password", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const employeeId = (req.session as any)?.employeeId;
+      const { currentPassword, newPassword } = req.body;
+
+      if (!newPassword || newPassword.length < 8) {
+        return res.status(400).json({ message: "New password must be at least 8 characters" });
+      }
+
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      // If user already has a password, require the current one
+      if (employee.passwordHash) {
+        if (!currentPassword) {
+          return res.status(400).json({ message: "Current password is required" });
+        }
+        const isValid = await bcrypt.compare(currentPassword, employee.passwordHash);
+        if (!isValid) {
+          return res.status(401).json({ message: "Current password is incorrect" });
+        }
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      await storage.updateEmployee(employeeId, { passwordHash });
+      return res.json({ message: "Password updated successfully" });
+    } catch (error) {
+      console.error("Error updating password:", error);
       return res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -3260,6 +3297,18 @@ export async function registerRoutes(
     try {
       const postings = await storage.getActiveJobPostingsByCompany(req.params.companyId);
       return res.json(postings);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.get("/api/job-postings/public/job/:id", async (req, res) => {
+    try {
+      const posting = await storage.getJobPosting(req.params.id);
+      if (!posting || posting.status !== "active") {
+        return res.status(404).json({ message: "Job posting not found" });
+      }
+      return res.json(posting);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }

@@ -24,9 +24,11 @@ import {
   Save,
   Loader2,
   Camera,
+  Lock,
 } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useRole, canEditOrgSettings } from "@/lib/role-context";
+import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Department } from "@shared/schema";
@@ -45,9 +47,14 @@ type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 export default function Settings() {
   const { role, currentUser } = useRole();
+  const { employee } = useAuth();
   const { data: departments = [] } = useQuery<Department[]>({ queryKey: ['/api/departments'] });
   const department = departments.find(d => d.id === currentUser.departmentId);
   const { toast } = useToast();
+  const hasPassword = (employee as any)?.hasPassword ?? false;
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const { data: birthdayReminderDays } = useQuery<{ value: string }>({
     queryKey: ['/api/company-settings/birthday-reminder-days'],
@@ -116,6 +123,39 @@ export default function Settings() {
       toast({ title: "Error", description: error.message || "Failed to upload photo.", variant: "destructive" });
     },
   });
+
+  const passwordMutation = useMutation({
+    mutationFn: async (data: { currentPassword?: string; newPassword: string }) => {
+      const res = await apiRequest("POST", "/api/profile/password", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      toast({ title: "Password Updated", description: hasPassword ? "Your password has been changed." : "Password set successfully. You can now sign in with email and password." });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message || "Failed to update password.", variant: "destructive" });
+    },
+  });
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 8) {
+      toast({ title: "Error", description: "Password must be at least 8 characters.", variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Error", description: "Passwords do not match.", variant: "destructive" });
+      return;
+    }
+    passwordMutation.mutate({
+      ...(hasPassword ? { currentPassword } : {}),
+      newPassword,
+    });
+  };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -308,6 +348,72 @@ export default function Settings() {
                   </div>
                 </form>
               </Form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="h-4 w-4" />
+                {hasPassword ? "Change Password" : "Set Password"}
+              </CardTitle>
+              <CardDescription>
+                {hasPassword
+                  ? "Update your account password"
+                  : "Set a password to enable email and password sign-in alongside Google"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                {hasPassword && (
+                  <div className="space-y-2">
+                    <Label htmlFor="currentPassword">Current Password</Label>
+                    <Input
+                      id="currentPassword"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      placeholder="Min. 8 characters"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      minLength={8}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      placeholder="Re-enter password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={8}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button type="submit" disabled={passwordMutation.isPending}>
+                    {passwordMutation.isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Lock className="mr-2 h-4 w-4" />
+                    )}
+                    {hasPassword ? "Change Password" : "Set Password"}
+                  </Button>
+                </div>
+              </form>
             </CardContent>
           </Card>
 

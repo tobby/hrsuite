@@ -271,6 +271,16 @@ export default function LdRequests() {
             <DialogHeader>
               <DialogTitle>New L&D Request</DialogTitle>
             </DialogHeader>
+            <div className="rounded-md bg-muted/50 border p-4 text-sm space-y-2 mb-2">
+              <p className="font-semibold">L&D Policy</p>
+              <p className="text-muted-foreground text-xs">Learning & Development requests are subject to the following conditions:</p>
+              <ol className="text-muted-foreground text-xs list-decimal list-inside space-y-1">
+                <li>Training must be relevant to your current role or career development within the company</li>
+                <li>Requests require manager approval followed by admin/HR final approval</li>
+                <li>Employees must complete the training within the specified duration and share key learnings with their team</li>
+              </ol>
+            </div>
+
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField control={form.control} name="courseTitle" render={({ field }) => (
@@ -359,6 +369,10 @@ export default function LdRequests() {
                     <FormMessage />
                   </FormItem>
                 )} />
+                <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-sm">
+                  <p className="text-muted-foreground">By submitting this request, I understand and accept the L&D policy terms outlined above.</p>
+                </div>
+
                 <DialogFooter>
                   <Button type="submit" disabled={createMutation.isPending}>
                     {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -385,6 +399,7 @@ export default function LdRequests() {
             <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
           ) : myRequests && myRequests.length > 0 ? (
             <Card>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -417,6 +432,7 @@ export default function LdRequests() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
               <TablePagination currentPage={myPage} totalPages={myTotalPages} onPageChange={setMyPage} totalItems={myTotal} pageSize={myPageSize} />
             </Card>
           ) : (
@@ -433,6 +449,7 @@ export default function LdRequests() {
             <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
           ) : assignedRequests && assignedRequests.length > 0 ? (
             <Card>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -461,6 +478,7 @@ export default function LdRequests() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
               <TablePagination currentPage={assignedPage} totalPages={assignedTotalPages} onPageChange={setAssignedPage} totalItems={assignedTotal} pageSize={assignedPageSize} />
             </Card>
           ) : (
@@ -477,6 +495,7 @@ export default function LdRequests() {
             <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
           ) : pendingRequests && pendingRequests.length > 0 ? (
             <Card>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -526,6 +545,7 @@ export default function LdRequests() {
                   })}
                 </TableBody>
               </Table>
+              </div>
               <TablePagination currentPage={pendingPage} totalPages={pendingTotalPages} onPageChange={setPendingPage} totalItems={pendingTotal} pageSize={pendingPageSize} />
             </Card>
           ) : (
@@ -542,6 +562,7 @@ export default function LdRequests() {
             <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
           ) : managerApprovedRequests && managerApprovedRequests.length > 0 ? (
             <Card>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -572,6 +593,7 @@ export default function LdRequests() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
               <TablePagination currentPage={maPage} totalPages={maTotalPages} onPageChange={setMaPage} totalItems={maTotal} pageSize={maPageSize} />
             </Card>
           ) : (
@@ -588,6 +610,7 @@ export default function LdRequests() {
             <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
           ) : allRequests && allRequests.length > 0 ? (
             <Card>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -624,6 +647,7 @@ export default function LdRequests() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
               <TablePagination currentPage={allPage} totalPages={allTotalPages} onPageChange={setAllPage} totalItems={allTotal} pageSize={allPageSize} />
             </Card>
           ) : (
