@@ -170,8 +170,10 @@ export interface IStorage {
   getFeedbackRatingsByAppraisal(appraisalId: string): Promise<FeedbackRating[]>;
 
   // Cycle Participants
-  addCycleParticipant(data: { cycleId: string; employeeId: string }): Promise<CycleParticipant>;
+  addCycleParticipant(data: { cycleId: string; employeeId: string; templateId?: string }): Promise<CycleParticipant>;
   getCycleParticipants(cycleId: string): Promise<CycleParticipant[]>;
+  getCycleParticipantByEmployee(cycleId: string, employeeId: string): Promise<CycleParticipant | undefined>;
+  updateCycleParticipantTemplate(participantId: string, templateId: string): Promise<CycleParticipant | undefined>;
   removeCycleParticipant(id: string): Promise<boolean>;
   removeCycleParticipantsByIds(cycleId: string, employeeIds: string[]): Promise<void>;
 
@@ -644,7 +646,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteTemplateSection(id: string): Promise<boolean> {
-    await db.update(templateQuestions).set({ sectionId: null }).where(eq(templateQuestions.sectionId, id));
+    await db.delete(templateQuestions).where(eq(templateQuestions.sectionId, id));
     const result = await db.delete(templateSections).where(eq(templateSections.id, id)).returning();
     return result.length > 0;
   }
@@ -837,13 +839,28 @@ export class DatabaseStorage implements IStorage {
 
   // ==================== CYCLE PARTICIPANTS ====================
 
-  async addCycleParticipant(data: { cycleId: string; employeeId: string }): Promise<CycleParticipant> {
+  async addCycleParticipant(data: { cycleId: string; employeeId: string; templateId?: string }): Promise<CycleParticipant> {
     const [participant] = await db.insert(cycleParticipants).values(data).returning();
     return participant;
   }
 
   async getCycleParticipants(cycleId: string): Promise<CycleParticipant[]> {
     return db.select().from(cycleParticipants).where(eq(cycleParticipants.cycleId, cycleId));
+  }
+
+  async getCycleParticipantByEmployee(cycleId: string, employeeId: string): Promise<CycleParticipant | undefined> {
+    const [participant] = await db.select().from(cycleParticipants).where(
+      and(eq(cycleParticipants.cycleId, cycleId), eq(cycleParticipants.employeeId, employeeId))
+    );
+    return participant;
+  }
+
+  async updateCycleParticipantTemplate(participantId: string, templateId: string): Promise<CycleParticipant | undefined> {
+    const [updated] = await db.update(cycleParticipants)
+      .set({ templateId })
+      .where(eq(cycleParticipants.id, participantId))
+      .returning();
+    return updated;
   }
 
   async removeCycleParticipant(id: string): Promise<boolean> {

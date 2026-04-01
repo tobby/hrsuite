@@ -2431,6 +2431,14 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Cannot activate cycle with no participants" });
       }
 
+      const participantsWithoutTemplate = participants.filter(p => !p.templateId);
+      if (participantsWithoutTemplate.length > 0) {
+        return res.status(400).json({
+          message: "All participants must have a template assigned before activation",
+          missingCount: participantsWithoutTemplate.length,
+        });
+      }
+
       for (const participant of participants) {
         const appraisal = await storage.createAppraisal({
           cycleId: cycle.id,
@@ -2504,6 +2512,27 @@ export async function registerRoutes(
         results.push(participant);
       }
       return res.status(201).json(results);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/appraisal-cycles/:id/participants/template", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { assignments } = req.body;
+      if (!Array.isArray(assignments) || assignments.length === 0) {
+        return res.status(400).json({ message: "assignments array is required" });
+      }
+      const participants = await storage.getCycleParticipants(req.params.id);
+      const results = [];
+      for (const { employeeId, templateId } of assignments) {
+        const participant = participants.find(p => p.employeeId === employeeId);
+        if (participant) {
+          const updated = await storage.updateCycleParticipantTemplate(participant.id, templateId);
+          if (updated) results.push(updated);
+        }
+      }
+      return res.json(results);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
@@ -2683,11 +2712,13 @@ export async function registerRoutes(
 
       const cycle = await storage.getAppraisalCycle(appraisal.cycleId);
       const employee = await storage.getEmployee(appraisal.employeeId);
+      const participant = await storage.getCycleParticipantByEmployee(appraisal.cycleId, appraisal.employeeId);
+      const resolvedTemplateId = participant?.templateId ?? cycle?.templateId;
       let questions: any[] = [];
       let sections: any[] = [];
-      if (cycle && cycle.templateId) {
-        questions = await storage.getTemplateQuestions(cycle.templateId);
-        sections = await storage.getTemplateSections(cycle.templateId);
+      if (resolvedTemplateId) {
+        questions = await storage.getTemplateQuestions(resolvedTemplateId);
+        sections = await storage.getTemplateSections(resolvedTemplateId);
       }
 
       return res.json({
@@ -2847,9 +2878,11 @@ export async function registerRoutes(
       let employee: any = null;
       if (appraisal) {
         cycle = await storage.getAppraisalCycle(appraisal.cycleId);
-        if (cycle && cycle.templateId) {
-          questions = await storage.getTemplateQuestions(cycle.templateId);
-          sections = await storage.getTemplateSections(cycle.templateId);
+        const participant = await storage.getCycleParticipantByEmployee(appraisal.cycleId, appraisal.employeeId);
+        const resolvedTemplateId = participant?.templateId ?? cycle?.templateId;
+        if (resolvedTemplateId) {
+          questions = await storage.getTemplateQuestions(resolvedTemplateId);
+          sections = await storage.getTemplateSections(resolvedTemplateId);
         }
         employee = await storage.getEmployee(appraisal.employeeId);
       }
@@ -2927,8 +2960,10 @@ export async function registerRoutes(
         const appraisal = await storage.getAppraisal(feedback.appraisalId);
         if (appraisal) {
           const cycle = await storage.getAppraisalCycle(appraisal.cycleId);
-          if (cycle && cycle.templateId) {
-            const questions = await storage.getTemplateQuestions(cycle.templateId);
+          const participant = await storage.getCycleParticipantByEmployee(appraisal.cycleId, appraisal.employeeId);
+          const resolvedTemplateId = participant?.templateId ?? cycle?.templateId;
+          if (resolvedTemplateId) {
+            const questions = await storage.getTemplateQuestions(resolvedTemplateId);
             const ratingQuestions = questions.filter(q => q.questionType === "rating");
 
             if (ratingQuestions.length > 0) {

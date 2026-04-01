@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { AppraisalCycle, CycleParticipant, PeerAssignment, Appraisal, Employee, Department } from "@shared/schema";
+import type { AppraisalCycle, CycleParticipant, PeerAssignment, Appraisal, Employee, Department, AppraisalTemplate } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import {
   ArrowLeft, Users, UserPlus, Trash2, Play, CheckCircle2, Calendar,
@@ -89,6 +89,13 @@ export default function CycleProgress() {
     queryKey: ["/api/departments"],
   });
 
+  const { data: templates = [] } = useQuery<AppraisalTemplate[]>({
+    queryKey: ["/api/appraisal-templates"],
+  });
+
+  const [isBulkTemplateOpen, setIsBulkTemplateOpen] = useState(false);
+  const [bulkTemplateId, setBulkTemplateId] = useState("");
+
   const cycleAppraisals = allAppraisals.filter(a => a.cycleId === cycleId);
 
   function getEmployee(id: string) {
@@ -130,6 +137,19 @@ export default function CycleProgress() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles", cycleId, "participants"] });
       toast({ title: "Participant removed", description: "The employee has been removed from the cycle." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const assignTemplateMutation = useMutation({
+    mutationFn: async (assignments: { employeeId: string; templateId: string }[]) => {
+      const res = await apiRequest("PATCH", `/api/appraisal-cycles/${cycleId}/participants/template`, { assignments });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/appraisal-cycles", cycleId, "participants"] });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -366,16 +386,21 @@ export default function CycleProgress() {
                     peerAssignments.some(a => a.revieweeId === p.employeeId)
                   )
                 : participants.length > 0;
+              const allHaveTemplates = participants.length > 0 && participants.every(p => p.templateId);
+              const canActivate = allHavePeers && allHaveTemplates;
               return (
                 <div className="flex flex-col items-end gap-1">
                   <Button
                     onClick={() => setIsActivateOpen(true)}
-                    disabled={!allHavePeers}
+                    disabled={!canActivate}
                     data-testid="button-activate-cycle"
                   >
                     <Play className="h-4 w-4 mr-2" />
                     Activate Cycle
                   </Button>
+                  {!allHaveTemplates && participants.length > 0 && (
+                    <p className="text-xs text-muted-foreground">All participants need a template assigned</p>
+                  )}
                 </div>
               );
             })()}
@@ -429,17 +454,32 @@ export default function CycleProgress() {
               <Badge variant="secondary" data-testid="badge-participant-count">{participants.length}</Badge>
             </div>
             {isAdmin && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSelectedEmployeeIds([]);
-                  setIsAddParticipantsOpen(true);
-                }}
-                data-testid="button-add-participants"
-              >
-                <UserPlus className="h-4 w-4 mr-2" />
-                Add Participants
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedEmployeeIds([]);
+                    setIsAddParticipantsOpen(true);
+                  }}
+                  data-testid="button-add-participants"
+                >
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Add Participants
+                </Button>
+                {participants.length > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setBulkTemplateId("");
+                      setIsBulkTemplateOpen(true);
+                    }}
+                    data-testid="button-bulk-assign-template"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Bulk Assign Template
+                  </Button>
+                )}
+              </div>
             )}
           </div>
 
@@ -502,10 +542,31 @@ export default function CycleProgress() {
                           )}
                         </>
                       )}
-                      {isDraft && (
+                      {isDraft && isAdmin && (
+                        <Select
+                          value={participant.templateId || ""}
+                          onValueChange={(templateId) =>
+                            assignTemplateMutation.mutate([{ employeeId: participant.employeeId, templateId }])
+                          }
+                        >
+                          <SelectTrigger className="w-[180px] h-8 text-xs" data-testid={`select-participant-template-${participant.employeeId}`}>
+                            <SelectValue placeholder="Assign template..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {templates.map((tmpl) => (
+                              <SelectItem key={tmpl.id} value={tmpl.id}>
+                                {tmpl.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {isDraft && !isAdmin && (
                         <Badge variant="outline" data-testid={`badge-draft-status-${participant.employeeId}`}>
                           <Clock className="h-3 w-3 mr-1" />
-                          Awaiting activation
+                          {participant.templateId
+                            ? templates.find(t => t.id === participant.templateId)?.name || "Template assigned"
+                            : "Awaiting activation"}
                         </Badge>
                       )}
                       {isAdmin && (
@@ -691,6 +752,60 @@ export default function CycleProgress() {
               data-testid="button-confirm-add-participants"
             >
               {addParticipantsMutation.isPending ? "Adding..." : `Add ${selectedEmployeeIds.length} Participant${selectedEmployeeIds.length !== 1 ? "s" : ""}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isBulkTemplateOpen} onOpenChange={setIsBulkTemplateOpen}>
+        <DialogContent className="sm:max-w-[400px]" data-testid="dialog-bulk-assign-template">
+          <DialogHeader>
+            <DialogTitle>Bulk Assign Template</DialogTitle>
+            <DialogDescription>Assign a template to all participants who don't have one yet.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Template</Label>
+              <Select value={bulkTemplateId} onValueChange={setBulkTemplateId}>
+                <SelectTrigger data-testid="select-bulk-template">
+                  <SelectValue placeholder="Select template..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((tmpl) => (
+                    <SelectItem key={tmpl.id} value={tmpl.id}>
+                      {tmpl.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {participants.filter(p => !p.templateId).length} participant(s) without a template
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsBulkTemplateOpen(false)}>Cancel</Button>
+            <Button
+              disabled={!bulkTemplateId || assignTemplateMutation.isPending}
+              data-testid="button-confirm-bulk-template"
+              onClick={() => {
+                const assignments = participants
+                  .filter(p => !p.templateId)
+                  .map(p => ({ employeeId: p.employeeId, templateId: bulkTemplateId }));
+                if (assignments.length > 0) {
+                  assignTemplateMutation.mutate(assignments, {
+                    onSuccess: () => {
+                      setIsBulkTemplateOpen(false);
+                      toast({ title: "Templates assigned", description: `Template assigned to ${assignments.length} participant(s).` });
+                    },
+                  });
+                } else {
+                  setIsBulkTemplateOpen(false);
+                  toast({ title: "No changes", description: "All participants already have a template assigned." });
+                }
+              }}
+            >
+              Assign
             </Button>
           </DialogFooter>
         </DialogContent>

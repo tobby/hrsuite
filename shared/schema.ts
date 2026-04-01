@@ -237,6 +237,7 @@ export const cycleParticipants = pgTable("cycle_participants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   cycleId: varchar("cycle_id").notNull(),
   employeeId: varchar("employee_id").notNull(),
+  templateId: varchar("template_id"),
 });
 
 export type CycleParticipant = typeof cycleParticipants.$inferSelect;

@@ -30,7 +30,6 @@ export default function AppraisalCycles() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<string>("360");
-  const [newTemplateId, setNewTemplateId] = useState("");
   const [newStartDate, setNewStartDate] = useState("");
   const [newEndDate, setNewEndDate] = useState("");
   const [newSelfWeight, setNewSelfWeight] = useState(10);
@@ -64,7 +63,6 @@ export default function AppraisalCycles() {
   function resetForm() {
     setNewName("");
     setNewType("360");
-    setNewTemplateId("");
     setNewStartDate("");
     setNewEndDate("");
     setNewSelfWeight(10);
@@ -95,10 +93,6 @@ export default function AppraisalCycles() {
       toast({ title: "Validation Error", description: "Please enter a cycle name.", variant: "destructive" });
       return;
     }
-    if (!newTemplateId) {
-      toast({ title: "Validation Error", description: "Please select a template.", variant: "destructive" });
-      return;
-    }
     if (!newStartDate || !newEndDate) {
       toast({ title: "Validation Error", description: "Please select start and end dates.", variant: "destructive" });
       return;
@@ -113,7 +107,6 @@ export default function AppraisalCycles() {
       companyId: "placeholder",
       name: newName.trim(),
       type: newType,
-      templateId: newTemplateId,
       startDate: newStartDate,
       endDate: newEndDate,
       selfWeight: newSelfWeight,
@@ -203,7 +196,7 @@ export default function AppraisalCycles() {
           <DialogHeader>
             <DialogTitle>Create Review Cycle</DialogTitle>
             <DialogDescription>
-              Set up a new performance review cycle. Configure the review type, template, dates, and weight distribution.
+              Set up a new performance review cycle. Configure the review type, dates, and weight distribution. You can assign templates to participants after adding them.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -217,34 +210,17 @@ export default function AppraisalCycles() {
                 data-testid="input-cycle-name"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Type</Label>
-                <Select value={newType} onValueChange={handleTypeChange}>
-                  <SelectTrigger data-testid="select-cycle-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="180">180 Review</SelectItem>
-                    <SelectItem value="360">360 Review</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Template</Label>
-                <Select value={newTemplateId} onValueChange={setNewTemplateId}>
-                  <SelectTrigger data-testid="select-cycle-template">
-                    <SelectValue placeholder="Select template..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {templates.map((tmpl) => (
-                      <SelectItem key={tmpl.id} value={tmpl.id}>
-                        {tmpl.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select value={newType} onValueChange={handleTypeChange}>
+                <SelectTrigger data-testid="select-cycle-type">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="180">180 Review</SelectItem>
+                  <SelectItem value="360">360 Review</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
