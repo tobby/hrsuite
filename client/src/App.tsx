@@ -27,6 +27,7 @@ import AppraisalResults from "@/pages/appraisal-results";
 import AppraisalTemplates from "@/pages/appraisal-templates";
 import AppraisalCycles from "@/pages/appraisal-cycles";
 import CycleProgress from "@/pages/cycle-progress";
+import AppraisalAnalytics from "@/pages/appraisal-analytics";
 import RecruitmentJobs from "@/pages/recruitment-jobs";
 import RecruitmentCandidates from "@/pages/recruitment-candidates";
 import CandidateDetail from "@/pages/candidate-detail";
@@ -86,6 +87,7 @@ function PrivateRouter() {
       <Route path="/appraisals/competencies" component={CompetencyLibrary} />
       <Route path="/appraisals/cycles" component={AppraisalCycles} />
       <Route path="/appraisals/cycles/:id" component={CycleProgress} />
+      <Route path="/appraisals/analytics">{() => <ContractGuard component={AppraisalAnalytics} />}</Route>
       <Route path="/recruitment/jobs" component={RecruitmentJobs} />
       <Route path="/recruitment/candidates" component={RecruitmentCandidates} />
       <Route path="/recruitment/candidates/:id" component={CandidateDetail} />

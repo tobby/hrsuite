@@ -13,7 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useRole } from "@/lib/role-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { AppraisalCycle, CycleParticipant, PeerAssignment, Appraisal, Employee, Department, AppraisalTemplate } from "@shared/schema";
+import type { AppraisalCycle, CycleParticipant, PeerAssignment, AppraisalWithFeedback, Employee, Department, AppraisalTemplate } from "@shared/schema";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 import {
   ArrowLeft, Users, UserPlus, Trash2, Play, CheckCircle2, Calendar,
@@ -77,7 +78,7 @@ export default function CycleProgress() {
     queryKey: ["/api/appraisal-cycles", cycleId, "peer-assignments"],
   });
 
-  const { data: allAppraisals = [] } = useQuery<Appraisal[]>({
+  const { data: allAppraisals = [] } = useQuery<AppraisalWithFeedback[]>({
     queryKey: ["/api/appraisals"],
   });
 
@@ -529,9 +530,45 @@ export default function CycleProgress() {
                     <div className="flex items-center gap-2 flex-wrap">
                       {!isDraft && appraisal && (
                         <>
-                          <Badge variant="secondary" className={statusCfg.className} data-testid={`badge-appraisal-status-${participant.employeeId}`}>
-                            {statusCfg.label}
-                          </Badge>
+                          {appraisalStatus === "completed" ? (
+                            <Badge variant="secondary" className={statusCfg.className} data-testid={`badge-appraisal-status-${participant.employeeId}`}>
+                              {statusCfg.label}
+                            </Badge>
+                          ) : appraisal.feedbackSummary && appraisal.feedbackSummary.length > 0 ? (
+                            <TooltipProvider>
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {appraisal.feedbackSummary.map((fb, idx) => {
+                                  const isSubmitted = fb.status === "submitted";
+                                  const label = fb.reviewerType === "peer"
+                                    ? fb.reviewerName.split(" ")[0]
+                                    : fb.reviewerType === "self" ? "Self" : "Manager";
+                                  return (
+                                    <Tooltip key={idx}>
+                                      <TooltipTrigger asChild>
+                                        <Badge
+                                          variant="outline"
+                                          className={isSubmitted
+                                            ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800 text-xs px-1.5 py-0"
+                                            : "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800 text-xs px-1.5 py-0"
+                                          }
+                                        >
+                                          {isSubmitted ? <CheckCircle2 className="h-3 w-3 mr-0.5" /> : <Clock className="h-3 w-3 mr-0.5" />}
+                                          {label}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>{fb.reviewerName} ({fb.reviewerType}): {isSubmitted ? "Submitted" : "Pending"}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  );
+                                })}
+                              </div>
+                            </TooltipProvider>
+                          ) : (
+                            <Badge variant="secondary" className={statusCfg.className} data-testid={`badge-appraisal-status-${participant.employeeId}`}>
+                              {statusCfg.label}
+                            </Badge>
+                          )}
                           {appraisalStatus === "completed" && (
                             <Link href={`/appraisals/results/${appraisal.id}`}>
                               <Button variant="ghost" size="sm" data-testid={`button-view-results-${participant.employeeId}`}>

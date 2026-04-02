@@ -205,6 +205,16 @@ export const appraisals = pgTable("appraisals", {
 
 export type Appraisal = typeof appraisals.$inferSelect;
 
+export type FeedbackSummaryItem = {
+  reviewerType: string;
+  reviewerName: string;
+  status: string;
+};
+
+export type AppraisalWithFeedback = Appraisal & {
+  feedbackSummary: FeedbackSummaryItem[];
+};
+
 export const appraisalFeedback = pgTable("appraisal_feedback", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   appraisalId: varchar("appraisal_id").notNull(),

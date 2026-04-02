@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
-import type { Appraisal, AppraisalFeedback, AppraisalCycle, Employee } from "@shared/schema";
+import type { AppraisalWithFeedback, AppraisalFeedback, AppraisalCycle, Employee } from "@shared/schema";
 import {
   BarChart3,
   Clock,
@@ -53,7 +53,7 @@ const cycleStatusLabels: Record<string, string> = {
 export default function Appraisals() {
   const { role, currentUser } = useRole();
 
-  const { data: appraisals = [], isLoading: appraisalsLoading } = useQuery<Appraisal[]>({
+  const { data: appraisals = [], isLoading: appraisalsLoading } = useQuery<AppraisalWithFeedback[]>({
     queryKey: ["/api/appraisals"],
   });
 
@@ -88,7 +88,7 @@ export default function Appraisals() {
     return cycle?.name || "Review";
   }
 
-  function getCycleForAppraisal(appraisal: Appraisal) {
+  function getCycleForAppraisal(appraisal: AppraisalWithFeedback) {
     return cycles.find((c) => c.id === appraisal.cycleId);
   }
 
@@ -372,6 +372,24 @@ export default function Appraisals() {
                         <p className="text-sm text-muted-foreground" data-testid={`text-appraisal-cycle-${appraisal.id}`}>
                           {cycleName}
                         </p>
+                        {appraisal.status !== "completed" && appraisal.feedbackSummary && appraisal.feedbackSummary.length > 0 && (
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {appraisal.feedbackSummary.map((fb, idx) => {
+                              const isSubmitted = fb.status === "submitted";
+                              const label = fb.reviewerType === "self" ? "Self"
+                                : fb.reviewerType === "manager" ? "Manager"
+                                : fb.reviewerName.split(" ")[0];
+                              return (
+                                <span
+                                  key={idx}
+                                  className={`text-xs ${isSubmitted ? "text-green-600 dark:text-green-400" : "text-yellow-600 dark:text-yellow-400"}`}
+                                >
+                                  {isSubmitted ? "\u2713" : "\u25CB"} {label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                         {appraisal.overallRating != null && (
                           <div className="flex items-center gap-1 text-sm" data-testid={`text-appraisal-rating-${appraisal.id}`}>
                             <Star className="h-4 w-4 text-amber-500" />

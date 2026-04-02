@@ -470,6 +470,18 @@ export function AppSidebar() {
                             </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === "/appraisals/analytics"}
+                            className="transition-all duration-150"
+                          >
+                            <Link href="/appraisals/analytics" data-testid="nav-appraisal-analytics">
+                              <BarChart3 className="h-3 w-3" />
+                              <span>Analytics</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </SidebarMenuItem>

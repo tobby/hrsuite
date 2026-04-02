@@ -1,4 +1,4 @@
-import { eq, and, like, desc, sql } from "drizzle-orm";
+import { eq, and, like, desc, sql, inArray } from "drizzle-orm";
 import { db } from "./db";
 import {
   companies, type Company, type InsertCompany,
@@ -160,6 +160,7 @@ export interface IStorage {
   // Appraisal Feedback
   createAppraisalFeedback(data: { appraisalId: string; reviewerId: string; reviewerType: string; status?: string }): Promise<AppraisalFeedback>;
   getAppraisalFeedbackByAppraisal(appraisalId: string): Promise<AppraisalFeedback[]>;
+  getAppraisalFeedbackByAppraisals(appraisalIds: string[]): Promise<AppraisalFeedback[]>;
   getAppraisalFeedbackByReviewer(reviewerId: string): Promise<AppraisalFeedback[]>;
   getAppraisalFeedback(id: string): Promise<AppraisalFeedback | undefined>;
   updateAppraisalFeedback(id: string, data: Partial<AppraisalFeedback>): Promise<AppraisalFeedback | undefined>;
@@ -803,6 +804,11 @@ export class DatabaseStorage implements IStorage {
 
   async getAppraisalFeedbackByAppraisal(appraisalId: string): Promise<AppraisalFeedback[]> {
     return db.select().from(appraisalFeedback).where(eq(appraisalFeedback.appraisalId, appraisalId));
+  }
+
+  async getAppraisalFeedbackByAppraisals(appraisalIds: string[]): Promise<AppraisalFeedback[]> {
+    if (appraisalIds.length === 0) return [];
+    return db.select().from(appraisalFeedback).where(inArray(appraisalFeedback.appraisalId, appraisalIds));
   }
 
   async getAppraisalFeedbackByReviewer(reviewerId: string): Promise<AppraisalFeedback[]> {

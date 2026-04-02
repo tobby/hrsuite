@@ -2644,6 +2644,9 @@ export async function registerRoutes(
       const companyId = (req.session as any).companyId;
       const role = (req.session as any).role;
 
+      let result: any[];
+      let employeeMap: Map<string, { firstName: string; lastName: string }>;
+
       if (role === "admin") {
         const cycles = await storage.getAppraisalCyclesByCompany(companyId);
         const allAppraisals = [];
@@ -2651,9 +2654,12 @@ export async function registerRoutes(
           const cycleAppraisals = await storage.getAppraisalsByCycle(cycle.id);
           allAppraisals.push(...cycleAppraisals);
         }
-        return res.json(allAppraisals);
+        result = allAppraisals;
+        const allEmployees = await storage.getEmployeesByCompany(companyId);
+        employeeMap = new Map(allEmployees.map(e => [e.id, { firstName: e.firstName, lastName: e.lastName }]));
       } else if (role === "manager") {
         const allEmployees = await storage.getEmployeesByCompany(companyId);
+        employeeMap = new Map(allEmployees.map(e => [e.id, { firstName: e.firstName, lastName: e.lastName }]));
         const directReportIds = allEmployees
           .filter(e => e.managerId === employeeId)
           .map(e => e.id);
@@ -2663,11 +2669,36 @@ export async function registerRoutes(
           const cycleAppraisals = await storage.getAppraisalsByCycle(cycle.id);
           allAppraisals.push(...cycleAppraisals.filter(a => directReportIds.includes(a.employeeId)));
         }
-        return res.json(allAppraisals);
+        result = allAppraisals;
       } else {
-        const appraisals = await storage.getAppraisalsByEmployee(employeeId);
-        return res.json(appraisals);
+        result = await storage.getAppraisalsByEmployee(employeeId);
+        const allEmployees = await storage.getEmployeesByCompany(companyId);
+        employeeMap = new Map(allEmployees.map(e => [e.id, { firstName: e.firstName, lastName: e.lastName }]));
       }
+
+      // Enrich with feedback summary
+      const appraisalIds = result.map(a => a.id);
+      const allFeedback = await storage.getAppraisalFeedbackByAppraisals(appraisalIds);
+      const feedbackByAppraisal = new Map<string, typeof allFeedback>();
+      for (const fb of allFeedback) {
+        const arr = feedbackByAppraisal.get(fb.appraisalId) || [];
+        arr.push(fb);
+        feedbackByAppraisal.set(fb.appraisalId, arr);
+      }
+
+      const enriched = result.map(a => ({
+        ...a,
+        feedbackSummary: (feedbackByAppraisal.get(a.id) || []).map(fb => {
+          const reviewer = employeeMap.get(fb.reviewerId);
+          return {
+            reviewerType: fb.reviewerType,
+            reviewerName: reviewer ? `${reviewer.firstName} ${reviewer.lastName}` : "Unknown",
+            status: fb.status,
+          };
+        }),
+      }));
+
+      return res.json(enriched);
     } catch (error) {
       return res.status(500).json({ message: "Internal server error" });
     }
@@ -3991,6 +4022,239 @@ export async function registerRoutes(
   });
 
   // ==================== DEV SEED ROUTE ====================
+
+  app.post("/api/dev/seed-appraisals", async (_req: Request, res: Response) => {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(403).json({ message: "Not available in production" });
+    }
+
+    try {
+      const admin = await storage.getEmployeeByEmail("admin@test.com");
+      if (!admin) return res.status(400).json({ message: "Run base seed first (test accounts must exist)" });
+
+      const companyId = admin.companyId;
+      const allEmployees = await storage.getEmployeesByCompany(companyId);
+      const existingCycles = await storage.getAppraisalCyclesByCompany(companyId);
+      let hasAppraisals = false;
+      for (const c of existingCycles) {
+        const aprs = await storage.getAppraisalsByCycle(c.id);
+        if (aprs.length > 0) { hasAppraisals = true; break; }
+      }
+      if (hasAppraisals) {
+        return res.json({ message: "Appraisal data already seeded", seeded: false });
+      }
+
+      // Create extra departments and employees for richer analytics
+      const deptNames = ["Product", "Design", "Marketing", "Sales"];
+      const deptIds: string[] = [];
+      const existingDepts = await storage.getDepartmentsByCompany(companyId);
+      const engDept = existingDepts[0];
+      if (engDept) deptIds.push(engDept.id);
+
+      for (const name of deptNames) {
+        const dept = await storage.createDepartment({ companyId, name });
+        deptIds.push(dept.id);
+      }
+
+      const hash = await bcrypt.hash("password123", 10);
+      const sampleNames = [
+        { firstName: "Alice", lastName: "Chen", position: "Senior Engineer" },
+        { firstName: "Bob", lastName: "Martinez", position: "Product Manager" },
+        { firstName: "Carol", lastName: "Williams", position: "UX Designer" },
+        { firstName: "David", lastName: "Kim", position: "Marketing Lead" },
+        { firstName: "Eva", lastName: "Johnson", position: "Sales Rep" },
+        { firstName: "Frank", lastName: "Brown", position: "Backend Engineer" },
+        { firstName: "Grace", lastName: "Lee", position: "Frontend Engineer" },
+        { firstName: "Henry", lastName: "Davis", position: "Data Analyst" },
+        { firstName: "Iris", lastName: "Wilson", position: "QA Engineer" },
+        { firstName: "Jack", lastName: "Taylor", position: "DevOps Engineer" },
+        { firstName: "Karen", lastName: "White", position: "Product Designer" },
+        { firstName: "Leo", lastName: "Garcia", position: "Sales Manager" },
+      ];
+
+      const manager = allEmployees.find(e => e.role === "manager");
+      const newEmployees = [];
+      for (let i = 0; i < sampleNames.length; i++) {
+        const deptId = deptIds[i % deptIds.length];
+        const emp = await storage.createEmployee({
+          companyId,
+          departmentId: deptId,
+          firstName: sampleNames[i].firstName,
+          lastName: sampleNames[i].lastName,
+          email: `${sampleNames[i].firstName.toLowerCase()}.${sampleNames[i].lastName.toLowerCase()}@test.com`,
+          role: "employee",
+          position: sampleNames[i].position,
+          status: "active",
+          managerId: manager?.id || null,
+        });
+        await storage.updateEmployee(emp.id, { passwordHash: hash });
+        newEmployees.push(emp);
+      }
+
+      const allParticipants = [...allEmployees.filter(e => e.role === "employee" || e.role === "manager"), ...newEmployees];
+
+      // Create an appraisal template
+      const template = await storage.createAppraisalTemplate({
+        companyId,
+        name: "Standard Performance Review",
+        description: "Quarterly performance evaluation template",
+      });
+
+      const section = await storage.createTemplateSection({
+        templateId: template.id,
+        name: "Core Competencies",
+        order: 0,
+      });
+
+      const questionTexts = [
+        "Quality of work and attention to detail",
+        "Communication and collaboration skills",
+        "Problem-solving and initiative",
+        "Meeting deadlines and time management",
+        "Technical skills and domain knowledge",
+      ];
+      for (let i = 0; i < questionTexts.length; i++) {
+        await storage.createTemplateQuestion({
+          templateId: template.id,
+          sectionId: section.id,
+          questionText: questionTexts[i],
+          questionType: "rating",
+          order: i,
+          reviewerTypes: ["self", "peer", "manager"],
+        });
+      }
+
+      const questions = await storage.getTemplateQuestions(template.id);
+
+      // Create 3 cycles
+      const cycleConfigs = [
+        { name: "Q3 2025 Review", startDate: "2025-07-01", endDate: "2025-09-30", status: "completed" },
+        { name: "Q4 2025 Review", startDate: "2025-10-01", endDate: "2025-12-31", status: "completed" },
+        { name: "Q1 2026 Review", startDate: "2026-01-01", endDate: "2026-03-31", status: "active" },
+      ];
+
+      for (const cfg of cycleConfigs) {
+        const cycle = await storage.createAppraisalCycle({
+          companyId,
+          name: cfg.name,
+          type: "360",
+          templateId: template.id,
+          startDate: cfg.startDate,
+          endDate: cfg.endDate,
+          status: cfg.status,
+          selfWeight: 10,
+          peerWeight: 30,
+          managerWeight: 60,
+        });
+
+        // Add participants
+        const participantsForCycle = cfg.status === "active"
+          ? allParticipants
+          : allParticipants.slice(0, cfg.name.includes("Q3") ? 8 : 12);
+
+        for (const emp of participantsForCycle) {
+          await storage.addCycleParticipant({ cycleId: cycle.id, employeeId: emp.id, templateId: template.id });
+
+          const appraisal = await storage.createAppraisal({
+            cycleId: cycle.id,
+            employeeId: emp.id,
+            status: "pending",
+          });
+
+          // Create self feedback
+          const selfFb = await storage.createAppraisalFeedback({
+            appraisalId: appraisal.id,
+            reviewerId: emp.id,
+            reviewerType: "self",
+            status: "pending",
+          });
+
+          // Create manager feedback
+          let mgrFb = null;
+          if (manager && emp.id !== manager.id) {
+            mgrFb = await storage.createAppraisalFeedback({
+              appraisalId: appraisal.id,
+              reviewerId: manager.id,
+              reviewerType: "manager",
+              status: "pending",
+            });
+          }
+
+          // Create a peer feedback
+          const peer = allParticipants.find(p => p.id !== emp.id);
+          let peerFb = null;
+          if (peer) {
+            await storage.createPeerAssignment({ cycleId: cycle.id, revieweeId: emp.id, reviewerId: peer.id });
+            peerFb = await storage.createAppraisalFeedback({
+              appraisalId: appraisal.id,
+              reviewerId: peer.id,
+              reviewerType: "peer",
+              status: "pending",
+            });
+          }
+
+          // For completed cycles, submit all feedback with ratings
+          if (cfg.status === "completed") {
+            const ratingGen = () => Math.floor(Math.random() * 3) + 3; // 3-5
+
+            // Submit self
+            for (const q of questions) {
+              await storage.createFeedbackRating({ feedbackId: selfFb.id, questionId: q.id, rating: ratingGen() });
+            }
+            await storage.updateAppraisalFeedback(selfFb.id, { status: "submitted", submittedAt: new Date() });
+
+            // Submit manager
+            if (mgrFb) {
+              for (const q of questions) {
+                await storage.createFeedbackRating({ feedbackId: mgrFb.id, questionId: q.id, rating: ratingGen() });
+              }
+              await storage.updateAppraisalFeedback(mgrFb.id, { status: "submitted", submittedAt: new Date() });
+            }
+
+            // Submit peer
+            if (peerFb) {
+              for (const q of questions) {
+                await storage.createFeedbackRating({ feedbackId: peerFb.id, questionId: q.id, rating: ratingGen() });
+              }
+              await storage.updateAppraisalFeedback(peerFb.id, { status: "submitted", submittedAt: new Date() });
+            }
+
+            // Calculate overall rating
+            const allFb = await storage.getAppraisalFeedbackByAppraisal(appraisal.id);
+            let totalWeightedSum = 0;
+            let totalWeight = 0;
+            for (const fb of allFb) {
+              const ratings = await storage.getFeedbackRatings(fb.id);
+              const weight = fb.reviewerType === "self" ? 10 : fb.reviewerType === "peer" ? 30 : 60;
+              for (const r of ratings) {
+                if (r.rating != null) {
+                  totalWeightedSum += r.rating * weight;
+                  totalWeight += weight;
+                }
+              }
+            }
+            const overallRating = totalWeight > 0 ? Math.round(totalWeightedSum / totalWeight) : null;
+            await storage.updateAppraisal(appraisal.id, { status: "completed", overallRating });
+          }
+
+          // For active cycle, randomly complete some (about half)
+          if (cfg.status === "active" && Math.random() > 0.5) {
+            const ratingGen = () => Math.floor(Math.random() * 3) + 3;
+
+            for (const q of questions) {
+              await storage.createFeedbackRating({ feedbackId: selfFb.id, questionId: q.id, rating: ratingGen() });
+            }
+            await storage.updateAppraisalFeedback(selfFb.id, { status: "submitted", submittedAt: new Date() });
+          }
+        }
+      }
+
+      return res.json({ message: "Appraisal sample data created", seeded: true });
+    } catch (error: any) {
+      console.error("Dev seed appraisals error:", error?.message || error);
+      return res.status(500).json({ message: "Failed to seed appraisal data", error: error?.message });
+    }
+  });
 
   app.post("/api/dev/seed", async (_req: Request, res: Response) => {
     if (process.env.NODE_ENV === "production") {
